@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: common-lib
+
+  data:
+    redis:
+      host: redis-16826.crce185.ap-seast-1-1.ec2.cloud.redislabs.com
+      port: 16826
+      password: 89gQDvM6is9ldiX3gAatuDU9HkUrPPG1
+      username: default
+      ssl:
+        enabled: true
+      timeout: 60000
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms

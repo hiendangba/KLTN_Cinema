@@ -1,0 +1,34 @@
+# Compiled class files
+*.class
+
+### Spring Boot ###
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### Maven ###
+.mvn/
+mvnw
+mvnw.cmd
+
+
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+
+### Environment Variables ###
+.env
+.env.local
+.env.*.local
+**/.env
