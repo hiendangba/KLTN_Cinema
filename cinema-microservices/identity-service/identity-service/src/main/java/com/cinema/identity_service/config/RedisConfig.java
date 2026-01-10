@@ -1,4 +1,4 @@
-package com.cinema.config;
+package com.cinema.identity_service.config;
 
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
@@ -20,12 +20,10 @@ import java.util.Map;
 @EnableCaching
 public class RedisConfig {
 
-    // Cache names
+    // ✅ Cache names CHỈ cho identity-service
     public static final String CACHE_BLACKLIST_TOKEN = "blacklist:token";
     public static final String CACHE_USER_SESSION = "user:session";
-    public static final String CACHE_MOVIE = "movie";
-    public static final String CACHE_MOVIE_LIST = "movie:list";
-    public static final String CACHE_CATEGORY = "category";
+    public static final String CACHE_OTP = "otp"; // ✅ Thêm cho OTP
 
     @Bean
     public RedisTemplate<String, Object> redisTemplate(
@@ -34,14 +32,11 @@ public class RedisConfig {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
-        // Serializer cho key
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);
 
-        // Serializer cho value - KHÔNG CÓ THAM SỐ
         RedisSerializer<Object> jsonSerializer = RedisSerializer.json();
-
         template.setValueSerializer(jsonSerializer);
         template.setHashValueSerializer(jsonSerializer);
 
@@ -51,17 +46,14 @@ public class RedisConfig {
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-
-        // JSON serializer - KHÔNG CÓ THAM SỐ
         RedisSerializer<Object> jsonSerializer = RedisSerializer.json();
 
-        // Cấu hình mặc định
         RedisCacheConfiguration defaultConfig = createCacheConfig(
                 Duration.ofHours(1),
                 jsonSerializer
         );
 
-        // Cấu hình riêng cho từng cache
+        // ✅ CHỈ config cache cho identity-service
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
 
         cacheConfigurations.put(
@@ -73,16 +65,8 @@ public class RedisConfig {
                 createCacheConfig(Duration.ofMinutes(30), jsonSerializer)
         );
         cacheConfigurations.put(
-                CACHE_MOVIE,
-                createCacheConfig(Duration.ofHours(2), jsonSerializer)
-        );
-        cacheConfigurations.put(
-                CACHE_MOVIE_LIST,
-                createCacheConfig(Duration.ofMinutes(30), jsonSerializer)
-        );
-        cacheConfigurations.put(
-                CACHE_CATEGORY,
-                createCacheConfig(Duration.ofDays(1), jsonSerializer)
+                CACHE_OTP,
+                createCacheConfig(Duration.ofMinutes(5), jsonSerializer) // ✅ OTP 5 phút
         );
 
         return RedisCacheManager.builder(connectionFactory)

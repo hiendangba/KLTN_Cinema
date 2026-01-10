@@ -5,11 +5,17 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.*;
-import lombok.Data;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.time.LocalDate;
+@Builder
+@Getter
+@Setter
+@AllArgsConstructor
 
-@Data
 public class RegisterCustomerRequest {
     @NotBlank(message = "Tên không được để trống")
     @Size(max = 100, message = "Tên quá dài không hợp lệ!")
@@ -31,11 +37,11 @@ public class RegisterCustomerRequest {
     )
     private String password;
 
-    @NotBlank(message = "Ngày sinh không được để trống")
+    @NotNull(message = "Ngày sinh không được để trống")
     @Past(message = "Ngày sinh phải là ngày trong quá khứ")
     private LocalDate dob;
 
-    @NotBlank(message = "Giới tính không được để trống")
+    @NotNull(message = "Giới tính không được để trống")
     @Enumerated(EnumType.STRING)
     @Column(length = 10)
     private User.Gender gender;

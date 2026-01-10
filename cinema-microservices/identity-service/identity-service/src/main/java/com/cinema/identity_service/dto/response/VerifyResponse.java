@@ -7,8 +7,6 @@ import lombok.Setter;
 @Getter
 @Setter
 @Builder
-public class RegisterCustomerResponse {
-    private String verifyToken;
+public class VerifyResponse {
     private String message;
-    private int expiresIn;
 }

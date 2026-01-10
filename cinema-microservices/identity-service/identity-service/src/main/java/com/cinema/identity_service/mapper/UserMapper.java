@@ -12,7 +12,6 @@ import org.mapstruct.ReportingPolicy;
 )
 public interface UserMapper {
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "password", ignore = true)
     @Mapping(target = "bankCode", ignore = true)
     @Mapping(target = "accountNumber", ignore = true)
     @Mapping(target = "accountName", ignore = true)

@@ -18,7 +18,10 @@ public enum ErrorCode {
     EXTERNAL_SERVICE_ERROR("9502", "External service error", HttpStatus.SERVICE_UNAVAILABLE),
 
 
-    EMAIL_EXISTED("4001", "Email đã được đăng ký trước đó", HttpStatus.CONFLICT);
+    EMAIL_EXISTED("4001", "Email đã được đăng ký trước đó", HttpStatus.CONFLICT),
+    OTP_ALREADY_SENT("4002","Đã gửi mã OTP rồi. Vui lòng đợi 5 phút sau thử lại!",HttpStatus.CONFLICT),
+    OTP_INVALID("4003","Mã OTP bạn vừa nhập không chính xác hoặc đã hết hạn. Hãy thử lại!",HttpStatus.BAD_REQUEST),
+    OTP_VERIFY_LIMIT("4004","Bạn đã nhập sai OTP 3 lần vui lòng đợt 5p sau và đăng ký lại",HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;
