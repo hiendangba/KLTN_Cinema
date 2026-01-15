@@ -19,9 +19,18 @@ public enum ErrorCode {
 
 
     EMAIL_EXISTED("4001", "Email đã được đăng ký trước đó", HttpStatus.CONFLICT),
-    OTP_ALREADY_SENT("4002","Đã gửi mã OTP rồi. Vui lòng đợi 5 phút sau thử lại!",HttpStatus.CONFLICT),
-    OTP_INVALID("4003","Mã OTP bạn vừa nhập không chính xác hoặc đã hết hạn. Hãy thử lại!",HttpStatus.BAD_REQUEST),
-    OTP_VERIFY_LIMIT("4004","Bạn đã nhập sai OTP 3 lần vui lòng đợt 5p sau và đăng ký lại",HttpStatus.BAD_REQUEST);
+    USER_NOT_FOUND("4002", "Không tìm thấy người dùng tương ứng", HttpStatus.NOT_FOUND),
+    OTP_ALREADY_SENT("4003","Đã gửi mã OTP rồi. Vui lòng đợi 5 phút sau thử lại!",HttpStatus.CONFLICT),
+    OTP_INVALID("4004","Mã OTP bạn vừa nhập không chính xác hoặc đã hết hạn. Hãy thử lại!",HttpStatus.BAD_REQUEST),
+    OTP_VERIFY_LIMIT("4005","Bạn đã nhập sai OTP 3 lần vui lòng đợt 5p sau và đăng ký lại",HttpStatus.BAD_REQUEST),
+    OTP_SEND_LIMIT("4006","Bạn đã yêu cầu gửi lại OTP 3 lần vui lòng đợt 5p sau và đăng ký lại",HttpStatus.BAD_REQUEST),
+
+    LOGIN_FAILED("4007","Tên đăng nhập hoặc mật khẩu không chính xác!",HttpStatus.BAD_REQUEST),
+    VERIFY_TOKEN_MISSING("4008","Phiên xác thực OTP đã hết hạn. Vui lòng yêu cầu gửi lại mã OTP.",HttpStatus.UNAUTHORIZED),
+    REFRESH_TOKEN_MISSING("4009","Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.",HttpStatus.UNAUTHORIZED),
+
+    PASSWORD_REQUIRED("4010","Mật khẩu mới là bắt buộc khi xác nhận OTP đặt lại mật khẩu",HttpStatus.BAD_REQUEST),
+    PASSWORD_INVALID("4011", "Mật khẩu phải từ 8–32 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

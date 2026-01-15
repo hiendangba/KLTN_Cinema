@@ -13,20 +13,10 @@ public abstract class BaseController {
     protected <T> ResponseEntity<APIResponse<T>> ok(T data) {
         return ResponseEntity.ok(buildResponse(true, "SUCCESS", "Operation successful", data));
     }
-
-    protected <T> ResponseEntity<APIResponse<T>> ok(String message, T data) {
-        return ResponseEntity.ok(buildResponse(true, "SUCCESS", message, data));
-    }
-
     protected <T> ResponseEntity<APIResponse<T>> created(T data) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(buildResponse(true, "CREATED", "Created successfully", data));
-    }
-    protected <T> ResponseEntity<APIResponse<T>> created(String message, T data) {
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(buildResponse(true, "CREATED", message, data));
     }
 
     protected ResponseEntity<Void> noContent() {
@@ -44,7 +34,6 @@ public abstract class BaseController {
                 .build();
     }
 
-    // ✅ Lấy path của request hiện tại
     private String getRequestPath() {
         try {
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();

@@ -79,9 +79,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<APIResponse<Void>> handleGlobalException(
             Exception ex, WebRequest request) {
-
         log.error("Unexpected error occurred", ex);
-
         APIResponse<Void> response = APIResponse.<Void>builder()
                 .success(false)
                 .message("An unexpected error occurred")

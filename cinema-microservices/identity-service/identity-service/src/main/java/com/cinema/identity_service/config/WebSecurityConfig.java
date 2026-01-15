@@ -1,25 +1,28 @@
 package com.cinema.identity_service.config;
 
 
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
+@FieldDefaults(level = AccessLevel.PRIVATE,makeFinal = true)
+@RequiredArgsConstructor
 public class WebSecurityConfig {
-
+    JwtAuthenticationFilter jwtAuthenticationFilter;
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) {
         http.csrf(csrf -> csrf.disable()).authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                        "/api/users/**",
-                        "/api/test/**"
-                ).permitAll()
-
-                // Swagger UI endpoints - QUAN TRỌNG!
+                .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers(
                         "/swagger-ui/**",
                         "/v3/api-docs/**",
@@ -27,7 +30,10 @@ public class WebSecurityConfig {
                         "/webjars/**"
                 ).permitAll()
                 .anyRequest().authenticated()
-        );
+        )
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                ).addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }
