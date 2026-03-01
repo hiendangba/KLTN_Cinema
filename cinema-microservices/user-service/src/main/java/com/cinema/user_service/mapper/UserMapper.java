@@ -7,6 +7,7 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.ReportingPolicy;
+import com.cinema.Enum.UserEnum;
 
 import java.util.List;
 
@@ -29,8 +30,25 @@ public interface UserMapper {
     User toUserStaff(RegisterStaffRequest registerStaffRequest);
 
     //Map vào object đã có sẳn update object
-    void updateUser(@MappingTarget User user, UpdateCustomerRequest request);
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "bankCode", ignore = true)
+    @Mapping(target = "accountNumber", ignore = true)
+    @Mapping(target = "accountName", ignore = true)
+    @Mapping(target = "timeCreated", ignore = true)
+    @Mapping(target = "timeUpdated", ignore = true)
+    @Mapping(target = "role", ignore = true)
+    void updateUserCustomer(@MappingTarget User user, UpdateCustomerRequest request);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "timeCreated", ignore = true)
+    @Mapping(target = "timeUpdated", ignore = true)
+    @Mapping(target = "role", ignore = true)
     void updateUserManager(@MappingTarget User user, UpdateManagerRequest request);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "timeCreated", ignore = true)
+    @Mapping(target = "timeUpdated", ignore = true)
+    @Mapping(target = "role", ignore = true)
     void updateUserStaff(@MappingTarget User user, UpdateStaffRequest request);
 
     UserResponse toUserResponse(User user);

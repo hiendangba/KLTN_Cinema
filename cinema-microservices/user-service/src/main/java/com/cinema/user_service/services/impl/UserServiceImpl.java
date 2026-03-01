@@ -98,15 +98,14 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        User user = userRepository.findById(userUUID).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findByIdAndRole(userUUID,UserEnum.UserRole.CUSTOMER).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // Check if email is already used by another user
-
         if (!user.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.EMAIL_EXISTED);
         }
 
-        userMapper.updateUser(user, request);
+        userMapper.updateUserCustomer(user, request);
         userRepository.save(user);
 
         log.info("Customer profile updated: customerId={}, email={}", userId, request.getEmail());
@@ -129,7 +128,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        User manager = userRepository.findById(userUUID).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        User manager = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.MANAGER).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // Check if email is already used by another user
         if (!manager.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
@@ -158,7 +157,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        User staff = userRepository.findById(userUUID)
+        User staff = userRepository.findByIdAndRole(userUUID,UserEnum.UserRole.STAFF)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // Check if email is already used by another user

@@ -41,4 +41,6 @@ public class UpdateCustomerRequest {
     @Pattern(regexp = "^(0[0-9]{9}|\\+84[0-9]{9})$", message = "Số điện thoại không hợp lệ")
     @Column(length = 15)
     private String phone;
+
+    private UserEnum.UserRole role;
 }

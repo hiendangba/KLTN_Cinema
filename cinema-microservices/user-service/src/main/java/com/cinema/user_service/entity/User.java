@@ -54,6 +54,7 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserEnum.UserRole role;
+
     @Column(nullable = false, updatable = false)
     LocalDateTime timeCreated;
 
