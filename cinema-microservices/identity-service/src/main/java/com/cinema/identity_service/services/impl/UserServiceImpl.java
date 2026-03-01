@@ -308,8 +308,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest,
-            HttpServletResponse response) {
+    public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest, HttpServletResponse response) {
         if (!userRepository.existsByEmail(forgotPasswordRequest.getEmail())) {
             throw new BusinessException(USER_NOT_FOUND);
         }
