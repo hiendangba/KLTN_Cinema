@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: email_service
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    from:
+      name: ${MAIL_FROM_NAME}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
