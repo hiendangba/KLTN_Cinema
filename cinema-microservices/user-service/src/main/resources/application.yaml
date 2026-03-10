@@ -39,4 +39,4 @@ spring:
     username: ${SPRING_RABBITMQ_USERNAME}
     password: ${SPRING_RABBITMQ_PASSWORD}
 server:
-  port: ${SERVER_PORT:8091}
+  port: ${SERVER_PORT:8092}

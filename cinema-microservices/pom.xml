@@ -18,6 +18,8 @@
         <module>common-lib</module>
         <module>identity-service</module>
         <module>user-service</module>
+        <module>film-service</module>
+        <module>email-service</module>
     </modules>
     <properties>
         <java.version>17</java.version>
@@ -31,6 +33,13 @@
     </properties>
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>4.0.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>io.jsonwebtoken</groupId>
                 <artifactId>jjwt-api</artifactId>
@@ -58,6 +67,10 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-amqp</artifactId>
                 <version>${amqp.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-mail</artifactId>
             </dependency>
         </dependencies>
     </dependencyManagement>

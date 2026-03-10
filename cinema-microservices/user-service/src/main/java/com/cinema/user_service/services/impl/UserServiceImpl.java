@@ -98,7 +98,12 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        User user = userRepository.findByIdAndRole(userUUID,UserEnum.UserRole.CUSTOMER).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        String role = httpRequest.getHeader("X-User-Role");
+        if (!("ADMIN".equals(role))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        User user = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.CUSTOMER).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // Check if email is already used by another user
         if (!user.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
@@ -157,7 +162,13 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        User staff = userRepository.findByIdAndRole(userUUID,UserEnum.UserRole.STAFF)
+
+        String role = httpRequest.getHeader("X-User-Role");
+        if (!("MANAGER".equals(role))) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        User staff = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.STAFF)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // Check if email is already used by another user

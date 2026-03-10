@@ -86,4 +86,5 @@ public class UserController extends BaseController {
         UserExistenceResponse response = userService.checkUserExists(userId);
         return ok(response);
     }
+
 }

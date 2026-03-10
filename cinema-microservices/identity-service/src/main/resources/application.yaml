@@ -18,7 +18,7 @@ spring:
         format_sql: true
   data:
     redis:
-#      url: ${REDIS_URL:}
+      #      url: ${REDIS_URL:}
       host: ${REDIS_HOST}
       port: ${REDIS_PORT}
       username: ${REDIS_USERNAME}
@@ -47,3 +47,6 @@ server:
 
 user-service:
   url: ${USER_SERVICE_URL}
+
+email-service:
+  url: ${EMAIL_SERVICE_URL}

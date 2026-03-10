@@ -1,6 +1,7 @@
 package com.cinema.identity_service.services.impl;
 
 import com.cinema.Enum.UserEnum;
+import com.cinema.dto.request.SendEmailRequest;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.identity_service.dto.request.ChangePasswordRequest;
@@ -64,6 +65,8 @@ public class UserServiceImpl implements UserService {
 
     @Value("${user-service.url}")
     String userServiceUrl;
+    @Value("${email-service.url}")
+    String emailServiceUrl;
 
     static String VerifyToken = "verifyToken";
     static String RefreshToken = "refreshToken";
@@ -74,13 +77,14 @@ public class UserServiceImpl implements UserService {
     static String REFRESH_TOKEN_PREFIX = "token:refresh:";
     static String USER_TOKENS_PREFIX = "user_tokens:";
 
-    static Pattern STRONG_PASSWORD_PATTERN = Pattern.compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,32}$");
+    static Pattern STRONG_PASSWORD_PATTERN = Pattern
+            .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,32}$");
     static int MAX_VERIFY_ATTEMPTS = 3;
     static int MAX_SEND_COUNT = 4;
 
     @Override
     public RegisterCustomerResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
-            HttpServletResponse response) {
+                                                     HttpServletResponse response) {
         if (userRepository.existsByEmail(registerCustomerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
         }
@@ -121,8 +125,21 @@ public class UserServiceImpl implements UserService {
         refreshTokenCookie.setPath("/");
         refreshTokenCookie.setMaxAge(300);
         response.addCookie(refreshTokenCookie);
-        // Gửi gmail
 
+        new Thread(() -> {
+            try {
+                SendEmailRequest sendEmailRequest = new SendEmailRequest(
+                        registerCustomerRequest.getEmail(),
+                        "Đăng ký tài khoản thành công",
+                        "Chào mừng bạn đến với CinemaStar!",
+                        "Mã OTP của bạn là: " + otp + "</p>");
+                String emailServiceUrlCreate = emailServiceUrl + "/send";
+                restTemplate.postForObject(emailServiceUrlCreate, sendEmailRequest, String.class);
+                log.info("OTP email sent for registration: email={}", registerCustomerRequest.getEmail());
+            } catch (Exception e) {
+                log.error("Failed to send OTP email for registration: email={}", registerCustomerRequest.getEmail(), e);
+            }
+        }).start();
         return RegisterCustomerResponse.builder()
                 .message("Mã OTP đã được gửi đến email của bạn")
                 .build();
@@ -130,7 +147,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public RegisterCustomerResponse createManager(RegisterManagerRequest registerManagerRequest,
-            HttpServletResponse response) {
+                                                  HttpServletResponse response) {
         String role = response.getHeader("X-ROLE");
         if (role == null || !role.equals("ADMIN")) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -181,7 +198,21 @@ public class UserServiceImpl implements UserService {
             log.error("Failed to create manager in user-service: email={}", managerRequest.getEmail(), e);
             throw new BusinessException(ErrorCode.NOT_CREATED);
         }
-
+        // Gửi email chào mừng cho manager
+        new Thread(() -> {
+            try {
+                SendEmailRequest sendEmailRequest = new SendEmailRequest(
+                        registerManagerRequest.getEmail(),
+                        "Chào mừng bạn trở thành Manager",
+                        "Tài khoản Manager đã được tạo thành công.",
+                        "Chúc mừng bạn đã trở thành Manager tại CinemaStar!");
+                String emailServiceUrlCreate = emailServiceUrl + "/send";
+                restTemplate.postForObject(emailServiceUrlCreate, sendEmailRequest, String.class);
+                log.info("Welcome email sent for manager: email={}", registerManagerRequest.getEmail());
+            } catch (Exception e) {
+                log.error("Failed to send welcome email for manager: email={}", registerManagerRequest.getEmail(), e);
+            }
+        }).start();
         return RegisterCustomerResponse.builder()
                 .message("Tạo manager thành công")
                 .build();
@@ -189,7 +220,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public RegisterCustomerResponse createStaff(RegisterStaffRequest registerStaffRequest,
-            HttpServletResponse response) {
+                                                HttpServletResponse response) {
         String role = response.getHeader("X-ROLE");
         if (role == null || !role.equals("MANAGER")) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -241,6 +272,21 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.NOT_CREATED);
         }
 
+        new Thread(() -> {
+            try {
+                SendEmailRequest sendEmailRequest = new SendEmailRequest(
+                        registerStaffRequest.getEmail(),
+                        "Chào mừng bạn trở thành Staff",
+                        "Tài khoản Staff đã được tạo thành công.",
+                        "Chúc mừng bạn đã trở thành Staff tại CinemaStar!");
+                String emailServiceUrlCreate = emailServiceUrl + "/send";
+                restTemplate.postForObject(emailServiceUrlCreate, sendEmailRequest, String.class);
+                log.info("Welcome email sent for staff: email={}", registerStaffRequest.getEmail());
+            } catch (Exception e) {
+                log.error("Failed to send welcome email for staff: email={}", registerStaffRequest.getEmail(), e);
+            }
+        }).start();
+        
         return RegisterCustomerResponse.builder()
                 .message("Tạo staff thành công")
                 .build();
@@ -305,10 +351,25 @@ public class UserServiceImpl implements UserService {
                 TimeUnit.MINUTES);
 
         // Gửi gmail
+        new Thread(() -> {
+            try {
+                SendEmailRequest sendEmailRequest = new SendEmailRequest(
+                        otpData.getSubject(),
+                        "Gửi lại mã OTP",
+                        "Bạn vừa yêu cầu gửi lại mã OTP.",
+                        "Mã OTP của bạn là: " + newOtp + "</p>");
+                String emailServiceUrlCreate = emailServiceUrl + "/send";
+                restTemplate.postForObject(emailServiceUrlCreate, sendEmailRequest, String.class);
+                log.info("OTP email resent: email={}", otpData.getSubject());
+            } catch (Exception e) {
+                log.error("Failed to resend OTP email: email={}", otpData.getSubject(), e);
+            }
+        }).start();
     }
 
     @Override
-    public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest, HttpServletResponse response) {
+    public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest,
+                                                 HttpServletResponse response) {
         if (!userRepository.existsByEmail(forgotPasswordRequest.getEmail())) {
             throw new BusinessException(USER_NOT_FOUND);
         }
@@ -341,16 +402,33 @@ public class UserServiceImpl implements UserService {
         response.addCookie(refreshTokenCookie);
         log.warn("otp forgot generate :{}", otp);
         // Gửi gmail
+        new Thread(() -> {
+            try {
+                SendEmailRequest sendEmailRequest = new SendEmailRequest(
+                        forgotPasswordRequest.getEmail(),
+                        "Quên mật khẩu - OTP",
+                        "Bạn vừa yêu cầu lấy lại mật khẩu.",
+                        "Mã OTP của bạn là: " + otp + "</p>");
+                String emailServiceUrlCreate = emailServiceUrl + "/send";
+                restTemplate.postForObject(emailServiceUrlCreate, sendEmailRequest, String.class);
+                log.info("OTP email sent for forgot password: email={}", forgotPasswordRequest.getEmail());
+            } catch (Exception e) {
+                log.error("Failed to send OTP email for forgot password: email={}", forgotPasswordRequest.getEmail(),
+                        e);
+            }
+        }).start();
+
         return ForgotPasswordResponse.builder()
                 .message("Mã OTP đã được gửi đến email của bạn")
                 .build();
     }
 
     @Override
-    public ChangePasswordResponse changePassword(ChangePasswordRequest changePasswordRequest, HttpServletResponse response) {
+    public ChangePasswordResponse changePassword(ChangePasswordRequest changePasswordRequest,
+                                                 HttpServletResponse response) {
 
-        //Kiểm tra mật khẩu cũ và mật khẩu mới có giống nhau hay không
-        if(changePasswordRequest.getOldPassword().equals(changePasswordRequest.getNewPassword())){
+        // Kiểm tra mật khẩu cũ và mật khẩu mới có giống nhau hay không
+        if (changePasswordRequest.getOldPassword().equals(changePasswordRequest.getNewPassword())) {
             throw new BusinessException(ErrorCode.PASSWORD_DUPLICATED);
         }
 

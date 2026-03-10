@@ -3,11 +3,9 @@ package com.cinema.user_service;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
-
 @ComponentScan(basePackages = {
         "com.cinema.user_service",
-        "com.cinema.exception",
-        "com.cinema.event"
+        "com.cinema.exception"
 })
 @SpringBootApplication
 public class UserServiceApplication {

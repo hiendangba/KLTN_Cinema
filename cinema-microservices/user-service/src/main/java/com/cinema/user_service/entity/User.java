@@ -1,8 +1,12 @@
 package com.cinema.user_service.entity;
+
 import com.cinema.Enum.UserEnum;
+import com.github.f4b6a3.uuid.UuidCreator;
+
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.time.LocalDate;
@@ -26,7 +30,7 @@ public class User {
     @Column(columnDefinition = "uuid")
     UUID id;
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Column(nullable = false, unique = true)
     private String email;
 
     @Column(nullable = false, length = 100)
@@ -62,7 +66,10 @@ public class User {
     LocalDateTime timeUpdated;
 
     @PrePersist
-    protected void onCreate() {
+    public void generateId() {
+        if (this.id == null) {
+            this.id = UuidCreator.getTimeOrderedEpoch();
+        }
         timeCreated = LocalDateTime.now();
         timeUpdated = LocalDateTime.now();
     }

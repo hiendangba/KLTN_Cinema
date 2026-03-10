@@ -8,6 +8,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import java.time.LocalDateTime;
@@ -75,6 +76,24 @@ public class GlobalExceptionHandler {
                 return ResponseEntity
                                 .status(HttpStatus.BAD_REQUEST)
                                 .body(response);
+        }
+
+        @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+        public ResponseEntity<APIResponse<Void>> handleMethodArgumentTypeMismatch(
+                        MethodArgumentTypeMismatchException ex, WebRequest request) {
+                log.warn("Method argument type mismatch: {}", ex.getMessage());
+                String message = "Invalid argument type";
+                if (ex.getRequiredType() != null) {
+                        message = "Invalid " + ex.getRequiredType().getSimpleName().toLowerCase() + " format";
+                }
+                APIResponse<Void> response = APIResponse.<Void>builder()
+                                .success(false)
+                                .message(message)
+                                .code(ErrorCode.VALIDATION_ERROR.getCode())
+                                .path(request.getDescription(false).replace("uri=", ""))
+                                .timestamp(LocalDateTime.now())
+                                .build();
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
 
         @ExceptionHandler(Exception.class)
