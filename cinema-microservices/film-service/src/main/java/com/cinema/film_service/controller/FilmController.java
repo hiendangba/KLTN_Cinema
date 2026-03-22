@@ -11,6 +11,7 @@ import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.response.CursorPageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,13 +21,10 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/films")
 @Slf4j
+@RequiredArgsConstructor
 public class FilmController extends BaseController {
 
     private final FilmService filmService;
-
-    public FilmController(FilmService filmService) {
-        this.filmService = filmService;
-    }
 
     @GetMapping
     public ResponseEntity<APIResponse<CursorPageResponse<FilmResponse>>> getAllFilms(

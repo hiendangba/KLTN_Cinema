@@ -1,0 +1,163 @@
+package com.cinema.showtime_service.services.impl;
+
+import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.ResultResponse;
+import com.cinema.dto.response.SuccessResponse;
+import com.cinema.exception.BusinessException;
+import com.cinema.exception.ErrorCode;
+import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
+import com.cinema.showtime_service.dto.response.FilmResponse;
+import com.cinema.showtime_service.dto.response.HallResponse;
+import com.cinema.showtime_service.dto.response.ShowTimeResponse;
+import com.cinema.showtime_service.entity.ShowTime;
+import com.cinema.showtime_service.mapper.ShowTimeMapper;
+import com.cinema.showtime_service.repository.ShowTimeRepository;
+import com.cinema.showtime_service.services.ShowTimeService;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+
+@RequiredArgsConstructor
+@Service
+@Slf4j
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class ShowTimeServiceImpl implements ShowTimeService {
+
+    final ShowTimeRepository showTimeRepository;
+    final ShowTimeMapper showTimeMapper;
+    final RestTemplate restTemplate;
+
+    @Value("${film-service.url}")
+    String filmUrl;
+
+    @Value("${hall-service.url}")
+    String hallUrl;
+
+    @Override
+    public ResultResponse<ShowTimeResponse> createShowTime(ShowTimeCreateRequest showTimeCreateRequest,
+                                                           HttpServletRequest httpRequest) {
+
+        String role = httpRequest.getHeader("X-User-Role");
+        if (!"MANAGER".equals(role)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        FilmResponse filmResponse;
+        try {
+            CompletableFuture<FilmResponse> filmFuture = CompletableFuture
+                    .supplyAsync(() -> fetchFilmsByIds(showTimeCreateRequest.getFilmId()));
+            System.out.println(filmFuture);
+            filmResponse = filmFuture.join();
+
+            // CompletableFuture<HallResponse> hallFuture = CompletableFuture
+            // .supplyAsync(() -> fetchHallsByIds(showTimeCreateRequest.getHallId()));
+
+            // HallResponse hallResponse = hallFuture.join();
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.NOT_CREATED_SHOWTIME);
+        }
+
+        // Lấy thời gian ra và kiểm tra thời gian và thời lượng của phim ra kiểm tra
+        // Thời lượng của phim + 30p dọn dẹp vệ sinh sau khi xem phim xong
+        long duration = (long) filmResponse.getDuration() + 30;
+        LocalDateTime startTime = showTimeCreateRequest.getStartDateTime();
+        LocalDateTime endTime = showTimeCreateRequest.getEndDateTime();
+
+        // Check endTime người dùng truyền vào có hợp lệ không
+        if (endTime.isBefore(startTime.plusMinutes(duration))) {
+            throw new BusinessException(ErrorCode.INVALID_END_TIME);
+        }
+
+        ResultResponse<ShowTimeResponse> resultResponse = new ResultResponse<>();
+        List<SuccessResponse<ShowTimeResponse>> showTimeResponses = new ArrayList<>();
+        while (startTime.plusMinutes(duration).isBefore(endTime)) {
+
+            Optional<ShowTime> overlapping = showTimeRepository.findOverlapping(
+                    showTimeCreateRequest.getHallId(),
+                    startTime,
+                    startTime.plusMinutes(duration));
+
+            if (overlapping.isEmpty()) {
+                // Gán lại thời gian tạo mới phim
+                showTimeCreateRequest.setStartDateTime(startTime);
+                showTimeCreateRequest.setEndDateTime(startTime.plusMinutes(duration));
+                ShowTime showTime = showTimeMapper.toEntity(showTimeCreateRequest);
+                showTime = showTimeRepository.save(showTime);
+                showTimeResponses
+                        .add(new SuccessResponse<>(showTimeMapper.toResponse(showTimeRepository.save(showTime))));
+                // Gán lại startTime
+                startTime = startTime.plusMinutes(duration);
+                continue;
+            }
+
+            // Dời startTime = endTime của show đang chiếm slot
+            startTime = overlapping.get().getEndDateTime();
+        }
+        if (showTimeResponses.isEmpty()) {
+            throw new BusinessException(ErrorCode.ALL_TIME_SLOT_OCCUPIED);
+        }
+        resultResponse.setSuccessResponse(showTimeResponses);
+        return resultResponse;
+    }
+
+    // Gọi Film Service để lấy thông tin phim dựa trên filmId
+    private FilmResponse fetchFilmsByIds(UUID filmId) {
+
+        String url = filmUrl + "/{filmId}";
+        try {
+            ResponseEntity<APIResponse<FilmResponse>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    new ParameterizedTypeReference<>() {
+                    },
+                    filmId);
+            if (response.getBody() == null || !response.getBody().isSuccess()) {
+                log.error("Failed to fetch film with ID {}: {}", filmId,
+                        response.getBody() != null ? response.getBody().getMessage() : "No response body");
+                throw new BusinessException(ErrorCode.FILM_NOT_FOUND);
+            }
+            var apirepsonse = response.getBody().getData();
+            return response.getBody().getData();
+        } catch (RestClientException e) {
+            log.error("Error fetching films from Film Service: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.FILM_NOT_FOUND);
+        }
+    }
+
+    // private HallResponse fetchHallsByIds(UUID hallId) {
+    // String url = hallUrl + "/{hallId}";
+    // try {
+    // ResponseEntity<APIResponse<HallResponse>> response = restTemplate.exchange(
+    // url,
+    // HttpMethod.GET,
+    // HttpEntity.EMPTY,
+    // new ParameterizedTypeReference<>() {
+    // },
+    // hallId);
+    // if (response.getBody() == null || !response.getBody().isSuccess()) {
+    // log.error("Failed to fetch hall with ID {}: {}", hallId,
+    // response.getBody() != null ? response.getBody().getMessage() : "No response
+    // body");
+    // throw new BusinessException(ErrorCode.HALL_NOT_FOUND);
+    // }
+    // return response.getBody().getData();
+    // } catch (RestClientException e) {
+    // log.error("Error fetching halls from Hall Service: {}", e.getMessage());
+    // throw new BusinessException(ErrorCode.HALL_SERVICE_ERROR);
+    // }
+    // }
+}

@@ -84,7 +84,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public RegisterCustomerResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
-                                                     HttpServletResponse response) {
+            HttpServletResponse response) {
         if (userRepository.existsByEmail(registerCustomerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
         }
@@ -147,7 +147,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public RegisterCustomerResponse createManager(RegisterManagerRequest registerManagerRequest,
-                                                  HttpServletResponse response) {
+            HttpServletResponse response) {
         String role = response.getHeader("X-ROLE");
         if (role == null || !role.equals("ADMIN")) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -220,7 +220,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public RegisterCustomerResponse createStaff(RegisterStaffRequest registerStaffRequest,
-                                                HttpServletResponse response) {
+            HttpServletResponse response) {
         String role = response.getHeader("X-ROLE");
         if (role == null || !role.equals("MANAGER")) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -286,7 +286,7 @@ public class UserServiceImpl implements UserService {
                 log.error("Failed to send welcome email for staff: email={}", registerStaffRequest.getEmail(), e);
             }
         }).start();
-        
+
         return RegisterCustomerResponse.builder()
                 .message("Tạo staff thành công")
                 .build();
@@ -369,7 +369,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest,
-                                                 HttpServletResponse response) {
+            HttpServletResponse response) {
         if (!userRepository.existsByEmail(forgotPasswordRequest.getEmail())) {
             throw new BusinessException(USER_NOT_FOUND);
         }
@@ -425,7 +425,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ChangePasswordResponse changePassword(ChangePasswordRequest changePasswordRequest,
-                                                 HttpServletResponse response) {
+            HttpServletResponse response) {
 
         // Kiểm tra mật khẩu cũ và mật khẩu mới có giống nhau hay không
         if (changePasswordRequest.getOldPassword().equals(changePasswordRequest.getNewPassword())) {

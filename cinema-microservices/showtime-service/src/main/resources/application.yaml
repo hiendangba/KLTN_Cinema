@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: ${APP_NAME:showtime-service}
+  mvc:
+    trailing-slash:
+      match: true
+  devtools:
+    restart:
+      enabled: false
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:true}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  data:
+    redis:
+      #      url: ${REDIS_URL:}
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      username: ${REDIS_USERNAME}
+      password: ${REDIS_PASSWORD}
+      timeout: ${REDIS_TIMEOUT:5000}
+      ssl:
+        enabled: false
+      lettuce:
+        pool:
+          max-active: ${REDIS_POOL_MAX_ACTIVE:20}
+          max-idle: ${REDIS_POOL_MAX_IDLE:10}
+          min-idle: ${REDIS_POOL_MIN_IDLE:5}
+          max-wait: ${REDIS_POOL_MAX_WAIT:-1}
+        shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:100}
+rabbitmq:
+  host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+  port: ${SPRING_RABBITMQ_PORT:5672}
+  username: ${SPRING_RABBITMQ_USERNAME:admin}
+  password: ${SPRING_RABBITMQ_PASSWORD:admin}
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+server:
+  port: ${SERVER_PORT:8094}
+
+user-service:
+  url: ${USER_SERVICE_URL}
+
+film-service:
+  url: ${FILM_SERVICE_URL}
+
+hall-service:
+  url: ${HALL_SERVICE_URL}

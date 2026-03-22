@@ -1,15 +1,15 @@
-package com.cinema.film_service;
+package com.cinema.showtime_service;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
-import org.springframework.context.annotation.ComponentScan;
 
 @EnableCaching
 @SpringBootApplication(scanBasePackages = "com.cinema")
-public class FilmServiceApplication {
+public class ShowtimeServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(FilmServiceApplication.class, args);
+        SpringApplication.run(ShowtimeServiceApplication.class, args);
     }
+
 }

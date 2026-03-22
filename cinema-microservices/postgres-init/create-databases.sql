@@ -1,3 +1,4 @@
 CREATE DATABASE user_db;
 CREATE DATABASE identity_db;
 CREATE DATABASE film_db;
+CREATE DATABASE showtime_db;
