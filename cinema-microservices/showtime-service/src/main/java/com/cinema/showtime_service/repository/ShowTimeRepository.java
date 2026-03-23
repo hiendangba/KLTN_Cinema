@@ -11,9 +11,11 @@ import java.util.UUID;
 
 public interface ShowTimeRepository extends JpaRepository<ShowTime, UUID> {
 
-    //Chỉ kiểm tra xem cái nào là đã lên lịch hoặc đang chiếu thôi
-    //StartDatetime < endTime : Suất mới có thời gian bắt đầu nhỏ hơn thời gian kết thúc của phim mới
-    //EndDateTime > startTime: Suất mới có thời gian kết thúc nhỏ hơn thời gian bắt đầu của phim mới
+    // Chỉ kiểm tra xem cái nào là đã lên lịch hoặc đang chiếu thôi
+    // StartDatetime < endTime : Suất mới có thời gian bắt đầu nhỏ hơn thời gian kết
+    // thúc của phim mới
+    // EndDateTime > startTime: Suất mới có thời gian kết thúc nhỏ hơn thời gian bắt
+    // đầu của phim mới
     @Query(value = """
             SELECT * FROM show_time s
             WHERE s.hall_id = :hallId
@@ -26,6 +28,18 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, UUID> {
     Optional<ShowTime> findOverlapping(
             @Param("hallId") UUID hallId,
             @Param("startTime") LocalDateTime startTime,
-            @Param("endTime") LocalDateTime endTime
-    );
+            @Param("endTime") LocalDateTime endTime);
+
+    // TODO: Implement method này bằng @Query hoặc Specification để hỗ trợ phân
+    // trang cursor, lọc status, isDeleted, keyword, sort đa trường
+    default java.util.List<ShowTime> findByCursorAndStatusAndIsDeletedAndKeywordAndSortMulti(
+            UUID cursor,
+            java.util.List<com.cinema.Enum.ShowTimeEnum.ShowTimeStatus> statuses,
+            boolean isDeleted,
+            String keyword,
+            int limit,
+            java.util.List<com.cinema.showtime_service.dto.request.ShowTimeSortField> sortFields) {
+        throw new UnsupportedOperationException(
+                "Chưa implement query động cho findByCursorAndStatusAndIsDeletedAndKeywordAndSortMulti");
+    }
 }

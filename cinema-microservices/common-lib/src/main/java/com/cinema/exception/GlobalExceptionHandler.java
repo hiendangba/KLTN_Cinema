@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,97 +20,97 @@ import java.util.Map;
 @Slf4j
 public class GlobalExceptionHandler {
 
-        @ExceptionHandler(BusinessException.class)
-        public ResponseEntity<APIResponse<Void>> handleBusinessException(
-                        BusinessException ex, WebRequest request) {
-                log.warn("Business exception: {} - {}", ex.getErrorCode().getCode(), ex.getMessage());
-                APIResponse<Void> response = APIResponse.<Void>builder()
-                                .success(false)
-                                .message(ex.getMessage())
-                                .code(ex.getErrorCode().getCode())
-                                .path(request.getDescription(false).replace("uri=", ""))
-                                .timestamp(LocalDateTime.now())
-                                .build();
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<APIResponse<Void>> handleBusinessException(
+            BusinessException ex, WebRequest request) {
+        log.warn("Business exception: {} - {}", ex.getErrorCode().getCode(), ex.getMessage());
+        APIResponse<Void> response = APIResponse.<Void>builder()
+                .success(false)
+                .message(ex.getMessage())
+                .code(ex.getErrorCode().getCode())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .build();
 
-                return ResponseEntity
-                                .status(ex.getErrorCode().getHttpStatus())
-                                .body(response);
+        return ResponseEntity
+                .status(ex.getErrorCode().getHttpStatus())
+                .body(response);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<APIResponse<Map<String, String>>> handleValidationException(
+            MethodArgumentNotValidException ex, WebRequest request) {
+        log.warn("Validation error: {}", ex.getMessage());
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach(error -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+
+        APIResponse<Map<String, String>> response = APIResponse.<Map<String, String>>builder()
+                .success(false)
+                .message(String.join(", ", errors.values()))
+                .data(errors)
+                .code(ErrorCode.VALIDATION_ERROR.getCode())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<APIResponse<Map<String, String>>> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex,
+            WebRequest request) {
+        log.warn("Invalid request body: {}", ex.getMessage());
+        Map<String, String> errors = new HashMap<>();
+        errors.put("_error", "Request body không hợp lệ hoặc sai định dạng");
+        APIResponse<Map<String, String>> response = APIResponse.<Map<String, String>>builder()
+                .success(false)
+                .message(errors.get("_error"))
+                .data(errors)
+                .code(ErrorCode.VALIDATION_ERROR.getCode())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .build();
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<APIResponse<Void>> handleMethodArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException ex, WebRequest request) {
+        log.warn("Method argument type mismatch: {}", ex.getMessage());
+        String message = "Invalid argument type";
+        if (ex.getRequiredType() != null) {
+            message = "Invalid " + ex.getRequiredType().getSimpleName().toLowerCase() + " format";
         }
+        APIResponse<Void> response = APIResponse.<Void>builder()
+                .success(false)
+                .message(message)
+                .code(ErrorCode.VALIDATION_ERROR.getCode())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
 
-        @ExceptionHandler(MethodArgumentNotValidException.class)
-        public ResponseEntity<APIResponse<Map<String, String>>> handleValidationException(
-                        MethodArgumentNotValidException ex, WebRequest request) {
-                log.warn("Validation error: {}", ex.getMessage());
-                Map<String, String> errors = new HashMap<>();
-                ex.getBindingResult().getAllErrors().forEach(error -> {
-                        String fieldName = ((FieldError) error).getField();
-                        String errorMessage = error.getDefaultMessage();
-                        errors.put(fieldName, errorMessage);
-                });
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<APIResponse<Void>> handleGlobalException(
+            Exception ex, WebRequest request) {
+        log.error("Unexpected error occurred", ex);
+        APIResponse<Void> response = APIResponse.<Void>builder()
+                .success(false)
+                .message("An unexpected error occurred")
+                .code(ErrorCode.INTERNAL_ERROR.getCode())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .build();
 
-                APIResponse<Map<String, String>> response = APIResponse.<Map<String, String>>builder()
-                                .success(false)
-                                .message("Lỗi định đạng dữ liệu")
-                                .data(errors)
-                                .code(ErrorCode.VALIDATION_ERROR.getCode())
-                                .path(request.getDescription(false).replace("uri=", ""))
-                                .timestamp(LocalDateTime.now())
-                                .build();
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        }
-
-        @ExceptionHandler(HttpMessageNotReadableException.class)
-        public ResponseEntity<APIResponse<Map<String, String>>> handleHttpMessageNotReadable(
-                        HttpMessageNotReadableException ex,
-                        WebRequest request) {
-                log.warn("Invalid request body: {}", ex.getMessage());
-                Map<String, String> errors = new HashMap<>();
-                errors.put("_error", "Request body không hợp lệ hoặc sai định dạng");
-                APIResponse<Map<String, String>> response = APIResponse.<Map<String, String>>builder()
-                                .success(false)
-                                .message("Lỗi định dạng dữ liệu")
-                                .data(errors)
-                                .code(ErrorCode.VALIDATION_ERROR.getCode())
-                                .path(request.getDescription(false).replace("uri=", ""))
-                                .timestamp(LocalDateTime.now())
-                                .build();
-                return ResponseEntity
-                                .status(HttpStatus.BAD_REQUEST)
-                                .body(response);
-        }
-
-        @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-        public ResponseEntity<APIResponse<Void>> handleMethodArgumentTypeMismatch(
-                        MethodArgumentTypeMismatchException ex, WebRequest request) {
-                log.warn("Method argument type mismatch: {}", ex.getMessage());
-                String message = "Invalid argument type";
-                if (ex.getRequiredType() != null) {
-                        message = "Invalid " + ex.getRequiredType().getSimpleName().toLowerCase() + " format";
-                }
-                APIResponse<Void> response = APIResponse.<Void>builder()
-                                .success(false)
-                                .message(message)
-                                .code(ErrorCode.VALIDATION_ERROR.getCode())
-                                .path(request.getDescription(false).replace("uri=", ""))
-                                .timestamp(LocalDateTime.now())
-                                .build();
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-        }
-
-        @ExceptionHandler(Exception.class)
-        public ResponseEntity<APIResponse<Void>> handleGlobalException(
-                        Exception ex, WebRequest request) {
-                log.error("Unexpected error occurred", ex);
-                APIResponse<Void> response = APIResponse.<Void>builder()
-                                .success(false)
-                                .message("An unexpected error occurred")
-                                .code(ErrorCode.INTERNAL_ERROR.getCode())
-                                .path(request.getDescription(false).replace("uri=", ""))
-                                .timestamp(LocalDateTime.now())
-                                .build();
-
-                return ResponseEntity
-                                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .body(response);
-        }
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(response);
+    }
 }

@@ -20,7 +20,10 @@ import java.util.UUID;
 public class RegisterManagerRequest {
     @NotBlank(message = "Tên không được để trống")
     @Size(max = 100, message = "Tên quá dài không hợp lệ!")
-    @Pattern(regexp = "^[\\p{L} .'-]+$", message = "Tên chứa ký tự không hợp lệ")
+    @Pattern(
+            regexp = "^[\\p{L}\\p{M} .'-]+$",
+            message = "Tên chứa ký tự không hợp lệ"
+    )
     private String name;
 
     @Email(message = "Email không hợp lệ")

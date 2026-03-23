@@ -51,8 +51,17 @@ public enum ErrorCode {
         NOT_CREATED_SHOWTIME("4201", "Không thể tạo suất chiếu. Vui lòng liên hệ quản trị viên để được hỗ trợ",
                         HttpStatus.BAD_REQUEST),
         ALL_TIME_SLOT_OCCUPIED("4202", "Tất cả các khung giờ đã có suất chiếu.", HttpStatus.BAD_REQUEST),
+        SHOWTIME_NOT_FOUND("4203", "Suất chiếu không tìm thấy", HttpStatus.NOT_FOUND),
+        NOT_UPDATE_BOOKED_SHOWTIME("4204", "Không thể cập nhật trạng thái của suất chiếu đã được đặt vé",
+                        HttpStatus.BAD_REQUEST),
+        NOT_UPDATE_CANCELLED_SHOWTIME("4205", "Không thể cập nhật trạng thái của suất chiếu đã bị hủy",
+                        HttpStatus.BAD_REQUEST),
+        NOT_UPDATE_FINISHED_SHOWTIME("4206", "Không thể cập nhật trạng thái của suất chiếu đã kết thúc",
+                        HttpStatus.BAD_REQUEST),
+        DELETED_SHOWTIME("4207", "Xuất chiếu đã bị xóa trước đó rồi", HttpStatus.BAD_REQUEST),
 
         HALL_NOT_FOUND("4301", "Phòng chiếu không tìm thấy", HttpStatus.NOT_FOUND),
+
         EMAIL_SEND_FAILED("9100", "Gửi email thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
         FILM_SERVICE_ERROR("9101", "Lỗi khi gọi Film Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         HALL_SERVICE_ERROR("9102", "Lỗi khi gọi Hall Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE);

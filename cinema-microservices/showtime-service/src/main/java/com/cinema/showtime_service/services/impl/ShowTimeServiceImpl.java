@@ -1,11 +1,16 @@
 package com.cinema.showtime_service.services.impl;
 
+import com.cinema.Enum.ShowTimeEnum;
+import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.dto.response.SuccessResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
+import com.cinema.showtime_service.dto.request.ShowTimeSortField;
+import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
 import com.cinema.showtime_service.dto.response.HallResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
@@ -46,6 +51,41 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Value("${hall-service.url}")
     String hallUrl;
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public CursorPageResponse<ShowTimeResponse> getAllShowtimes(
+            CursorPageRequest<ShowTimeSortField> request) {
+
+        // Lọc trạng thái SCHEDULED, ONGOING và isDeleted = false
+        var allowedStatuses = java.util.List.of(
+                com.cinema.Enum.ShowTimeEnum.ShowTimeStatus.SCHEDULED,
+                com.cinema.Enum.ShowTimeEnum.ShowTimeStatus.ONGOING);
+
+        UUID cursor = request.getParsedCursor();
+        String keyword = request.getNormalizedKeyword();
+        int size = request.getSize();
+        // Lấy danh sách sort fields
+        var sortFields = request.getSortFields(); // cần bổ sung hàm getSortFields nếu chưa có
+
+        // Query động bằng JPA Specification hoặc native query, ở đây demo native query
+        // đơn giản
+        // Giả sử có method findByCursorAndStatusAndIsDeletedAndKeywordAndSortMulti
+        java.util.List<ShowTime> showtimes = showTimeRepository.findByCursorAndStatusAndIsDeletedAndKeywordAndSortMulti(
+                cursor, allowedStatuses, false, keyword, size + 1, sortFields);
+
+        boolean hasNext = showtimes.size() > size;
+        if (hasNext)
+            showtimes = showtimes.subList(0, size);
+        String nextCursor = hasNext ? showtimes.get(showtimes.size() - 1).getId().toString() : null;
+
+        return com.cinema.dto.response.CursorPageResponse.<ShowTimeResponse>builder()
+                .data(showtimes.stream().map(showTimeMapper::toResponse).toList())
+                .nextCursor(nextCursor)
+                .hasNext(hasNext)
+                .size(showtimes.size())
+                .build();
+    }
 
     @Override
     public ResultResponse<ShowTimeResponse> createShowTime(ShowTimeCreateRequest showTimeCreateRequest,
@@ -97,7 +137,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 ShowTime showTime = showTimeMapper.toEntity(showTimeCreateRequest);
                 showTime = showTimeRepository.save(showTime);
                 showTimeResponses
-                        .add(new SuccessResponse<>(showTimeMapper.toResponse(showTimeRepository.save(showTime))));
+                        .add(new SuccessResponse<>(showTimeMapper.toResponse(showTime)));
                 // Gán lại startTime
                 startTime = startTime.plusMinutes(duration);
                 continue;
@@ -111,6 +151,56 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         }
         resultResponse.setSuccessResponse(showTimeResponses);
         return resultResponse;
+    }
+
+    @Override
+    public ShowTimeResponse updateShowTimeStatus(UUID id, UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
+                                                 HttpServletRequest httpRequest) {
+        String role = httpRequest.getHeader("X-User-Role");
+        if (!"MANAGER".equals(role)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        ShowTime showTime = showTimeRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+        if (showTime.getIsDeleted()) {
+            throw new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND);
+        }
+
+        if (showTime.getIsBooked()) {
+            throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
+        }
+
+        if (showTime.getStatus().equals(ShowTimeEnum.ShowTimeStatus.CANCELLED)) {
+            throw new BusinessException(ErrorCode.NOT_UPDATE_CANCELLED_SHOWTIME);
+        }
+
+        if (showTime.getStatus().equals(ShowTimeEnum.ShowTimeStatus.FINISHED)) {
+            throw new BusinessException(ErrorCode.NOT_UPDATE_FINISHED_SHOWTIME);
+        }
+
+        showTime.setStatus(updateShowTimeStatusRequest.getStatus());
+        showTimeRepository.save(showTime);
+        return showTimeMapper.toResponse(showTime);
+    }
+
+    @Override
+    public void deleteShowTime(UUID id, HttpServletRequest httpRequest) {
+        String role = httpRequest.getHeader("X-User-Role");
+        if (!"MANAGER".equals(role)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        ShowTime showTime = showTimeRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+
+        if (showTime.getIsBooked()) {
+            throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
+        }
+
+        if (showTime.getIsDeleted()) {
+            throw new BusinessException(ErrorCode.DELETED_SHOWTIME);
+        }
+        showTime.setIsDeleted(true);
+        showTimeRepository.save(showTime);
     }
 
     // Gọi Film Service để lấy thông tin phim dựa trên filmId
@@ -130,7 +220,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                         response.getBody() != null ? response.getBody().getMessage() : "No response body");
                 throw new BusinessException(ErrorCode.FILM_NOT_FOUND);
             }
-            var apirepsonse = response.getBody().getData();
+            log.info("Fetched film with ID {}: {}", filmId, response.getBody().getData());
             return response.getBody().getData();
         } catch (RestClientException e) {
             log.error("Error fetching films from Film Service: {}", e.getMessage());
@@ -158,6 +248,4 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     // } catch (RestClientException e) {
     // log.error("Error fetching halls from Hall Service: {}", e.getMessage());
     // throw new BusinessException(ErrorCode.HALL_SERVICE_ERROR);
-    // }
-    // }
 }
