@@ -29,17 +29,4 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, UUID> {
             @Param("hallId") UUID hallId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
-
-    // TODO: Implement method này bằng @Query hoặc Specification để hỗ trợ phân
-    // trang cursor, lọc status, isDeleted, keyword, sort đa trường
-    default java.util.List<ShowTime> findByCursorAndStatusAndIsDeletedAndKeywordAndSortMulti(
-            UUID cursor,
-            java.util.List<com.cinema.Enum.ShowTimeEnum.ShowTimeStatus> statuses,
-            boolean isDeleted,
-            String keyword,
-            int limit,
-            java.util.List<com.cinema.showtime_service.dto.request.ShowTimeSortField> sortFields) {
-        throw new UnsupportedOperationException(
-                "Chưa implement query động cho findByCursorAndStatusAndIsDeletedAndKeywordAndSortMulti");
-    }
 }

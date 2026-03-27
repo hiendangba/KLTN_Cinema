@@ -9,14 +9,14 @@ import com.cinema.dto.response.SuccessResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
-import com.cinema.showtime_service.dto.request.ShowTimeSortField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
-import com.cinema.showtime_service.dto.response.HallResponse;
+//import com.cinema.showtime_service.dto.response.HallResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import com.cinema.showtime_service.entity.ShowTime;
 import com.cinema.showtime_service.mapper.ShowTimeMapper;
 import com.cinema.showtime_service.repository.ShowTimeRepository;
+import com.cinema.showtime_service.repository.ShowTimeRepositoryImpl;
 import com.cinema.showtime_service.services.ShowTimeService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
@@ -40,9 +40,11 @@ import java.util.concurrent.CompletableFuture;
 @Service
 @Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE)
+
 public class ShowTimeServiceImpl implements ShowTimeService {
 
     final ShowTimeRepository showTimeRepository;
+    final ShowTimeRepositoryImpl showTimeRepositoryImpl;
     final ShowTimeMapper showTimeMapper;
     final RestTemplate restTemplate;
 
@@ -54,32 +56,30 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public CursorPageResponse<ShowTimeResponse> getAllShowtimes(
-            CursorPageRequest<ShowTimeSortField> request) {
-
-        // Lọc trạng thái SCHEDULED, ONGOING và isDeleted = false
-        var allowedStatuses = java.util.List.of(
-                com.cinema.Enum.ShowTimeEnum.ShowTimeStatus.SCHEDULED,
-                com.cinema.Enum.ShowTimeEnum.ShowTimeStatus.ONGOING);
+    public CursorPageResponse<ShowTimeResponse> searchShowtimes(
+            CursorPageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request) {
+        log.info("Lấy danh sách showtime (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
+                request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
+                request.getFilterBy());
 
         UUID cursor = request.getParsedCursor();
         String keyword = request.getNormalizedKeyword();
         int size = request.getSize();
-        // Lấy danh sách sort fields
-        var sortFields = request.getSortFields(); // cần bổ sung hàm getSortFields nếu chưa có
+        var sortFields = request.getSortBy();
+        var filterFields = request.getFilterBy();
 
-        // Query động bằng JPA Specification hoặc native query, ở đây demo native query
-        // đơn giản
-        // Giả sử có method findByCursorAndStatusAndIsDeletedAndKeywordAndSortMulti
-        java.util.List<ShowTime> showtimes = showTimeRepository.findByCursorAndStatusAndIsDeletedAndKeywordAndSortMulti(
-                cursor, allowedStatuses, false, keyword, size + 1, sortFields);
+        List<ShowTime> showtimes = showTimeRepositoryImpl.searchWithCursorAndSortAndFilter(
+                cursor, keyword, size, sortFields, filterFields);
 
         boolean hasNext = showtimes.size() > size;
         if (hasNext)
             showtimes = showtimes.subList(0, size);
-        String nextCursor = hasNext ? showtimes.get(showtimes.size() - 1).getId().toString() : null;
 
-        return com.cinema.dto.response.CursorPageResponse.<ShowTimeResponse>builder()
+        String nextCursor = hasNext && !showtimes.isEmpty()
+                ? showtimes.get(showtimes.size() - 1).getId().toString()
+                : null;
+
+        return CursorPageResponse.<ShowTimeResponse>builder()
                 .data(showtimes.stream().map(showTimeMapper::toResponse).toList())
                 .nextCursor(nextCursor)
                 .hasNext(hasNext)
@@ -89,7 +89,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     public ResultResponse<ShowTimeResponse> createShowTime(ShowTimeCreateRequest showTimeCreateRequest,
-                                                           HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest) {
 
         String role = httpRequest.getHeader("X-User-Role");
         if (!"MANAGER".equals(role)) {
@@ -155,7 +155,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     public ShowTimeResponse updateShowTimeStatus(UUID id, UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
-                                                 HttpServletRequest httpRequest) {
+            HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader("X-User-Role");
         if (!"MANAGER".equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);

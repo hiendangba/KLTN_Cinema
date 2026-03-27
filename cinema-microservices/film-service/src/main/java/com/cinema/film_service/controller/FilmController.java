@@ -3,7 +3,7 @@ package com.cinema.film_service.controller;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
-import com.cinema.film_service.dto.request.FilmSortField;
+import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.services.FilmService;
@@ -26,10 +26,10 @@ public class FilmController extends BaseController {
 
     private final FilmService filmService;
 
-    @GetMapping
-    public ResponseEntity<APIResponse<CursorPageResponse<FilmResponse>>> getAllFilms(
-            @ModelAttribute CursorPageRequest<FilmSortField> request) {
-        CursorPageResponse<FilmResponse> response = filmService.getAllFilms(request);
+    @PostMapping("/search")
+    public ResponseEntity<APIResponse<CursorPageResponse<FilmResponse>>> searchFilms(
+            @RequestBody CursorPageRequest<FilmField> request) {
+        CursorPageResponse<FilmResponse> response = filmService.searchFilms(request);
         return ok(response);
     }
 
@@ -40,14 +40,16 @@ public class FilmController extends BaseController {
     }
 
     @PostMapping
-    public ResponseEntity<APIResponse<FilmResponse>> createFilm(@Valid @RequestBody CreateFilmRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<APIResponse<FilmResponse>> createFilm(@Valid @RequestBody CreateFilmRequest request,
+            HttpServletRequest httpRequest) {
         log.info("Request tạo phim: {}", request.getTitle());
         FilmResponse response = filmService.createFilm(request, httpRequest);
         return created(response);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<APIResponse<FilmResponse>> updateFilm(@PathVariable UUID id, @Valid @RequestBody UpdateFilmRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<APIResponse<FilmResponse>> updateFilm(@PathVariable UUID id,
+            @Valid @RequestBody UpdateFilmRequest request, HttpServletRequest httpRequest) {
         log.info("Request cập nhật phim với ID: {}", id);
         FilmResponse response = filmService.updateFilm(id, request, httpRequest);
         return ok(response);

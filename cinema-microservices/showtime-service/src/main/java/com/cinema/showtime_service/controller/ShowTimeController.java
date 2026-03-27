@@ -7,7 +7,6 @@ import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
-import com.cinema.showtime_service.dto.request.ShowTimeSortField;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import com.cinema.showtime_service.services.ShowTimeService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,10 +26,10 @@ import java.util.UUID;
 public class ShowTimeController extends BaseController {
     private final ShowTimeService showTimeService;
 
-    @GetMapping
-    public ResponseEntity<APIResponse<CursorPageResponse<ShowTimeResponse>>> getAllShowtimes(
-            @ModelAttribute CursorPageRequest<ShowTimeSortField> request) {
-        var response = showTimeService.getAllShowtimes(request);
+    @PostMapping("/search")
+    public ResponseEntity<APIResponse<CursorPageResponse<ShowTimeResponse>>> searchShowtimes(
+            @RequestBody CursorPageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request) {
+        CursorPageResponse<ShowTimeResponse> response = showTimeService.searchShowtimes(request);
         return ok(response);
     }
 

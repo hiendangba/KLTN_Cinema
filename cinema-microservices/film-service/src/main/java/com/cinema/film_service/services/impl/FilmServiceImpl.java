@@ -1,14 +1,16 @@
 package com.cinema.film_service.services.impl;
 
 import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.FilterField;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
-import com.cinema.film_service.dto.request.FilmSortField;
+import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.entity.Film;
 import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.FilmRepository;
+import com.cinema.film_service.repository.FilmRepositoryImpl;
 import com.cinema.film_service.services.FilmService;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
@@ -19,11 +21,11 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// ...existing code...
-
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import com.cinema.dto.request.SortField;
 
 @Service
 @Slf4j
@@ -32,6 +34,7 @@ import java.util.stream.Collectors;
 public class FilmServiceImpl implements FilmService {
 
     private final FilmRepository filmRepository;
+    private final FilmRepositoryImpl filmRepositoryImpl;
     private final FilmMapper filmMapper;
 
     @Override
@@ -96,28 +99,48 @@ public class FilmServiceImpl implements FilmService {
     }
 
     @Override
-    public CursorPageResponse<FilmResponse> getAllFilms(CursorPageRequest<FilmSortField> request) {
-        log.info("Lấy danh sách phim (cursor={}, size={}, keyword={})",
-                request.getCursor(), request.getSize(), request.getKeyword());
+    public CursorPageResponse<FilmResponse> searchFilms(
+            CursorPageRequest<FilmField> request) {
+        log.info("Lấy danh sách phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
+                request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
+                request.getFilterBy());
 
-        UUID cursor = request.getParsedCursor(); // ✅ dùng method trong request
-        String keyword = request.getNormalizedKeyword(); // ✅ dùng method trong request
+        String[] cursorParts = request.getParsedCompositeCursor();
+        String keyword = request.getNormalizedKeyword();
+        int size = request.getSizeOrDefault();
 
-        List<Film> films = filmRepository.findByCursorAndKeyword(cursor, keyword, request.getSize() + 1);
+        // Truyền thẳng các DTO filter/sort vào repository
+        List<SortField<FilmField>> sortFields = request.getSortBy();
 
-        boolean hasNext = films.size() > request.getSize();
-        if (hasNext)
-            films = films.subList(0, request.getSize());
+        // Luôn thêm ID làm sort cuối để đảm bảo thứ tự ổn định
+        sortFields.add(new SortField<>(FilmField.ID, "ASC"));
+        List<FilterField<FilmField>> filterFields = request.getFilterBy();
+        List<Film> films = filmRepositoryImpl.searchWithCursorAndSortAndFilter(
+                cursorParts, keyword, size, sortFields, filterFields);
+        boolean hasNext = films.size() > size;
+        String nextCursor = null;
+        if (hasNext) {
+            films = films.subList(0, size);
+            nextCursor = CursorPageRequest
+                    .encodeCompositeCursor(FilmField.getFieldValues(films.get(films.size() - 1), sortFields));
+        }
 
-        String nextCursor = hasNext
-                ? films.get(films.size() - 1).getId().toString()
-                : null;
+        String prevCursor = null;
+        if (cursorParts != null && cursorParts.length > 0) {
+            List<Film> prevFilms = filmRepositoryImpl.previousCursor(
+                    cursorParts, keyword, size, sortFields, filterFields);
+            if (!prevFilms.isEmpty()) {
+                prevCursor = CursorPageRequest
+                        .encodeCompositeCursor(FilmField.getFieldValues(prevFilms.get(0), sortFields));
+            }
+        }
 
         return CursorPageResponse.<FilmResponse>builder()
                 .data(films.stream()
                         .map(filmMapper::toResponse)
                         .collect(Collectors.toList()))
                 .nextCursor(nextCursor)
+                .prevCursor(prevCursor)
                 .hasNext(hasNext)
                 .size(films.size())
                 .build();
