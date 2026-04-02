@@ -56,4 +56,10 @@ public class ShowTimeController extends BaseController {
         showTimeService.deleteShowTime(id, httpRequest);
         return ok(null);
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<APIResponse<ShowTimeResponse>> getShowTimeById(@PathVariable UUID id) {
+        ShowTimeResponse response = showTimeService.getShowTimeById(id);
+        return ok(response);
+    }
 }

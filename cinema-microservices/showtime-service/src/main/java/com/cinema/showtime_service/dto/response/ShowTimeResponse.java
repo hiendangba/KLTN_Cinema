@@ -22,5 +22,4 @@ public class ShowTimeResponse {
     boolean isDeleted;
     LocalDateTime timeCreated;
     LocalDateTime timeUpdated;
-    boolean isBooked;
 }

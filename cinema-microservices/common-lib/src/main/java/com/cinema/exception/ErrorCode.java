@@ -65,6 +65,7 @@ public enum ErrorCode {
         EMAIL_SEND_FAILED("9100", "Gửi email thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
         FILM_SERVICE_ERROR("9101", "Lỗi khi gọi Film Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         HALL_SERVICE_ERROR("9102", "Lỗi khi gọi Hall Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
+        BOOKING_SERVICE_ERROR("9104", "Lỗi khi gọi Booking Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         UN_SUPPORTED_FIELD_TYPE("9103", "Loại dữ liệu của trường không được hỗ trợ", HttpStatus.BAD_REQUEST);
 
         private final String code;

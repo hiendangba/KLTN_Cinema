@@ -1,7 +1,9 @@
 package com.cinema.user_service.controller;
 
 import com.cinema.controller.BaseController;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.user_service.dto.request.*;
 import com.cinema.user_service.dto.response.RegisterCustomerResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
@@ -13,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -69,15 +70,19 @@ public class UserController extends BaseController {
         return ok(updateStaffResponse);
     }
 
-    @GetMapping("/staffs")
-    public ResponseEntity<APIResponse<List<UserResponse>>> getAllStaff(HttpServletRequest request) {
-        List<UserResponse> staffList = userService.getAllStaff(request);
+    @PostMapping("/staffs/search")
+    public ResponseEntity<APIResponse<PageResponse<UserResponse>>> getAllStaff(
+            @Valid @RequestBody PageRequest<?> pageRequest,
+            HttpServletRequest request) {
+        PageResponse<UserResponse> staffList = userService.getAllStaff(pageRequest, request);
         return ok(staffList);
     }
 
-    @GetMapping("/managers")
-    public ResponseEntity<APIResponse<List<UserResponse>>> getAllManager(HttpServletRequest request) {
-        List<UserResponse> managerList = userService.getAllManager(request);
+    @PostMapping("/managers/search")
+    public ResponseEntity<APIResponse<PageResponse<UserResponse>>> getAllManager(
+            @Valid @RequestBody PageRequest<?> pageRequest,
+            HttpServletRequest request) {
+        PageResponse<UserResponse> managerList = userService.getAllManager(pageRequest, request);
         return ok(managerList);
     }
 

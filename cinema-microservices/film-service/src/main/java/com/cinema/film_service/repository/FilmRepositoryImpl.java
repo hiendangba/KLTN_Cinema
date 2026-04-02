@@ -206,7 +206,7 @@ public class FilmRepositoryImpl {
         cq.orderBy(orders);
 
         TypedQuery<Film> query = entityManager.createQuery(cq);
-        query.setMaxResults(1);
+        query.setMaxResults(size);
 
         return query.getResultList();
     }

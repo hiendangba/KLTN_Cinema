@@ -23,6 +23,7 @@ public class UserResponse {
     String phone;
     UserEnum.UserRole role;
     LocalDateTime timeCreated;
+    LocalDateTime timeUpdated ;
     String bankCode;
     String accountNumber;
     String accountName;

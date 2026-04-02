@@ -45,16 +45,12 @@ public class ShowTime {
     @Column(name = "time_updated", nullable = false)
     private LocalDateTime timeUpdated;
 
-    @Column(name = "is_booked", nullable = false)
-    private Boolean isBooked;
-
     @PrePersist
     public void prePersist() {
         if (this.id == null) {
             this.id = UuidCreator.getTimeOrderedEpoch(); // UUIDv7
         }
         isDeleted = false;
-        isBooked = false;
         timeCreated = LocalDateTime.now();
         timeUpdated = LocalDateTime.now();
     }

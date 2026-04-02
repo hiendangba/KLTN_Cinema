@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class FilterField<T extends Enum<T>> {
     private T field;
-    @Pattern(regexp = "^(EQ|LIKE|GTE|LTE|NEQ|IN|BETWEEN)$", message = "Operator must be one of: EQ, LIKE, GTE, LTE, NEQ, IN, BETWEEN")
+    @Pattern(regexp = "^(EQ|LIKE|GTE|LTE|NEQ|IN|BETWEEN)$", message = "Operator must be one of: EQ, LIKE , GTE, LTE, NEQ, IN, BETWEEN")
     private String operator;
     private Object value;
 }

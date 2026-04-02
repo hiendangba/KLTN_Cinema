@@ -12,7 +12,6 @@ import com.cinema.Enum.ShowTimeEnum;
 public interface ShowTimeMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
-    @Mapping(target = "isBooked", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
     @Mapping(target = "timeUpdated", ignore = true)
     ShowTime toEntity(ShowTimeCreateRequest showTimeCreateRequest);

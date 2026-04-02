@@ -3,9 +3,11 @@ package com.cinema.film_service.services.impl;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
+import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.entity.Film;
 import com.cinema.film_service.mapper.FilmMapper;
@@ -21,6 +23,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -99,6 +102,18 @@ public class FilmServiceImpl implements FilmService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public BatchFilmResponse getFilmsInBatch(BatchFilmRequest request) {
+        log.info("Lấy danh sách phim theo batch: {} ids", request.getIds().size());
+        List<Film> films = filmRepository.findAllById(request.getIds());
+        List<FilmResponse> filmResponses = films.stream()
+                .filter(film -> !film.getIsDeleted())
+                .map(filmMapper::toResponse)
+                .collect(Collectors.toList());
+        return new BatchFilmResponse(filmResponses);
+    }
+
+    @Override
     public CursorPageResponse<FilmResponse> searchFilms(
             CursorPageRequest<FilmField> request) {
         log.info("Lấy danh sách phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
@@ -111,7 +126,9 @@ public class FilmServiceImpl implements FilmService {
 
         // Truyền thẳng các DTO filter/sort vào repository
         List<SortField<FilmField>> sortFields = request.getSortBy();
-
+        if (sortFields == null) {
+            sortFields = new ArrayList<>();
+        }
         // Luôn thêm ID làm sort cuối để đảm bảo thứ tự ổn định
         sortFields.add(new SortField<>(FilmField.ID, "ASC"));
         List<FilterField<FilmField>> filterFields = request.getFilterBy();
@@ -130,8 +147,11 @@ public class FilmServiceImpl implements FilmService {
             List<Film> prevFilms = filmRepositoryImpl.previousCursor(
                     cursorParts, keyword, size, sortFields, filterFields);
             if (!prevFilms.isEmpty()) {
-                prevCursor = CursorPageRequest
-                        .encodeCompositeCursor(FilmField.getFieldValues(prevFilms.get(0), sortFields));
+                if (prevFilms.size() == size) {
+                    prevCursor = CursorPageRequest
+                            .encodeCompositeCursor(
+                                    FilmField.getFieldValues(prevFilms.get(size - 1), sortFields));
+                }
             }
         }
 

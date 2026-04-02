@@ -2,9 +2,11 @@ package com.cinema.film_service.controller;
 
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
+import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.services.FilmService;
 import com.cinema.dto.request.CursorPageRequest;
@@ -16,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -39,9 +42,16 @@ public class FilmController extends BaseController {
         return ok(response);
     }
 
+    @PostMapping("/batch")
+    public ResponseEntity<APIResponse<BatchFilmResponse>> getFilmsInBatch(
+            @Valid @RequestBody BatchFilmRequest batchFilmRequest) {
+        BatchFilmResponse response = filmService.getFilmsInBatch(batchFilmRequest);
+        return ok(response);
+    }
+
     @PostMapping
     public ResponseEntity<APIResponse<FilmResponse>> createFilm(@Valid @RequestBody CreateFilmRequest request,
-            HttpServletRequest httpRequest) {
+                                                                HttpServletRequest httpRequest) {
         log.info("Request tạo phim: {}", request.getTitle());
         FilmResponse response = filmService.createFilm(request, httpRequest);
         return created(response);
@@ -49,7 +59,7 @@ public class FilmController extends BaseController {
 
     @PutMapping("/{id}")
     public ResponseEntity<APIResponse<FilmResponse>> updateFilm(@PathVariable UUID id,
-            @Valid @RequestBody UpdateFilmRequest request, HttpServletRequest httpRequest) {
+                                                                @Valid @RequestBody UpdateFilmRequest request, HttpServletRequest httpRequest) {
         log.info("Request cập nhật phim với ID: {}", id);
         FilmResponse response = filmService.updateFilm(id, request, httpRequest);
         return ok(response);

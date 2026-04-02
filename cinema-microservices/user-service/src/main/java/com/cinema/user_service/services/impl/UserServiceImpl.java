@@ -3,6 +3,8 @@ package com.cinema.user_service.services.impl;
 import com.cinema.Enum.UserEnum;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.user_service.dto.request.*;
 import com.cinema.user_service.dto.response.RegisterCustomerResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
@@ -18,8 +20,10 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.UUID;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Service
@@ -194,22 +198,44 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<UserResponse> getAllStaff(HttpServletRequest request) {
+    public PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request) {
         String role = request.getHeader("X-User-Role");
         if (!("ADMIN".equals(role) || "MANAGER".equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return userMapper.toUserResponseList(
-                userRepository.findByRole(UserEnum.UserRole.STAFF));
+
+        Pageable pageable = pageRequest.toPageable();
+        Page<User> userPage = userRepository.findByRole(UserEnum.UserRole.STAFF, pageable);
+
+        return PageResponse.<UserResponse>builder()
+                .data(userMapper.toUserResponseList(userPage.getContent()))
+                .currentPage(pageRequest.getPageOrDefault())
+                .totalPages(userPage.getTotalPages())
+                .totalElements(userPage.getTotalElements())
+                .size(pageRequest.getSizeOrDefault())
+                .hasNext(userPage.hasNext())
+                .hasPrevious(userPage.hasPrevious())
+                .build();
     }
 
     @Override
-    public List<UserResponse> getAllManager(HttpServletRequest request) {
+    public PageResponse<UserResponse> getAllManager(PageRequest<?> pageRequest, HttpServletRequest request) {
         String role = request.getHeader("X-User-Role");
         if (!"ADMIN".equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        return userMapper.toUserResponseList(
-                userRepository.findByRole(UserEnum.UserRole.MANAGER));
+
+        Pageable pageable = pageRequest.toPageable();
+        Page<User> userPage = userRepository.findByRole(UserEnum.UserRole.MANAGER, pageable);
+
+        return PageResponse.<UserResponse>builder()
+                .data(userMapper.toUserResponseList(userPage.getContent()))
+                .currentPage(pageRequest.getPageOrDefault())
+                .totalPages(userPage.getTotalPages())
+                .totalElements(userPage.getTotalElements())
+                .size(pageRequest.getSizeOrDefault())
+                .hasNext(userPage.hasNext())
+                .hasPrevious(userPage.hasPrevious())
+                .build();
     }
 }

@@ -2,6 +2,8 @@ package com.cinema.showtime_service.services.impl;
 
 import com.cinema.Enum.ShowTimeEnum;
 import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.FilterField;
+import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.dto.response.ResultResponse;
@@ -9,6 +11,7 @@ import com.cinema.dto.response.SuccessResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
+import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
 //import com.cinema.showtime_service.dto.response.HallResponse;
@@ -35,6 +38,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
@@ -54,6 +58,9 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     @Value("${hall-service.url}")
     String hallUrl;
 
+    @Value("${booking-service.url}")
+    String bookingUrl;
+
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public CursorPageResponse<ShowTimeResponse> searchShowtimes(
@@ -62,34 +69,64 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
                 request.getFilterBy());
 
-        UUID cursor = request.getParsedCursor();
+        String[] cursorParts = request.getParsedCompositeCursor();
         String keyword = request.getNormalizedKeyword();
-        int size = request.getSize();
-        var sortFields = request.getSortBy();
-        var filterFields = request.getFilterBy();
+        int size = request.getSizeOrDefault();
 
-        List<ShowTime> showtimes = showTimeRepositoryImpl.searchWithCursorAndSortAndFilter(
-                cursor, keyword, size, sortFields, filterFields);
+        // Truyền thẳng các DTO filter/sort vào repository
+        List<SortField<ShowTimeField>> sortFields = request.getSortBy();
+        if (sortFields == null) {
+            sortFields = new ArrayList<>();
+        }
 
-        boolean hasNext = showtimes.size() > size;
-        if (hasNext)
-            showtimes = showtimes.subList(0, size);
+        // Luôn thêm ID làm sort cuối để đảm bảo thứ tự ổn định
+        sortFields.add(new SortField<>(ShowTimeField.ID, "ASC"));
+        List<FilterField<ShowTimeField>> filterFields = request.getFilterBy();
+        List<ShowTime> showTimes = showTimeRepositoryImpl.searchWithCursorAndSortAndFilter(
+                cursorParts, keyword, size, sortFields, filterFields);
+        boolean hasNext = showTimes.size() > size;
+        String nextCursor = null;
+        if (hasNext) {
+            showTimes = showTimes.subList(0, size);
+            nextCursor = CursorPageRequest
+                    .encodeCompositeCursor(ShowTimeField.getFieldValues(showTimes.get(showTimes.size() - 1), sortFields));
+        }
 
-        String nextCursor = hasNext && !showtimes.isEmpty()
-                ? showtimes.get(showtimes.size() - 1).getId().toString()
-                : null;
+        String prevCursor = null;
+        if (cursorParts != null && cursorParts.length > 0) {
+            List<ShowTime> prevShowTimes = showTimeRepositoryImpl.previousCursor(
+                    cursorParts, keyword, size, sortFields, filterFields);
+            if (!prevShowTimes.isEmpty()) {
+                if (prevShowTimes.size() == size) {
+                    prevCursor = CursorPageRequest
+                            .encodeCompositeCursor(
+                                    ShowTimeField.getFieldValues(prevShowTimes.get(size - 1), sortFields));
+                }
+            }
+        }
 
         return CursorPageResponse.<ShowTimeResponse>builder()
-                .data(showtimes.stream().map(showTimeMapper::toResponse).toList())
+                .data(showTimes.stream()
+                        .map(showTimeMapper::toResponse)
+                        .collect(Collectors.toList()))
                 .nextCursor(nextCursor)
+                .prevCursor(prevCursor)
                 .hasNext(hasNext)
-                .size(showtimes.size())
+                .size(showTimes.size())
                 .build();
     }
 
     @Override
+    public ShowTimeResponse getShowTimeById(UUID id) {
+        ShowTime showTime = showTimeRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+
+        return showTimeMapper.toResponse(showTime);
+    }
+
+    @Override
     public ResultResponse<ShowTimeResponse> createShowTime(ShowTimeCreateRequest showTimeCreateRequest,
-            HttpServletRequest httpRequest) {
+                                                           HttpServletRequest httpRequest) {
 
         String role = httpRequest.getHeader("X-User-Role");
         if (!"MANAGER".equals(role)) {
@@ -155,7 +192,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     public ShowTimeResponse updateShowTimeStatus(UUID id, UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
-            HttpServletRequest httpRequest) {
+                                                 HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader("X-User-Role");
         if (!"MANAGER".equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -166,7 +203,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             throw new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND);
         }
 
-        if (showTime.getIsBooked()) {
+        if (checkShowtimeBooked(id)) {
             throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
         }
 
@@ -192,7 +229,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
 
-        if (showTime.getIsBooked()) {
+        if (checkShowtimeBooked(id)) {
             throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
         }
 
@@ -248,4 +285,29 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     // } catch (RestClientException e) {
     // log.error("Error fetching halls from Hall Service: {}", e.getMessage());
     // throw new BusinessException(ErrorCode.HALL_SERVICE_ERROR);
+    // }
+
+    private boolean checkShowtimeBooked(UUID showtimeId) {
+        String url = bookingUrl + "/check-showtime/{showtimeId}";
+        try {
+            ResponseEntity<APIResponse<Void>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    HttpEntity.EMPTY,
+                    new ParameterizedTypeReference<APIResponse<Void>>() {},
+                    showtimeId);
+
+            if (response.getBody() == null) {
+                log.error("Failed to check booking status for showtime {}: No response body", showtimeId);
+                throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
+            }
+            
+            // Nếu success = false (tức là Booking Service báo có lỗi / có người đã đặt) thì trả về true (Đã Booked)
+            return !response.getBody().isSuccess();
+            
+        } catch (RestClientException e) {
+            log.error("Error fetching booking status from Booking Service: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
+        }
+    }
 }

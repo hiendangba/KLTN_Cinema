@@ -1,12 +1,13 @@
 package com.cinema.user_service.services;
 
+import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.user_service.dto.request.*;
 import com.cinema.user_service.dto.response.RegisterCustomerResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface UserService {
@@ -24,7 +25,7 @@ public interface UserService {
 
     UserExistenceResponse checkUserExists(UUID userId);
 
-    List<UserResponse> getAllStaff(HttpServletRequest request);
+    PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request);
 
-    List<UserResponse> getAllManager(HttpServletRequest request);
+    PageResponse<UserResponse> getAllManager(PageRequest<?> pageRequest, HttpServletRequest request);
 }
