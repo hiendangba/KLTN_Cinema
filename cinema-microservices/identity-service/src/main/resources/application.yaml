@@ -42,11 +42,12 @@ spring:
     port: ${SPRING_RABBITMQ_PORT}
     username: ${SPRING_RABBITMQ_USERNAME}
     password: ${SPRING_RABBITMQ_PASSWORD}
+  grpc:
+    client:
+      channels:
+        user:
+          address: "${USER_GRPC_HOST:localhost}:${USER_GRPC_PORT:9191}"
+        email:
+          address: "${EMAIL_GRPC_HOST:localhost}:${EMAIL_GRPC_PORT:9193}"
 server:
   port: ${SERVER_PORT:8090}
-
-user-service:
-  url: ${USER_SERVICE_URL}
-
-email-service:
-  url: ${EMAIL_SERVICE_URL}

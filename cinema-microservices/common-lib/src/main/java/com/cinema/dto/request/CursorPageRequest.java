@@ -43,8 +43,12 @@ public class CursorPageRequest<T extends Enum<T>> {
         if (cursor == null || cursor.isEmpty()) {
             return null;
         }
-        String cursorDecode = new String(Base64.getDecoder().decode(cursor));
-        return cursorDecode.split("_");
+        try {
+            String cursorDecode = new String(Base64.getUrlDecoder().decode(cursor));
+            return cursorDecode.split("_");
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     /**

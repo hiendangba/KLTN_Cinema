@@ -27,12 +27,15 @@
     <properties>
         <java.version>17</java.version>
         <lombok.version>1.18.30</lombok.version>
-        <jwt.version>0.11.5</jwt.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jwt.version>0.12.6</jwt.version>
         <amqp.version>4.0.1</amqp.version>
+        <spring-grpc.version>1.0.2</spring-grpc.version>
+        <grpc.version>1.80.0</grpc.version>
+        <protobuf.version>3.25.8</protobuf.version>
+        <javax.annotation.version>1.3.2</javax.annotation.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -40,6 +43,13 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>4.0.1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.grpc</groupId>
+                <artifactId>spring-grpc-dependencies</artifactId>
+                <version>${spring-grpc.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -75,6 +85,11 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-mail</artifactId>
             </dependency>
+            <dependency>
+                <groupId>javax.annotation</groupId>
+                <artifactId>javax.annotation-api</artifactId>
+                <version>${javax.annotation.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
     <dependencies>
@@ -87,10 +102,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-restclient</artifactId>
         </dependency>
     </dependencies>
     <build>

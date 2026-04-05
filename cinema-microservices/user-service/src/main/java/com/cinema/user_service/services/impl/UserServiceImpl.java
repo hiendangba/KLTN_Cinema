@@ -5,6 +5,7 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.PageResponse;
+import com.cinema.http.HeaderNames;
 import com.cinema.user_service.dto.request.*;
 import com.cinema.user_service.dto.response.RegisterCustomerResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
@@ -87,8 +88,9 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public RegisterCustomerResponse updateCustomerProfile(UpdateCustomerRequest request, HttpServletRequest httpRequest) {
-        String userId = httpRequest.getHeader("X-User-ID");
+    public RegisterCustomerResponse updateCustomerProfile(UpdateCustomerRequest request,
+            HttpServletRequest httpRequest) {
+        String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
 
         if (userId == null || userId.isBlank()) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
@@ -102,12 +104,13 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        String role = httpRequest.getHeader("X-User-Role");
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!("ADMIN".equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
-        User user = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.CUSTOMER).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.CUSTOMER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // Check if email is already used by another user
         if (!user.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
@@ -125,7 +128,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public RegisterCustomerResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest) {
-        String userId = httpRequest.getHeader("X-User-ID");
+        String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
         if (userId == null || userId.isBlank()) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
@@ -137,7 +140,8 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-        User manager = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.MANAGER).orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        User manager = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.MANAGER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         // Check if email is already used by another user
         if (!manager.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
@@ -154,7 +158,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public RegisterCustomerResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest) {
-        String userId = httpRequest.getHeader("X-User-ID");
+        String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
         if (userId == null || userId.isBlank()) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
@@ -166,8 +170,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
-
-        String role = httpRequest.getHeader("X-User-Role");
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!("MANAGER".equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
@@ -199,7 +202,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request) {
-        String role = request.getHeader("X-User-Role");
+        String role = request.getHeader(HeaderNames.X_USER_ROLE);
         if (!("ADMIN".equals(role) || "MANAGER".equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
@@ -220,7 +223,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PageResponse<UserResponse> getAllManager(PageRequest<?> pageRequest, HttpServletRequest request) {
-        String role = request.getHeader("X-User-Role");
+        String role = request.getHeader(HeaderNames.X_USER_ROLE);
         if (!"ADMIN".equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }

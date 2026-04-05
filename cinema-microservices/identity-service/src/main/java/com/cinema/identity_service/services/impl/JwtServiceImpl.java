@@ -115,7 +115,7 @@ public class JwtServiceImpl {
         if (!authorities.isEmpty()) {
             String firstAuthority = authorities.get(0);
             if (firstAuthority.startsWith("ROLE_")) {
-                return firstAuthority.substring(5);  // "ROLE_ADMIN" → "ADMIN"
+                return firstAuthority.substring(5); // "ROLE_ADMIN" → "ADMIN"
             }
             return firstAuthority;
         }

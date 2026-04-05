@@ -10,8 +10,6 @@ import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
 import com.cinema.film_service.dto.response.FilmResponse;
 import jakarta.servlet.http.HttpServletRequest;
-
-import java.util.List;
 import java.util.UUID;
 
 public interface FilmService {

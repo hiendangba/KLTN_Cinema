@@ -1,0 +1,171 @@
+package com.cinema.user_service.grpc;
+
+import com.cinema.Enum.UserEnum;
+import com.cinema.exception.BusinessException;
+import com.cinema.exception.ErrorCode;
+import com.cinema.grpc.common.OperationReply;
+import com.cinema.grpc.user.CheckUserExistsReply;
+import com.cinema.grpc.user.CheckUserExistsRequest;
+import com.cinema.grpc.user.CreateCustomerProfileRequest;
+import com.cinema.grpc.user.CreateManagerProfileRequest;
+import com.cinema.grpc.user.CreateStaffProfileRequest;
+import com.cinema.grpc.user.UserInternalServiceGrpc;
+import com.cinema.user_service.dto.request.RegisterCustomerRequest;
+import com.cinema.user_service.dto.request.RegisterManagerRequest;
+import com.cinema.user_service.dto.request.RegisterStaffRequest;
+import com.cinema.user_service.dto.response.UserExistenceResponse;
+import com.cinema.user_service.services.UserService;
+import io.grpc.BindableService;
+import io.grpc.stub.StreamObserver;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.UUID;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInternalServiceImplBase
+        implements BindableService {
+
+    private final UserService userService;
+
+    @Override
+    public void createCustomerProfile(
+            CreateCustomerProfileRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            userService.createCustomerProfile(RegisterCustomerRequest.builder()
+                    .id(UUID.fromString(request.getId()))
+                    .name(request.getName())
+                    .email(request.getEmail())
+                    .dob(LocalDate.parse(request.getDob()))
+                    .gender(UserEnum.Gender.valueOf(request.getGender()))
+                    .phone(request.getPhone())
+                    .role(UserEnum.UserRole.valueOf(request.getRole()))
+                    .build());
+            responseObserver.onNext(success("Customer profile created successfully"));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while creating customer profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void createManagerProfile(
+            CreateManagerProfileRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            userService.createManagerProfile(RegisterManagerRequest.builder()
+                    .id(UUID.fromString(request.getId()))
+                    .name(request.getName())
+                    .email(request.getEmail())
+                    .dob(LocalDate.parse(request.getDob()))
+                    .gender(UserEnum.Gender.valueOf(request.getGender()))
+                    .phone(request.getPhone())
+                    .role(UserEnum.UserRole.valueOf(request.getRole()))
+                    .bankCode(blankToNull(request.getBankCode()))
+                    .accountNumber(blankToNull(request.getAccountNumber()))
+                    .accountName(blankToNull(request.getAccountName()))
+                    .build());
+            responseObserver.onNext(success("Manager profile created successfully"));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while creating manager profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void createStaffProfile(
+            CreateStaffProfileRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            userService.createStaffProfile(RegisterStaffRequest.builder()
+                    .id(UUID.fromString(request.getId()))
+                    .name(request.getName())
+                    .email(request.getEmail())
+                    .dob(LocalDate.parse(request.getDob()))
+                    .gender(UserEnum.Gender.valueOf(request.getGender()))
+                    .phone(request.getPhone())
+                    .role(UserEnum.UserRole.valueOf(request.getRole()))
+                    .bankCode(blankToNull(request.getBankCode()))
+                    .accountNumber(blankToNull(request.getAccountNumber()))
+                    .accountName(blankToNull(request.getAccountName()))
+                    .build());
+            responseObserver.onNext(success("Staff profile created successfully"));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while creating staff profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void checkUserExists(
+            CheckUserExistsRequest request,
+            StreamObserver<CheckUserExistsReply> responseObserver) {
+        try {
+            UserExistenceResponse response = userService.checkUserExists(UUID.fromString(request.getUserId()));
+            responseObserver.onNext(CheckUserExistsReply.newBuilder()
+                    .setSuccess(true)
+                    .setExists(response.isExists())
+                    .setMessage(response.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(CheckUserExistsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while checking user existence", ex);
+            responseObserver.onNext(CheckUserExistsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    private OperationReply success(String message) {
+        return OperationReply.newBuilder()
+                .setSuccess(true)
+                .setMessage(message)
+                .build();
+    }
+
+    private OperationReply failure(BusinessException exception) {
+        return failure(exception.getErrorCode());
+    }
+
+    private OperationReply failure(ErrorCode errorCode) {
+        return OperationReply.newBuilder()
+                .setSuccess(false)
+                .setErrorKey(errorCode.name())
+                .setMessage(errorCode.getMessage())
+                .build();
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+}

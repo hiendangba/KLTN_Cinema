@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package cinema.user.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.user";
+option java_outer_classname = "UserInternalProto";
+
+import "common.proto";
+
+service UserInternalService {
+  rpc CreateCustomerProfile(CreateCustomerProfileRequest) returns (cinema.common.v1.OperationReply);
+  rpc CreateManagerProfile(CreateManagerProfileRequest) returns (cinema.common.v1.OperationReply);
+  rpc CreateStaffProfile(CreateStaffProfileRequest) returns (cinema.common.v1.OperationReply);
+  rpc CheckUserExists(CheckUserExistsRequest) returns (CheckUserExistsReply);
+}
+
+message CreateCustomerProfileRequest {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string dob = 4;
+  string gender = 5;
+  string phone = 6;
+  string role = 7;
+}
+
+message CreateManagerProfileRequest {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string dob = 4;
+  string gender = 5;
+  string phone = 6;
+  string role = 7;
+  string bank_code = 8;
+  string account_number = 9;
+  string account_name = 10;
+}
+
+message CreateStaffProfileRequest {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string dob = 4;
+  string gender = 5;
+  string phone = 6;
+  string role = 7;
+  string bank_code = 8;
+  string account_number = 9;
+  string account_name = 10;
+}
+
+message CheckUserExistsRequest {
+  string user_id = 1;
+}
+
+message CheckUserExistsReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  bool exists = 4;
+}

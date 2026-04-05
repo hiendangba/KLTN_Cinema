@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: ./identity-service/Dockerfile
     env_file: ./identity-service/src/main/resources/.env
+    environment:
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
     ports:
       - "9000:8090"
     depends_on:
@@ -16,6 +19,10 @@ services:
       context: .
       dockerfile: ./user-service/Dockerfile
     env_file: ./user-service/src/main/resources/.env
+    environment:
+      GRPC_SERVER_PORT: 9191
+    expose:
+      - "9191"
     ports:
       - "9001:8091"
     depends_on:

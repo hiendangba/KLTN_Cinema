@@ -4,19 +4,20 @@ import com.cinema.Enum.ShowTimeEnum;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
-import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.dto.response.SuccessResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.http.HeaderNames;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
-//import com.cinema.showtime_service.dto.response.HallResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import com.cinema.showtime_service.entity.ShowTime;
+import com.cinema.showtime_service.grpc.BookingGrpcClient;
+import com.cinema.showtime_service.grpc.FilmGrpcClient;
 import com.cinema.showtime_service.mapper.ShowTimeMapper;
 import com.cinema.showtime_service.repository.ShowTimeRepository;
 import com.cinema.showtime_service.repository.ShowTimeRepositoryImpl;
@@ -26,45 +27,31 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.concurrent.CompletableFuture;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
 @Slf4j
-@FieldDefaults(level = AccessLevel.PRIVATE)
-
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ShowTimeServiceImpl implements ShowTimeService {
 
-    final ShowTimeRepository showTimeRepository;
-    final ShowTimeRepositoryImpl showTimeRepositoryImpl;
-    final ShowTimeMapper showTimeMapper;
-    final RestTemplate restTemplate;
-
-    @Value("${film-service.url}")
-    String filmUrl;
-
-    @Value("${hall-service.url}")
-    String hallUrl;
-
-    @Value("${booking-service.url}")
-    String bookingUrl;
+    ShowTimeRepository showTimeRepository;
+    ShowTimeRepositoryImpl showTimeRepositoryImpl;
+    ShowTimeMapper showTimeMapper;
+    FilmGrpcClient filmGrpcClient;
+    BookingGrpcClient bookingGrpcClient;
 
     @Override
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public CursorPageResponse<ShowTimeResponse> searchShowtimes(
-            CursorPageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request) {
+    @Transactional(readOnly = true)
+    public CursorPageResponse<ShowTimeResponse> searchShowtimes(CursorPageRequest<ShowTimeField> request) {
         log.info("Lấy danh sách showtime (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
                 request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
                 request.getFilterBy());
@@ -73,35 +60,29 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         String keyword = request.getNormalizedKeyword();
         int size = request.getSizeOrDefault();
 
-        // Truyền thẳng các DTO filter/sort vào repository
         List<SortField<ShowTimeField>> sortFields = request.getSortBy();
-        if (sortFields == null) {
-            sortFields = new ArrayList<>();
-        }
-
-        // Luôn thêm ID làm sort cuối để đảm bảo thứ tự ổn định
+        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
         sortFields.add(new SortField<>(ShowTimeField.ID, "ASC"));
+
         List<FilterField<ShowTimeField>> filterFields = request.getFilterBy();
         List<ShowTime> showTimes = showTimeRepositoryImpl.searchWithCursorAndSortAndFilter(
                 cursorParts, keyword, size, sortFields, filterFields);
+
         boolean hasNext = showTimes.size() > size;
         String nextCursor = null;
         if (hasNext) {
             showTimes = showTimes.subList(0, size);
-            nextCursor = CursorPageRequest
-                    .encodeCompositeCursor(ShowTimeField.getFieldValues(showTimes.get(showTimes.size() - 1), sortFields));
+            nextCursor = CursorPageRequest.encodeCompositeCursor(
+                    ShowTimeField.getFieldValues(showTimes.get(showTimes.size() - 1), sortFields));
         }
 
         String prevCursor = null;
         if (cursorParts != null && cursorParts.length > 0) {
             List<ShowTime> prevShowTimes = showTimeRepositoryImpl.previousCursor(
                     cursorParts, keyword, size, sortFields, filterFields);
-            if (!prevShowTimes.isEmpty()) {
-                if (prevShowTimes.size() == size) {
-                    prevCursor = CursorPageRequest
-                            .encodeCompositeCursor(
-                                    ShowTimeField.getFieldValues(prevShowTimes.get(size - 1), sortFields));
-                }
+            if (!prevShowTimes.isEmpty() && prevShowTimes.size() == size) {
+                prevCursor = CursorPageRequest.encodeCompositeCursor(
+                        ShowTimeField.getFieldValues(prevShowTimes.get(size - 1), sortFields));
             }
         }
 
@@ -117,93 +98,79 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ShowTimeResponse getShowTimeById(UUID id) {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
-
         return showTimeMapper.toResponse(showTime);
     }
 
     @Override
-    public ResultResponse<ShowTimeResponse> createShowTime(ShowTimeCreateRequest showTimeCreateRequest,
-                                                           HttpServletRequest httpRequest) {
-
-        String role = httpRequest.getHeader("X-User-Role");
+    public ResultResponse<ShowTimeResponse> createShowTime(
+            ShowTimeCreateRequest showTimeCreateRequest,
+            HttpServletRequest httpRequest) {
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!"MANAGER".equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        FilmResponse filmResponse;
-        try {
-            CompletableFuture<FilmResponse> filmFuture = CompletableFuture
-                    .supplyAsync(() -> fetchFilmsByIds(showTimeCreateRequest.getFilmId()));
-            System.out.println(filmFuture);
-            filmResponse = filmFuture.join();
 
-            // CompletableFuture<HallResponse> hallFuture = CompletableFuture
-            // .supplyAsync(() -> fetchHallsByIds(showTimeCreateRequest.getHallId()));
+        FilmResponse filmResponse = filmGrpcClient.getFilmById(showTimeCreateRequest.getFilmId());
 
-            // HallResponse hallResponse = hallFuture.join();
-        } catch (Exception e) {
-            throw new BusinessException(ErrorCode.NOT_CREATED_SHOWTIME);
-        }
-
-        // Lấy thời gian ra và kiểm tra thời gian và thời lượng của phim ra kiểm tra
-        // Thời lượng của phim + 30p dọn dẹp vệ sinh sau khi xem phim xong
         long duration = (long) filmResponse.getDuration() + 30;
         LocalDateTime startTime = showTimeCreateRequest.getStartDateTime();
         LocalDateTime endTime = showTimeCreateRequest.getEndDateTime();
 
-        // Check endTime người dùng truyền vào có hợp lệ không
         if (endTime.isBefore(startTime.plusMinutes(duration))) {
             throw new BusinessException(ErrorCode.INVALID_END_TIME);
         }
 
         ResultResponse<ShowTimeResponse> resultResponse = new ResultResponse<>();
         List<SuccessResponse<ShowTimeResponse>> showTimeResponses = new ArrayList<>();
-        while (startTime.plusMinutes(duration).isBefore(endTime)) {
 
+        while (startTime.plusMinutes(duration).isBefore(endTime)) {
             Optional<ShowTime> overlapping = showTimeRepository.findOverlapping(
                     showTimeCreateRequest.getHallId(),
                     startTime,
                     startTime.plusMinutes(duration));
 
             if (overlapping.isEmpty()) {
-                // Gán lại thời gian tạo mới phim
                 showTimeCreateRequest.setStartDateTime(startTime);
                 showTimeCreateRequest.setEndDateTime(startTime.plusMinutes(duration));
                 ShowTime showTime = showTimeMapper.toEntity(showTimeCreateRequest);
                 showTime = showTimeRepository.save(showTime);
-                showTimeResponses
-                        .add(new SuccessResponse<>(showTimeMapper.toResponse(showTime)));
-                // Gán lại startTime
+                showTimeResponses.add(new SuccessResponse<>(showTimeMapper.toResponse(showTime)));
                 startTime = startTime.plusMinutes(duration);
                 continue;
             }
 
-            // Dời startTime = endTime của show đang chiếm slot
             startTime = overlapping.get().getEndDateTime();
         }
+
         if (showTimeResponses.isEmpty()) {
             throw new BusinessException(ErrorCode.ALL_TIME_SLOT_OCCUPIED);
         }
+
         resultResponse.setSuccessResponse(showTimeResponses);
         return resultResponse;
     }
 
     @Override
-    public ShowTimeResponse updateShowTimeStatus(UUID id, UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
-                                                 HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader("X-User-Role");
+    public ShowTimeResponse updateShowTimeStatus(
+            UUID id,
+            UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
+            HttpServletRequest httpRequest) {
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!"MANAGER".equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
         if (showTime.getIsDeleted()) {
             throw new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND);
         }
 
-        if (checkShowtimeBooked(id)) {
+        if (bookingGrpcClient.isShowtimeBooked(id)) {
             throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
         }
 
@@ -222,92 +189,23 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     public void deleteShowTime(UUID id, HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader("X-User-Role");
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!"MANAGER".equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
 
-        if (checkShowtimeBooked(id)) {
+        if (bookingGrpcClient.isShowtimeBooked(id)) {
             throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
         }
 
         if (showTime.getIsDeleted()) {
             throw new BusinessException(ErrorCode.DELETED_SHOWTIME);
         }
+
         showTime.setIsDeleted(true);
         showTimeRepository.save(showTime);
-    }
-
-    // Gọi Film Service để lấy thông tin phim dựa trên filmId
-    private FilmResponse fetchFilmsByIds(UUID filmId) {
-
-        String url = filmUrl + "/{filmId}";
-        try {
-            ResponseEntity<APIResponse<FilmResponse>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    HttpEntity.EMPTY,
-                    new ParameterizedTypeReference<>() {
-                    },
-                    filmId);
-            if (response.getBody() == null || !response.getBody().isSuccess()) {
-                log.error("Failed to fetch film with ID {}: {}", filmId,
-                        response.getBody() != null ? response.getBody().getMessage() : "No response body");
-                throw new BusinessException(ErrorCode.FILM_NOT_FOUND);
-            }
-            log.info("Fetched film with ID {}: {}", filmId, response.getBody().getData());
-            return response.getBody().getData();
-        } catch (RestClientException e) {
-            log.error("Error fetching films from Film Service: {}", e.getMessage());
-            throw new BusinessException(ErrorCode.FILM_NOT_FOUND);
-        }
-    }
-
-    // private HallResponse fetchHallsByIds(UUID hallId) {
-    // String url = hallUrl + "/{hallId}";
-    // try {
-    // ResponseEntity<APIResponse<HallResponse>> response = restTemplate.exchange(
-    // url,
-    // HttpMethod.GET,
-    // HttpEntity.EMPTY,
-    // new ParameterizedTypeReference<>() {
-    // },
-    // hallId);
-    // if (response.getBody() == null || !response.getBody().isSuccess()) {
-    // log.error("Failed to fetch hall with ID {}: {}", hallId,
-    // response.getBody() != null ? response.getBody().getMessage() : "No response
-    // body");
-    // throw new BusinessException(ErrorCode.HALL_NOT_FOUND);
-    // }
-    // return response.getBody().getData();
-    // } catch (RestClientException e) {
-    // log.error("Error fetching halls from Hall Service: {}", e.getMessage());
-    // throw new BusinessException(ErrorCode.HALL_SERVICE_ERROR);
-    // }
-
-    private boolean checkShowtimeBooked(UUID showtimeId) {
-        String url = bookingUrl + "/check-showtime/{showtimeId}";
-        try {
-            ResponseEntity<APIResponse<Void>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    HttpEntity.EMPTY,
-                    new ParameterizedTypeReference<APIResponse<Void>>() {},
-                    showtimeId);
-
-            if (response.getBody() == null) {
-                log.error("Failed to check booking status for showtime {}: No response body", showtimeId);
-                throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
-            }
-            
-            // Nếu success = false (tức là Booking Service báo có lỗi / có người đã đặt) thì trả về true (Đã Booked)
-            return !response.getBody().isSuccess();
-            
-        } catch (RestClientException e) {
-            log.error("Error fetching booking status from Booking Service: {}", e.getMessage());
-            throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
-        }
     }
 }

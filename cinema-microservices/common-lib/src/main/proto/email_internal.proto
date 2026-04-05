@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package cinema.email.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.email";
+option java_outer_classname = "EmailInternalProto";
+
+import "common.proto";
+
+service EmailInternalService {
+  rpc SendEmail(SendEmailGrpcRequest) returns (cinema.common.v1.OperationReply);
+}
+
+message SendEmailGrpcRequest {
+  string to = 1;
+  string subject = 2;
+  string header = 3;
+  string content = 4;
+}

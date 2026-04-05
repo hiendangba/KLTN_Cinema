@@ -85,6 +85,23 @@ Nginx đóng vai trò là "người gác cổng" thông minh qua cơ chế **Aut
 4. Nếu hợp lệ, Identity Service trả về HTTP 200 kèm các header `X-User-ID` và `X-User-Role`.
 5. Nginx lấy các header này từ kết quả subrequest, gắn vào request gốc và truyền (forward) xuống service đích (User, Film, hoặc Showtime). Lớp bảo vệ này giúp các service con không cần tự quan tâm đến logic JWT phức tạp.
 
+### Giao tiếp nội bộ giữa các Service (gRPC)
+
+Từ bản cập nhật hiện tại, hệ thống tách rõ 2 lớp giao tiếp:
+
+- **HTTP/REST** chỉ còn dành cho phía ngoài: Frontend -> Nginx Gateway -> Public API.
+- **gRPC nội bộ** dùng cho các lệnh gọi service-to-service nhằm giảm overhead serialization, giảm độ trễ và gom contract tập trung bằng `.proto`.
+- Lớp wiring gRPC hiện được chuẩn hóa theo **Spring gRPC official starter** để giảm bớt `ManagedChannel` / `ServerBuilder` config thủ công ở từng service.
+
+Các luồng đã được chuyển sang **gRPC**:
+
+- `identity-service` -> `user-service`: tạo profile Customer / Manager / Staff.
+- `identity-service` -> `email-service`: gửi OTP / mail chào mừng nội bộ.
+- `showtime-service` -> `film-service`: lấy chi tiết phim theo `filmId`.
+- `showtime-service` -> `booking-service`: chuẩn hóa contract kiểm tra showtime đã được đặt vé hay chưa.
+
+Contract gRPC được đặt tập trung trong `common-lib/src/main/proto` để mọi service dùng chung một chuẩn message/stub nội bộ. Việc bind server/client hiện đi qua cấu hình `spring.grpc.*` trong `application.yaml`.
+
 ---
 
 ## 🛠️ Công Nghệ Sử Dụng
@@ -98,6 +115,7 @@ Nginx đóng vai trò là "người gác cổng" thông minh qua cơ chế **Aut
 | **Spring Data Redis** | Tích hợp | Giao tiếp với Redis qua Lettuce client. |
 | **Spring AMQP** | 4.0.1 | Quản lý kết nối Message Broker (RabbitMQ). |
 | **Spring Mail** | 4.0.1 | Hỗ trợ gửi template HTML qua JavaMailSender. |
+| **Spring gRPC + Protocol Buffers** | Spring gRPC 1.0.2 / protoc 3.25.8 | Giao tiếp nội bộ service-to-service hiệu năng cao, dùng starter/autoconfig chính thức của Spring thay cho wiring thủ công. |
 | **PostgreSQL** | 16 | RDBMS chính, ACID, hỗ trợ tốt UUID và JSON. |
 | **Redis** | 7 | In-memory cache cực nhanh cho token, OTP, session, API cache. |
 | **RabbitMQ** | 3.x | Hệ thống Queue xử lý các luồng bất đồng bộ (giảm latency). |
@@ -124,7 +142,8 @@ cinema-microservices/
 │       ├── controller/            # BaseController chuẩn hóa response REST (ok, created)
 │       ├── dto/                   # APIResponse, CursorPageRequest/Response
 │       ├── exception/             # GlobalExceptionHandler, ErrorCode tập trung 68 mã lỗi, BusinessException
-│       └── service/               # SpecificationBuilder hỗ trợ dynamic query cho JPA dễ dàng
+│       ├── grpc/                  # Shared gRPC contracts, generated stubs, error utils
+│       └── service/               # Service helpers dùng chung
 │
 ├── identity-service/              # 🔐 Service xác thực và ủy quyền
 │   └── src/main/java/.../
@@ -180,7 +199,6 @@ Mọi service đều import thư viện này. Nó giải quyết triệt để s
 - **Dynamic API Response**: Class `APIResponse<T>` chuẩn hóa mọi payload gửi về Frontend (success, code, data, timestamp).
 - **Global Error Handling**: Bắt lỗi toàn cục qua `@RestControllerAdvice`. Sử dụng Enum `ErrorCode` để quản lý tập trung mã lỗi logic (vd: 4001: USER_NOT_FOUND, 4002: FILM_TITLE_EXISTED).
 - **Pagination Optimization**: Áp dụng **Cursor Pagination** (`CursorPageRequest`, `CursorPageResponse`) dựa trên Base64 token mã hóa (Sort fields + Offset IDs), giúp vượt qua giới hạn chậm chạp của cấu trúc `LIMIT/OFFSET`.
-- **Criteria Dynamic Query**: Class `SpecificationBuilder` cho phép Frontend tự tùy biến bộ lọc phức tạp `(field = :val AND field2 LIKE :val...)` xuống DB mà không cần code cứng.
 
 ### 2. `identity-service` & Bảo mật (Security Model)
 Đảm nhận trọng trách cổng kiểm tra chứng minh thư của hệ thống.
@@ -376,38 +394,47 @@ SPRING_RABBITMQ_PASSWORD=admin
 **[identity-service]**
 ```env
 SERVER_PORT=8090
-USER_SERVICE_URL=http://user_service:8091
-EMAIL_SERVICE_URL=http://email_service:8093
+USER_GRPC_HOST=user-service
+USER_GRPC_PORT=9191
+EMAIL_GRPC_HOST=email-service
+EMAIL_GRPC_PORT=9193
 ```
 
 **[user-service]**
 ```env
 SERVER_PORT=8091
+GRPC_SERVER_PORT=9191
 ```
 
 **[film-service]**
 ```env
 SERVER_PORT=8092
-USER_SERVICE_URL=http://user_service:8091
+GRPC_SERVER_PORT=9192
 ```
 
 **[showtime-service]**
 ```env
 SERVER_PORT=8094
-USER_SERVICE_URL=http://user_service:8091
-FILM_SERVICE_URL=http://film_service:8092
-HALL_SERVICE_URL=http://hall_service:8095     # Trỏ Placeholder Tương Lai
+FILM_GRPC_HOST=film-service
+FILM_GRPC_PORT=9192
+BOOKING_GRPC_HOST=booking-service
+BOOKING_GRPC_PORT=9195
 ```
 
 **[email-service]**
 ```env
 SERVER_PORT=8093
+GRPC_SERVER_PORT=9193
 MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
 MAIL_FROM_NAME=CinemaSystem
 MAIL_USERNAME=nhap_mail@gmail.com
 MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 ```
+
+> Khi chạy local không qua Docker network, có thể đổi các giá trị `*_GRPC_HOST` về `localhost`.
+> Riêng `compose.yaml` hiện đã được đồng bộ sẵn host/port gRPC cho cặp `identity-service` <-> `user-service`; các service Docker hóa tiếp theo chỉ cần nối theo cùng convention này.
+> Bên trong từng service, các biến môi trường này được map vào cấu hình `spring.grpc.client.channels.*.address` hoặc `spring.grpc.server.port`.
 
 ---
 
@@ -455,5 +482,44 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Bổ sung Batch API `POST /api/films/batch` tại `film-service` hỗ trợ Frontend thực hiện Client-Side API Composition thay vì gom gọi (N+1 query) gây nghẽn rớt dây chuyền.
   - Sử dụng DTO chuẩn xác `BatchFilmRequest` (có `@NotEmpty`) và `BatchFilmResponse` để đóng gói dữ liệu an toàn chặn lỗi từ sớm.
 
+### 🗓️ 03/04/2026 — Nâng cấp Inter-Service Communication sang gRPC
+**Nội dung cập nhật:**
+- Chuyển các lệnh gọi nội bộ đang dùng REST sang **gRPC** ở các luồng:
+  - `identity-service` -> `user-service`
+  - `identity-service` -> `email-service`
+  - `showtime-service` -> `film-service`
+  - `showtime-service` -> `booking-service` (theo contract gRPC thống nhất cho service tương lai)
+- Bổ sung thư mục `common-lib/src/main/proto` chứa các contract:
+  - `user_internal.proto`
+  - `email_internal.proto`
+  - `film_internal.proto`
+  - `booking_internal.proto`
+- Sinh shared gRPC stubs vào `common-lib` để các service tái sử dụng cùng một contract nội bộ.
+- Thêm gRPC server bootstrap cho `user-service`, `film-service`, `email-service`.
+- Thêm gRPC client config cho `identity-service`, `showtime-service`.
+- Dọn bỏ `RestTemplate` nội bộ ở các luồng trên để tách hẳn REST public và RPC nội bộ.
+- Dọn luồng gửi mail trong `identity-service`: bỏ `new Thread(...)` thủ công, giữ `@Async` + gRPC để giảm thread thừa và dễ kiểm soát hơn.
+- Đồng bộ `compose.yaml` cho cặp service đã có Dockerfile (`identity-service`, `user-service`) để container gọi nhau qua host nội bộ thay vì rơi về `localhost`.
+- Sửa lại một số điểm cấu hình đi kèm:
+  - `user-service` trả về mặc định đúng cổng HTTP `8091`.
+  - `email-service` bổ sung rõ cổng HTTP `8093` và cổng gRPC riêng.
+  - `identity-service` sửa cách đọc header phân quyền ở các luồng tạo `manager/staff` và đổi mật khẩu.
+
+### 🗓️ 04/04/2026 — Chuẩn hóa gRPC theo Spring Official Starter
+**Nội dung cập nhật:**
+- Refactor lớp wiring gRPC từ cấu hình Java thủ công sang **Spring gRPC official starter** (`org.springframework.grpc:spring-grpc-spring-boot-starter`) để phù hợp hơn với hệ Spring Boot 4.
+- Loại bỏ các class config tự tạo `ManagedChannel`, `BlockingStub`, `GrpcServerRunner` ở từng service.
+- Chuyển client-side wiring sang `GrpcChannelFactory`, nhờ đó wrapper gRPC chỉ cần lấy channel theo tên (`user`, `email`, `film`, `booking`) thay vì tự build connection thủ công.
+- Giữ nguyên các contract `.proto` và generated stubs trong `common-lib`, nên luồng giao tiếp nội bộ không bị đổi semantics.
+- Chuẩn hóa prefix cấu hình từ `grpc.*` cũ sang `spring.grpc.*` trong `application.yaml`:
+  - `spring.grpc.server.port`
+  - `spring.grpc.client.channels.<name>.address`
+- Biên dịch kiểm tra lại toàn bộ multi-module bằng Maven sau khi refactor và bảo đảm build thành công.
+- Refactor chung header nội bộ sang hằng số dùng chung (`X-User-ID`, `X-User-Role`) để tránh sai lệch và giảm duplication.
+- Cải thiện độ an toàn khi parse cursor: dùng URL decoder tương thích và bỏ lỗi khi cursor không hợp lệ.
+- Tránh mutate list sort đầu vào trong search showtime để giảm side-effect khó debug.
+- Dọn duplicate `authentication.setDetails` trong filter để giảm work thừa.
+- Tối ưu query phim và showtime: tránh thao tác `toLowerCase` lặp lại, dùng `IN` cho enum status, thêm guard khi cursor thiếu field và ưu tiên so khớp UUID trực tiếp khi keyword là UUID.
+
 ---
-> Hệ thống kiến trúc mở được chế tác và kiểm tra tổng quát toàn bộ luồng logic lần cuối vào **03/04/2026**. Thiết kế để sãn sàng đáp ứng quy mô High-Availability Online Cinema System.
+> Hệ thống kiến trúc mở được chế tác và kiểm tra tổng quát toàn bộ luồng logic lần cuối vào **04/04/2026**. Thiết kế để sãn sàng đáp ứng quy mô High-Availability Online Cinema System.

@@ -5,6 +5,7 @@ import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import lombok.*;
 
 import java.time.LocalDateTime;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -32,6 +33,3 @@ public class OtpData {
         FORGOT_PASSWORD
     }
 }
-
-
-

@@ -1,10 +1,12 @@
 package com.cinema.identity_service.config;
+
+import com.cinema.http.HeaderNames;
 import com.cinema.identity_service.services.impl.JwtServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.*;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -75,15 +77,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             authentication.setDetails(
                     new WebAuthenticationDetailsSource().buildDetails(request)
             );
-
-            authentication.setDetails(
-                    new WebAuthenticationDetailsSource().buildDetails(request)
-            );
             request.setAttribute("userId", userId);
             request.setAttribute("tokenId", tokenId);
             request.setAttribute("role", jwtService.extractRole(token));
-            response.setHeader("X-User-Id", userId.toString());
-            response.setHeader("X-User-Role", jwtService.extractRole(token));
+            response.setHeader(HeaderNames.X_USER_ID, userId.toString());
+            response.setHeader(HeaderNames.X_USER_ROLE, jwtService.extractRole(token));
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
         } catch (Exception ex) {

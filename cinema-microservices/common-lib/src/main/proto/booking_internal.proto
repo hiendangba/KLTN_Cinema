@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package cinema.booking.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.booking";
+option java_outer_classname = "BookingInternalProto";
+
+service BookingInternalService {
+  rpc CheckShowtimeBooked(CheckShowtimeBookedRequest) returns (CheckShowtimeBookedReply);
+}
+
+message CheckShowtimeBookedRequest {
+  string showtime_id = 1;
+}
+
+message CheckShowtimeBookedReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  bool booked = 4;
+}

@@ -19,9 +19,9 @@ public interface UserService {
     RegisterCustomerResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
             HttpServletResponse response);
 
-    RegisterCustomerResponse createManager(RegisterManagerRequest registerManagerRequest, HttpServletResponse response);
+    RegisterCustomerResponse createManager(RegisterManagerRequest registerManagerRequest, HttpServletRequest request);
 
-    RegisterCustomerResponse createStaff(RegisterStaffRequest registerStaffRequest, HttpServletResponse response);
+    RegisterCustomerResponse createStaff(RegisterStaffRequest registerStaffRequest, HttpServletRequest request);
 
     VerifyResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request);
 
@@ -29,7 +29,7 @@ public interface UserService {
 
     ForgotPasswordResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest, HttpServletResponse response);
 
-    ChangePasswordResponse changePassword(ChangePasswordRequest changePasswordRequest, HttpServletResponse response);
+    ChangePasswordResponse changePassword(ChangePasswordRequest changePasswordRequest, HttpServletRequest request);
 
     LoginResponse login(LoginRequest loginRequest, HttpServletResponse response);
 

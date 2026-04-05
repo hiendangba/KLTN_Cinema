@@ -18,6 +18,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @RequiredArgsConstructor
 @Repository
@@ -36,7 +37,7 @@ public class ShowTimeRepositoryImpl {
         Root<ShowTime> root = cq.from(ShowTime.class);
 
         List<Predicate> predicates = new ArrayList<>();
-        if (cursorParts != null && sortBy != null && !sortBy.isEmpty()) {
+        if (cursorParts != null && sortBy != null && !sortBy.isEmpty() && cursorParts.length >= sortBy.size()) {
             List<Predicate> orPredicates = new ArrayList<>();
             int n = sortBy.size(); // Giả định sortBy ĐÃ bao gồm trường ID ở cuối
 
@@ -72,18 +73,15 @@ public class ShowTimeRepositoryImpl {
             predicates.add(cb.or(orPredicates.toArray(new Predicate[0])));
         }
 
-        if (keyword != null && !keyword.isEmpty()) {
-            Predicate keywordPredicate = cb.or(
-                    cb.like(root.get(ShowTimeField.HALL_ID.getEntityField()).as(String.class), "%" + keyword + "%"),
-                    cb.like(root.get(ShowTimeField.FILM_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
+        Predicate keywordPredicate = buildKeywordPredicate(cb, root, keyword);
+        if (keywordPredicate != null) {
             predicates.add(keywordPredicate);
         }
 
-        Predicate equalPredicate = cb.or(
-                cb.equal(root.get(ShowTimeField.STATUS.getEntityField()).as(String.class), ShowTimeEnum.ShowTimeStatus.SCHEDULED.toString()),
-                cb.equal(root.get(ShowTimeField.STATUS.getEntityField()).as(String.class), ShowTimeEnum.ShowTimeStatus.ONGOING.toString())
-        );
-        predicates.add(equalPredicate);
+        Predicate statusPredicate = root.get(ShowTimeField.STATUS.getEntityField()).in(
+                ShowTimeEnum.ShowTimeStatus.SCHEDULED,
+                ShowTimeEnum.ShowTimeStatus.ONGOING);
+        predicates.add(statusPredicate);
 
         if (filterBy != null) {
             for (FilterField<ShowTimeField> filter : filterBy) {
@@ -127,7 +125,7 @@ public class ShowTimeRepositoryImpl {
         Root<ShowTime> root = cq.from(ShowTime.class);
 
         List<Predicate> predicates = new ArrayList<>();
-        if (cursorParts != null && sortBy != null && !sortBy.isEmpty()) {
+        if (cursorParts != null && sortBy != null && !sortBy.isEmpty() && cursorParts.length >= sortBy.size()) {
             List<Predicate> orPredicates = new ArrayList<>();
             int n = sortBy.size();
 
@@ -162,18 +160,15 @@ public class ShowTimeRepositoryImpl {
             predicates.add(cb.or(orPredicates.toArray(new Predicate[0])));
         }
 
-        if (keyword != null && !keyword.isEmpty()) {
-            Predicate keywordPredicate = cb.or(
-                    cb.like(root.get(ShowTimeField.HALL_ID.getEntityField()).as(String.class), "%" + keyword + "%"),
-                    cb.like(root.get(ShowTimeField.FILM_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
+        Predicate keywordPredicate = buildKeywordPredicate(cb, root, keyword);
+        if (keywordPredicate != null) {
             predicates.add(keywordPredicate);
         }
 
-        Predicate equalPredicate = cb.or(
-                cb.equal(root.get(ShowTimeField.STATUS.getEntityField()).as(String.class), ShowTimeEnum.ShowTimeStatus.SCHEDULED.toString()),
-                cb.equal(root.get(ShowTimeField.STATUS.getEntityField()).as(String.class), ShowTimeEnum.ShowTimeStatus.ONGOING.toString())
-        );
-        predicates.add(equalPredicate);
+        Predicate statusPredicate = root.get(ShowTimeField.STATUS.getEntityField()).in(
+                ShowTimeEnum.ShowTimeStatus.SCHEDULED,
+                ShowTimeEnum.ShowTimeStatus.ONGOING);
+        predicates.add(statusPredicate);
 
         if (filterBy != null) {
             for (FilterField<ShowTimeField> filter : filterBy) {
@@ -199,12 +194,45 @@ public class ShowTimeRepositoryImpl {
             }
         }
 
-        orders.add(cb.asc(root.get(ShowTimeField.ID.getEntityField())));
+        if (!hasIdSort(sortBy)) {
+            orders.add(cb.asc(root.get(ShowTimeField.ID.getEntityField())));
+        }
         cq.orderBy(orders);
 
         TypedQuery<ShowTime> query = entityManager.createQuery(cq);
         query.setMaxResults(size);
 
         return query.getResultList();
+    }
+
+    private Predicate buildKeywordPredicate(CriteriaBuilder cb, Root<ShowTime> root, String keyword) {
+        if (keyword == null || keyword.isEmpty()) {
+            return null;
+        }
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.like(root.get(ShowTimeField.HALL_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
+        predicates.add(cb.like(root.get(ShowTimeField.FILM_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
+
+        try {
+            UUID keywordUuid = UUID.fromString(keyword);
+            predicates.add(cb.equal(root.get(ShowTimeField.HALL_ID.getEntityField()), keywordUuid));
+            predicates.add(cb.equal(root.get(ShowTimeField.FILM_ID.getEntityField()), keywordUuid));
+        } catch (IllegalArgumentException ignored) {
+        }
+
+        return cb.or(predicates.toArray(new Predicate[0]));
+    }
+
+    private boolean hasIdSort(List<SortField<ShowTimeField>> sortBy) {
+        if (sortBy == null || sortBy.isEmpty()) {
+            return false;
+        }
+        for (SortField<ShowTimeField> sort : sortBy) {
+            if (sort.getField() == ShowTimeField.ID) {
+                return true;
+            }
+        }
+        return false;
     }
 }

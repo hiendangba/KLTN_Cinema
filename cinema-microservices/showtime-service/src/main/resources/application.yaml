@@ -38,6 +38,13 @@ spring:
           min-idle: ${REDIS_POOL_MIN_IDLE:5}
           max-wait: ${REDIS_POOL_MAX_WAIT:-1}
         shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:100}
+  grpc:
+    client:
+      channels:
+        film:
+          address: "${FILM_GRPC_HOST:localhost}:${FILM_GRPC_PORT:9192}"
+        booking:
+          address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
 rabbitmq:
   host: ${SPRING_RABBITMQ_HOST:rabbitmq}
   port: ${SPRING_RABBITMQ_PORT:5672}
@@ -49,12 +56,3 @@ logging:
     org.hibernate.orm.jdbc.bind: TRACE
 server:
   port: ${SERVER_PORT:8094}
-
-user-service:
-  url: ${USER_SERVICE_URL}
-
-film-service:
-  url: ${FILM_SERVICE_URL}
-
-hall-service:
-  url: ${HALL_SERVICE_URL}

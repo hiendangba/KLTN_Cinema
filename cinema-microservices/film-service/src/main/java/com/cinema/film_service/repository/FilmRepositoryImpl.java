@@ -41,7 +41,7 @@ public class FilmRepositoryImpl {
         Root<Film> root = cq.from(Film.class);
 
         List<Predicate> predicates = new ArrayList<>();
-        if (cursorParts != null && sortBy != null && !sortBy.isEmpty()) {
+        if (cursorParts != null && sortBy != null && !sortBy.isEmpty() && cursorParts.length >= sortBy.size()) {
             List<Predicate> orPredicates = new ArrayList<>();
             int n = sortBy.size(); // Giả định sortBy ĐÃ bao gồm trường ID ở cuối
 
@@ -77,15 +77,8 @@ public class FilmRepositoryImpl {
             predicates.add(cb.or(orPredicates.toArray(new Predicate[0])));
         }
 
-        if (keyword != null && !keyword.isEmpty()) {
-            Predicate keywordPredicate = cb.or(
-                    cb.like(cb.lower(root.get(FilmField.TITLE.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.DIRECTOR.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.ACTOR.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.TYPE.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.COUNTRY.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.LANGUAGE.getEntityField())),
-                            "%" + keyword.toLowerCase() + "%"));
+        Predicate keywordPredicate = buildKeywordPredicate(cb, root, keyword);
+        if (keywordPredicate != null) {
             predicates.add(keywordPredicate);
         }
 
@@ -131,7 +124,7 @@ public class FilmRepositoryImpl {
         Root<Film> root = cq.from(Film.class);
 
         List<Predicate> predicates = new ArrayList<>();
-        if (cursorParts != null && sortBy != null && !sortBy.isEmpty()) {
+        if (cursorParts != null && sortBy != null && !sortBy.isEmpty() && cursorParts.length >= sortBy.size()) {
             List<Predicate> orPredicates = new ArrayList<>();
             int n = sortBy.size();
 
@@ -166,15 +159,8 @@ public class FilmRepositoryImpl {
             predicates.add(cb.or(orPredicates.toArray(new Predicate[0])));
         }
 
-        if (keyword != null && !keyword.isEmpty()) {
-            Predicate keywordPredicate = cb.or(
-                    cb.like(cb.lower(root.get(FilmField.TITLE.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.DIRECTOR.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.ACTOR.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.TYPE.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.COUNTRY.getEntityField())), "%" + keyword.toLowerCase() + "%"),
-                    cb.like(cb.lower(root.get(FilmField.LANGUAGE.getEntityField())),
-                            "%" + keyword.toLowerCase() + "%"));
+        Predicate keywordPredicate = buildKeywordPredicate(cb, root, keyword);
+        if (keywordPredicate != null) {
             predicates.add(keywordPredicate);
         }
 
@@ -202,12 +188,40 @@ public class FilmRepositoryImpl {
             }
         }
 
-        orders.add(cb.asc(root.get(FilmField.ID.getEntityField())));
+        if (!hasIdSort(sortBy)) {
+            orders.add(cb.asc(root.get(FilmField.ID.getEntityField())));
+        }
         cq.orderBy(orders);
 
         TypedQuery<Film> query = entityManager.createQuery(cq);
         query.setMaxResults(size);
 
         return query.getResultList();
+    }
+
+    private Predicate buildKeywordPredicate(CriteriaBuilder cb, Root<Film> root, String keyword) {
+        if (keyword == null || keyword.isEmpty()) {
+            return null;
+        }
+        String keywordLower = keyword.toLowerCase();
+        return cb.or(
+                cb.like(cb.lower(root.get(FilmField.TITLE.getEntityField())), "%" + keywordLower + "%"),
+                cb.like(cb.lower(root.get(FilmField.DIRECTOR.getEntityField())), "%" + keywordLower + "%"),
+                cb.like(cb.lower(root.get(FilmField.ACTOR.getEntityField())), "%" + keywordLower + "%"),
+                cb.like(cb.lower(root.get(FilmField.TYPE.getEntityField())), "%" + keywordLower + "%"),
+                cb.like(cb.lower(root.get(FilmField.COUNTRY.getEntityField())), "%" + keywordLower + "%"),
+                cb.like(cb.lower(root.get(FilmField.LANGUAGE.getEntityField())), "%" + keywordLower + "%"));
+    }
+
+    private boolean hasIdSort(List<SortField<FilmField>> sortBy) {
+        if (sortBy == null || sortBy.isEmpty()) {
+            return false;
+        }
+        for (SortField<FilmField> sort : sortBy) {
+            if (sort.getField() == FilmField.ID) {
+                return true;
+            }
+        }
+        return false;
     }
 }

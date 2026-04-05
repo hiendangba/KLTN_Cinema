@@ -16,6 +16,7 @@ import com.cinema.film_service.repository.FilmRepositoryImpl;
 import com.cinema.film_service.services.FilmService;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.http.HeaderNames;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +44,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     public FilmResponse createFilm(CreateFilmRequest request, HttpServletRequest httpRequest) {
         log.info("Tạo mới phim: {}", request.getTitle());
-        String role = httpRequest.getHeader("X-User-Role");
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!("ADMIN".equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
@@ -62,7 +63,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     public FilmResponse updateFilm(UUID id, UpdateFilmRequest request, HttpServletRequest httpRequest) {
         log.info("Cập nhật phim với ID: {}", id);
-        String role = httpRequest.getHeader("X-User-Role");
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!("ADMIN".equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
@@ -169,7 +170,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     public void deleteFilm(UUID id, HttpServletRequest httpRequest) {
         log.info("Xóa phim với ID: {}", id);
-        String role = httpRequest.getHeader("X-User-Role");
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!("ADMIN".equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }

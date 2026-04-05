@@ -52,8 +52,8 @@ public class UserController extends BaseController {
 
     @PostMapping("/change-password")
     public ResponseEntity<APIResponse<ChangePasswordResponse>> changePassword(
-            @Valid @RequestBody ChangePasswordRequest changePasswordRequest, HttpServletResponse response) {
-        ChangePasswordResponse changePasswordResponse = userService.changePassword(changePasswordRequest, response);
+            @Valid @RequestBody ChangePasswordRequest changePasswordRequest, HttpServletRequest request) {
+        ChangePasswordResponse changePasswordResponse = userService.changePassword(changePasswordRequest, request);
         return ok(changePasswordResponse);
     }
 
@@ -85,15 +85,15 @@ public class UserController extends BaseController {
 
     @PostMapping("/manager")
     public ResponseEntity<APIResponse<RegisterCustomerResponse>> createManager(
-            @Valid @RequestBody RegisterManagerRequest registerManagerRequest, HttpServletResponse response) {
-        RegisterCustomerResponse registerCustomerResponse = userService.createManager(registerManagerRequest, response);
+            @Valid @RequestBody RegisterManagerRequest registerManagerRequest, HttpServletRequest request) {
+        RegisterCustomerResponse registerCustomerResponse = userService.createManager(registerManagerRequest, request);
         return created(registerCustomerResponse);
     }
 
     @PostMapping("/staff")
     public ResponseEntity<APIResponse<RegisterCustomerResponse>> createStaff(
-            @Valid @RequestBody RegisterStaffRequest registerStaffRequest, HttpServletResponse response) {
-        RegisterCustomerResponse registerCustomerResponse = userService.createStaff(registerStaffRequest, response);
+            @Valid @RequestBody RegisterStaffRequest registerStaffRequest, HttpServletRequest request) {
+        RegisterCustomerResponse registerCustomerResponse = userService.createStaff(registerStaffRequest, request);
         return created(registerCustomerResponse);
     }
 
