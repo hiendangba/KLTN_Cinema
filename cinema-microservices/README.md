@@ -483,10 +483,6 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 |---|---|---|
 | **RabbitMQ Event Bus** | 🔴 Cao | Các luồng Service hiện tại có gọi REST gắt sang Email-Service. Cần chuyển Email thành Worker Consumer bắt Event bất đồng bộ để bảo toàn Time-to-Interaction (Xử lý OTP). |
 | **Booking Core Service** | 🔴 Cao | Xương sống kinh doanh (Bán Vé Core, Giữ Chỗ Redis Locking). Tương thích Gateway sẵn. |
-| **Hall (Rạp & Ghế) Service**| 🔴 Cao | Sơ đồ Map ghế rạp riêng lẻ, tham chiếu chéo ngược lên Lịch Chiếu. |
-| **Thanh toán Payment** | 🟡 Trung | VNPay & Momo Hook IPN liên hoàn gọi ngược trạng thái Ticket. |
-| **Docker Chuyên Sâu** | 🟡 Trung | Hoàn thiện file Containerization cho toàn bộ service và tối ưu multi-stage build. |
-| **Quality Unit Testing** | 🟢 Thấp | Áp dụng Mockito bổ trợ Service Layer, mục tiêu Coverage 60%. |
 
 ### 🗓️ 02/04/2026 — Nâng cấp Phân trang (Offset Pagination)
 **Nội dung cập nhật:**
