@@ -192,7 +192,9 @@ cinema-microservices/
 │       └── services/              # Xử lý gửi email bất đồng bộ qua Gmail SMTP (@EnableAsync)
 │
 ├── envoy/
-│   └── envoy.yaml                 # 🔀 Cấu hình Envoy Gateway (routing, ext_authz)
+│   ├── envoy.dev.yaml             # 🔀 Envoy dev (route tới host.docker.internal)
+│   ├── envoy.prod.yaml            # 🔀 Envoy prod (route tới service trong Docker)
+│   └── envoy.yaml                 # 🔀 Envoy mặc định (prod)
 │
 ├── postgres-init/
 │   └── create-databases.sql       # 🐘 Script tự khởi động 4 DB độc lập cho microservices
@@ -457,7 +459,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 ```
 
 > Khi chạy local không qua Docker network, có thể đổi các giá trị `*_GRPC_HOST` về `localhost`.
-> Riêng `compose.yaml` hiện đã được đồng bộ sẵn host/port gRPC cho cặp `identity-service` <-> `user-service`; các service Docker hóa tiếp theo chỉ cần nối theo cùng convention này.
+> `compose.yaml` đã đồng bộ các host/port gRPC chính cho các service nội bộ; khi thêm service mới chỉ cần nối theo cùng convention này.
 > Bên trong từng service, các biến môi trường này được map vào cấu hình `spring.grpc.client.channels.*.address` hoặc `spring.grpc.server.port`.
 
 ---
@@ -485,7 +487,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 | **Booking Core Service** | 🔴 Cao | Xương sống kinh doanh (Bán Vé Core, Giữ Chỗ Redis Locking). Tương thích Gateway sẵn. |
 | **Hall (Rạp & Ghế) Service**| 🔴 Cao | Sơ đồ Map ghế rạp riêng lẻ, tham chiếu chéo ngược lên Lịch Chiếu. |
 | **Thanh toán Payment** | 🟡 Trung | VNPay & Momo Hook IPN liên hoàn gọi ngược trạng thái Ticket. |
-| **Docker Chuyên Sâu** | 🟡 Trung | Hoàn thiện file Containerization cho Film, ShowTime. (Hiện mới có Identity và User). |
+| **Docker Chuyên Sâu** | 🟡 Trung | Hoàn thiện file Containerization cho toàn bộ service và tối ưu multi-stage build. |
 | **Quality Unit Testing** | 🟢 Thấp | Áp dụng Mockito bổ trợ Service Layer, mục tiêu Coverage 60%. |
 
 ### 🗓️ 02/04/2026 — Nâng cấp Phân trang (Offset Pagination)
@@ -548,8 +550,9 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 ### 🗓️ 05/04/2026 — Chuẩn hóa API Gateway với Envoy (Production-ready)
 **Nội dung cập nhật:**
 - Thay Nginx gateway bằng **Envoy Proxy** để phù hợp hơn với kiến trúc microservices/gRPC.
-- Cấu hình `ext_authz` gọi `identity-service/api/auth/auth-check` để xác thực tập trung và tự động forward `X-User-ID`, `X-User-Role`.
+- Cấu hình `ext_authz` gọi `identity-service/internal/auth/check` để xác thực tập trung và tự động forward `X-User-ID`, `X-User-Role`.
 - Thiết lập routing cho các service backend qua Envoy.
+- Tách 2 cấu hình Envoy cho **dev/prod** qua `envoy.dev.yaml` và `envoy.prod.yaml` + `compose.dev.yaml`.
 
 ---
 > Hệ thống kiến trúc mở được chế tác và kiểm tra tổng quát toàn bộ luồng logic lần cuối vào **04/04/2026**. Thiết kế để sãn sàng đáp ứng quy mô High-Availability Online Cinema System.
