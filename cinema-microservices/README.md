@@ -481,8 +481,9 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 | Hạng Mục Tương Lai Mở Rộng | Mức Phân Quyền | Diễn Giải Nhiệm Vụ |
 |---|---|---|
-| **RabbitMQ Event Bus** | 🔴 Cao | Các luồng Service hiện tại có gọi REST gắt sang Email-Service. Cần chuyển Email thành Worker Consumer bắt Event bất đồng bộ để bảo toàn Time-to-Interaction (Xử lý OTP). |
+| **Hall Service (Rạp & Ghế)** | 🔴 Cao | Xây dựng sơ đồ rạp, phòng chiếu, ghế; chuẩn hóa map ghế để liên kết lịch chiếu. |
 | **Booking Core Service** | 🔴 Cao | Xương sống kinh doanh (Bán Vé Core, Giữ Chỗ Redis Locking). Tương thích Gateway sẵn. |
+| **Payment Integration** | 🟡 Trung | VNPay/MoMo IPN, cập nhật trạng thái vé và giao dịch thanh toán. |
 
 ### 🗓️ 02/04/2026 — Nâng cấp Phân trang (Offset Pagination)
 **Nội dung cập nhật:**
