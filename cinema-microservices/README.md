@@ -377,8 +377,8 @@ docker compose -f compose.yaml -f compose.dev.yaml up -d
 | Dịch vụ / Hệ Tầng | Liên kết thực thi trên máy cá nhân |
 |---|---|
 | Envoy (Trung Tâm Gateway) | http://localhost:80 |
-| Identity Service Web API | http://localhost:9000 |
-| User Profile Web API | http://localhost:9001 |
+| Identity Service Web API | http://localhost:9000 (dev) |
+| User Profile Web API | http://localhost:9001 (dev) |
 | PostgreSQL Relational | `localhost:5433` (User: postgres / 123456) |
 | Redis In-Memory KV | `localhost:6379` |
 | RabbitMQ Management UI | http://localhost:15672 (admin / admin) |

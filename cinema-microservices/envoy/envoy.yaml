@@ -24,10 +24,9 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
                       http_service:
                         server_uri:
-                          uri: http://identity-service:8090
+                          uri: http://identity-service:8090/internal/auth/check
                           cluster: identity-service
                           timeout: 1s
-                        path_prefix: /internal/auth/check
                         authorization_request:
                           allowed_headers:
                             patterns:

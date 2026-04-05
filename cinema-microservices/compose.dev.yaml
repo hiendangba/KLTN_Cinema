@@ -1,4 +1,19 @@
 services:
+  identity-service:
+    ports:
+      - "9000:8090"
+  user-service:
+    ports:
+      - "9001:8091"
+  film-service:
+    ports:
+      - "9002:8092"
+  showtime-service:
+    ports:
+      - "9004:8094"
+  email-service:
+    ports:
+      - "9003:8093"
   envoy:
     extra_hosts:
       - "host.docker.internal:host-gateway"
