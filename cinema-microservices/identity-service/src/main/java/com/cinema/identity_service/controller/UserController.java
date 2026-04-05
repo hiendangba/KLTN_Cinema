@@ -38,7 +38,7 @@ public class UserController extends BaseController {
 
     @PostMapping("/verify-otp")
     public ResponseEntity<APIResponse<VerifyResponse>> verifyOTP(@Valid @RequestBody VerifyRequest verifyRequest,
-                                                                 HttpServletRequest request) {
+            HttpServletRequest request) {
         VerifyResponse verifyResponse = userService.verifyOTP(verifyRequest, request);
         return ok(verifyResponse);
     }
@@ -65,7 +65,7 @@ public class UserController extends BaseController {
 
     @PostMapping("/login")
     public ResponseEntity<APIResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest loginRequest,
-                                                            HttpServletResponse response) {
+            HttpServletResponse response) {
         LoginResponse loginResponse = userService.login(loginRequest, response);
         return ok(loginResponse);
     }
@@ -78,7 +78,7 @@ public class UserController extends BaseController {
 
     @PostMapping("/refresh_token")
     public ResponseEntity<APIResponse<LoginResponse>> refreshToken(HttpServletRequest request,
-                                                                   HttpServletResponse response) {
+            HttpServletResponse response) {
         LoginResponse loginResponse = userService.refreshToken(request, response);
         return ok(loginResponse);
     }

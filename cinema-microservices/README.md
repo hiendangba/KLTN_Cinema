@@ -107,11 +107,11 @@ Từ bản cập nhật hiện tại, hệ thống tách rõ 2 lớp giao tiếp
 Các luồng đã được chuyển sang **gRPC**:
 
 - `identity-service` -> `user-service`: tạo profile Customer / Manager / Staff.
-- `identity-service` -> `email-service`: gửi OTP / mail chào mừng nội bộ.
+- Email được đẩy vào RabbitMQ để `email-service` xử lý bất đồng bộ.
 - `showtime-service` -> `film-service`: lấy chi tiết phim theo `filmId`.
 - `showtime-service` -> `booking-service`: chuẩn hóa contract kiểm tra showtime đã được đặt vé hay chưa.
 
-Contract gRPC được đặt tập trung trong `common-lib/src/main/proto` để mọi service dùng chung một chuẩn message/stub nội bộ. Việc bind server/client hiện đi qua cấu hình `spring.grpc.*` trong `application.yaml`.
+Contract gRPC được đặt tập trung trong `common-lib/src/main/proto` để mọi service dùng chung một chuẩn message/stub nội bộ. Việc bind server/client hiện đi qua cấu hình `spring.grpc.*` trong `application.yaml` cho các luồng RPC còn lại.
 
 ---
 
@@ -236,9 +236,10 @@ Bộ não hệ thống lập lịch chiếu phim hằng ngày.
 - **Collision Rules Engine**: Không cho phép tạo đè suất chiếu. Bộ máy sẽ phân tích lịch của phòng chiếu mục tiêu, cảnh báo và từ chối nếu thời lượng bị lố giờ sang suất chiếu khác.
 - Theo dõi sát vòng đời thực tiễn của suất (Pending -> Screening -> Ended).
 
-### 6. `email-service` 
-Làm việc trong thầm lặng phía sau luồng gọi chính `@EnableAsync`.
+### 6. `email-service`
+Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải request đồng bộ.
 - Tách luồng IO với SMTP Google chậm chạp ra khỏi Response HTTP nhằm bảo vệ tính trải nghiệm thời gian thực của người dùng khi yêu cầu OTP hoặc vé điện tử.
+- Listener có retry/backoff để xử lý tạm thời khi SMTP hoặc network lỗi.
 
 ---
 
@@ -422,8 +423,6 @@ SPRING_RABBITMQ_PASSWORD=admin
 SERVER_PORT=8090
 USER_GRPC_HOST=user-service
 USER_GRPC_PORT=9191
-EMAIL_GRPC_HOST=email-service
-EMAIL_GRPC_PORT=9193
 ```
 
 **[user-service]**
@@ -450,7 +449,6 @@ BOOKING_GRPC_PORT=9195
 **[email-service]**
 ```env
 SERVER_PORT=8093
-GRPC_SERVER_PORT=9193
 MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
 MAIL_FROM_NAME=CinemaSystem
@@ -512,7 +510,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 **Nội dung cập nhật:**
 - Chuyển các lệnh gọi nội bộ đang dùng REST sang **gRPC** ở các luồng:
   - `identity-service` -> `user-service`
-  - `identity-service` -> `email-service`
+  - Email được đẩy vào RabbitMQ để `email-service` xử lý bất đồng bộ.
   - `showtime-service` -> `film-service`
   - `showtime-service` -> `booking-service` (theo contract gRPC thống nhất cho service tương lai)
 - Bổ sung thư mục `common-lib/src/main/proto` chứa các contract:
@@ -521,14 +519,14 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - `film_internal.proto`
   - `booking_internal.proto`
 - Sinh shared gRPC stubs vào `common-lib` để các service tái sử dụng cùng một contract nội bộ.
-- Thêm gRPC server bootstrap cho `user-service`, `film-service`, `email-service`.
+- Thêm gRPC server bootstrap cho `user-service`, `film-service`.
 - Thêm gRPC client config cho `identity-service`, `showtime-service`.
 - Dọn bỏ `RestTemplate` nội bộ ở các luồng trên để tách hẳn REST public và RPC nội bộ.
 - Dọn luồng gửi mail trong `identity-service`: bỏ `new Thread(...)` thủ công, giữ `@Async` + gRPC để giảm thread thừa và dễ kiểm soát hơn.
 - Đồng bộ `compose.yaml` cho cặp service đã có Dockerfile (`identity-service`, `user-service`) để container gọi nhau qua host nội bộ thay vì rơi về `localhost`.
 - Sửa lại một số điểm cấu hình đi kèm:
   - `user-service` trả về mặc định đúng cổng HTTP `8091`.
-  - `email-service` bổ sung rõ cổng HTTP `8093` và cổng gRPC riêng.
+  - `email-service` chuẩn hóa cổng HTTP `8093` để phục vụ nội bộ.
   - `identity-service` sửa cách đọc header phân quyền ở các luồng tạo `manager/staff` và đổi mật khẩu.
 
 ### 🗓️ 04/04/2026 — Chuẩn hóa gRPC theo Spring Official Starter

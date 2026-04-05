@@ -21,6 +21,7 @@ import com.cinema.identity_service.entity.OtpData;
 import com.cinema.identity_service.entity.User;
 import com.cinema.identity_service.grpc.UserGrpcClient;
 import com.cinema.identity_service.mapper.UserMapper;
+import com.cinema.identity_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.identity_service.repository.UserRepository;
 import com.cinema.identity_service.services.UserService;
 import com.cinema.identity_service.utils.OTPGenerator;
