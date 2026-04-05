@@ -122,12 +122,6 @@ services:
     volumes:
       - ./envoy/envoy.prod.yaml:/etc/envoy/envoy.yaml:ro
     command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
-    depends_on:
-      - identity-service
-      - user-service
-      - film-service
-      - showtime-service
-      - email-service
 volumes:
   pgdata:
   redis_data:

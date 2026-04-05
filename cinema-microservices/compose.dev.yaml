@@ -1,21 +1,17 @@
 services:
   identity-service:
-    ports:
-      - "9000:8090"
+    profiles: ["docker-apps"]
   user-service:
-    ports:
-      - "9001:8091"
+    profiles: ["docker-apps"]
   film-service:
-    ports:
-      - "9002:8092"
+    profiles: ["docker-apps"]
   showtime-service:
-    ports:
-      - "9004:8094"
+    profiles: ["docker-apps"]
   email-service:
-    ports:
-      - "9003:8093"
+    profiles: ["docker-apps"]
   envoy:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./envoy/envoy.dev.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on: []
