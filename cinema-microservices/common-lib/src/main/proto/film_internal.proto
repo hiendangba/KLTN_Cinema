@@ -8,6 +8,7 @@ option java_outer_classname = "FilmInternalProto";
 
 service FilmInternalService {
   rpc GetFilmById(GetFilmByIdRequest) returns (GetFilmByIdReply);
+  rpc GetFilmsByIds(GetFilmsByIdsRequest) returns (GetFilmsByIdsReply);
 }
 
 message GetFilmByIdRequest {
@@ -38,4 +39,15 @@ message GetFilmByIdReply {
   string error_key = 2;
   string message = 3;
   FilmPayload film = 4;
+}
+
+message GetFilmsByIdsRequest {
+  repeated string film_ids = 1;
+}
+
+message GetFilmsByIdsReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated FilmPayload films = 4;
 }

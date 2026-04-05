@@ -8,6 +8,8 @@ import com.cinema.grpc.film.FilmInternalServiceGrpc;
 import com.cinema.grpc.film.FilmPayload;
 import com.cinema.grpc.film.GetFilmByIdReply;
 import com.cinema.grpc.film.GetFilmByIdRequest;
+import com.cinema.grpc.film.GetFilmsByIdsReply;
+import com.cinema.grpc.film.GetFilmsByIdsRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
 import io.grpc.StatusRuntimeException;
 import org.springframework.grpc.client.GrpcChannelFactory;
@@ -15,7 +17,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 public class FilmGrpcClient {
@@ -37,6 +42,25 @@ public class FilmGrpcClient {
             }
 
             return toResponse(reply.getFilm());
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.FILM_SERVICE_ERROR);
+        }
+    }
+
+    public Map<UUID, FilmResponse> getFilmsByIds(List<UUID> filmIds) {
+        try {
+            GetFilmsByIdsReply reply = filmBlockingStub.getFilmsByIds(GetFilmsByIdsRequest.newBuilder()
+                    .addAllFilmIds(filmIds.stream().map(UUID::toString).collect(Collectors.toList()))
+                    .build());
+
+            if (!reply.getSuccess()) {
+                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.FILM_SERVICE_ERROR));
+            }
+
+            return reply.getFilmsList().stream()
+                    .map(this::toResponse)
+                    .filter(response -> response.getId() != null)
+                    .collect(Collectors.toMap(FilmResponse::getId, response -> response, (a, b) -> a));
         } catch (StatusRuntimeException ex) {
             throw new BusinessException(ErrorCode.FILM_SERVICE_ERROR);
         }

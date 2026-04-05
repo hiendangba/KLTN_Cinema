@@ -3,11 +3,14 @@ package com.cinema.film_service.grpc;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.film_service.dto.response.FilmResponse;
+import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.services.FilmService;
 import com.cinema.grpc.film.FilmInternalServiceGrpc;
 import com.cinema.grpc.film.FilmPayload;
 import com.cinema.grpc.film.GetFilmByIdReply;
 import com.cinema.grpc.film.GetFilmByIdRequest;
+import com.cinema.grpc.film.GetFilmsByIdsReply;
+import com.cinema.grpc.film.GetFilmsByIdsRequest;
 import io.grpc.BindableService;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +18,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.Objects;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -46,6 +51,49 @@ public class FilmInternalGrpcService extends FilmInternalServiceGrpc.FilmInterna
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching film", ex);
             responseObserver.onNext(GetFilmByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void getFilmsByIds(
+            GetFilmsByIdsRequest request,
+            StreamObserver<GetFilmsByIdsReply> responseObserver) {
+        try {
+            List<UUID> ids = request.getFilmIdsList().stream()
+                    .map(UUID::fromString)
+                    .collect(Collectors.toList());
+
+            com.cinema.film_service.dto.request.BatchFilmRequest batchRequest =
+                    new com.cinema.film_service.dto.request.BatchFilmRequest();
+            batchRequest.setIds(ids);
+
+            BatchFilmResponse batchResponse = filmService.getFilmsInBatch(batchRequest);
+
+            List<FilmPayload> payloads = batchResponse.getData().stream()
+                    .map(this::toPayload)
+                    .collect(Collectors.toList());
+
+            responseObserver.onNext(GetFilmsByIdsReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Films fetched successfully")
+                    .addAllFilms(payloads)
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(GetFilmsByIdsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching films", ex);
+            responseObserver.onNext(GetFilmsByIdsReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())

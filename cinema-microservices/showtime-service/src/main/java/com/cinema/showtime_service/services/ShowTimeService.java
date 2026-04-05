@@ -7,6 +7,7 @@ import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
+import com.cinema.showtime_service.dto.response.ShowTimeWithFilmResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.UUID;
@@ -25,4 +26,9 @@ public interface ShowTimeService {
             CursorPageRequest<ShowTimeField> request);
 
     ShowTimeResponse getShowTimeById(UUID id);
+
+    CursorPageResponse<ShowTimeWithFilmResponse> searchShowtimesWithFilm(
+            CursorPageRequest<ShowTimeField> request);
+
+    ShowTimeWithFilmResponse getShowTimeByIdWithFilm(UUID id);
 }

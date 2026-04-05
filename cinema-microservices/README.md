@@ -4,6 +4,17 @@
 
 ---
 
+## ⚡ Chạy Nhanh (Dev/Prod)
+
+- **Dev (service chạy local VS Code, Envoy chạy Docker):**
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d
+```
+- **Prod (tất cả chạy trong Docker):**
+```bash
+docker compose up -d
+```
+
 ## 📋 Mục Lục
 
 1. [🚀 Giới Thiệu](#-giới-thiệu)
@@ -43,7 +54,7 @@ graph TD
     end
 
     subgraph "API Gateway Layer"
-        Nginx[Nginx API Gateway - Port 80\n- Proxy Cache\n- Load Balancing]
+        Envoy[Envoy API Gateway - Port 80\n- AuthZ Filter\n- Routing]
     end
 
     subgraph "Logic Layer (Microservices)"
@@ -60,12 +71,12 @@ graph TD
         Rabbit[RabbitMQ :5672\nMessage Broker]
     end
 
-    Web --> Nginx
-    Nginx -- "1. Auth Subrequest" --> Identity
-    Identity -- "2. Valid (X-User-ID, Role)" --> Nginx
-    Nginx -- "3. Forward Request" --> User
-    Nginx -- "3. Forward Request" --> Film
-    Nginx -- "3. Forward Request" --> Showtime
+    Web --> Envoy
+    Envoy -- "1. ext_authz" --> Identity
+    Identity -- "2. Valid (X-User-ID, Role)" --> Envoy
+    Envoy -- "3. Forward Request" --> User
+    Envoy -- "3. Forward Request" --> Film
+    Envoy -- "3. Forward Request" --> Showtime
     
     Identity & User & Film & Showtime --> PG
     Identity & User & Film & Showtime --> Redis
@@ -73,23 +84,23 @@ graph TD
     Rabbit --> Email
 ```
 
-### Luồng xác thực qua Nginx (Gateway Pattern)
+### Luồng xác thực qua Envoy (Gateway Pattern)
 
-Nginx đóng vai trò là "người gác cổng" thông minh qua cơ chế **Auth Subrequest**:
+Envoy đóng vai trò là "người gác cổng" thông minh qua cơ chế **ext_authz**:
 
-1. **Client** gửi request kèm header `Authorization: Bearer <token>` đến Nginx.
-2. Nginx chặn request và gọi một **auth subrequest** nội bộ đến `identity-service/api/auth/auth-check`.
+1. **Client** gửi request kèm header `Authorization: Bearer <token>` đến Envoy.
+2. Envoy chặn request và gọi **ext_authz** nội bộ đến `identity-service/internal/auth/check`.
 3. **Identity Service** sẽ:
    - Giải mã và xác thực JWT token (đảm bảo hạn dùng hợp lệ).
    - Kiểm tra trong **Redis** xem token có bị blacklist hay không (người dùng đã logout chưa).
 4. Nếu hợp lệ, Identity Service trả về HTTP 200 kèm các header `X-User-ID` và `X-User-Role`.
-5. Nginx lấy các header này từ kết quả subrequest, gắn vào request gốc và truyền (forward) xuống service đích (User, Film, hoặc Showtime). Lớp bảo vệ này giúp các service con không cần tự quan tâm đến logic JWT phức tạp.
+5. Envoy lấy các header này từ kết quả ext_authz, gắn vào request gốc và truyền (forward) xuống service đích (User, Film, hoặc Showtime). Lớp bảo vệ này giúp các service con không cần tự quan tâm đến logic JWT phức tạp.
 
 ### Giao tiếp nội bộ giữa các Service (gRPC)
 
 Từ bản cập nhật hiện tại, hệ thống tách rõ 2 lớp giao tiếp:
 
-- **HTTP/REST** chỉ còn dành cho phía ngoài: Frontend -> Nginx Gateway -> Public API.
+- **HTTP/REST** chỉ còn dành cho phía ngoài: Frontend -> Envoy Gateway -> Public API.
 - **gRPC nội bộ** dùng cho các lệnh gọi service-to-service nhằm giảm overhead serialization, giảm độ trễ và gom contract tập trung bằng `.proto`.
 - Lớp wiring gRPC hiện được chuẩn hóa theo **Spring gRPC official starter** để giảm bớt `ManagedChannel` / `ServerBuilder` config thủ công ở từng service.
 
@@ -119,7 +130,7 @@ Contract gRPC được đặt tập trung trong `common-lib/src/main/proto` đ�
 | **PostgreSQL** | 16 | RDBMS chính, ACID, hỗ trợ tốt UUID và JSON. |
 | **Redis** | 7 | In-memory cache cực nhanh cho token, OTP, session, API cache. |
 | **RabbitMQ** | 3.x | Hệ thống Queue xử lý các luồng bất đồng bộ (giảm latency). |
-| **Nginx** | Alpine | API Gateway, reverse proxy, proxy cache tối ưu. |
+| **Envoy Proxy** | 1.31.x | API Gateway chuẩn microservices, ext_authz và routing linh hoạt. |
 | **Docker Compose** | Mới nhất | Container hóa đồng bộ 100% môi trường dev/prod. |
 | **Maven** | 3.9+ | Build tool mạnh mẽ quản lý dự án multi-module. |
 | **jjwt** | 0.12.6 | Xử lý thế hệ Token ECDSA và RSA an toàn. |
@@ -180,8 +191,8 @@ cinema-microservices/
 │   └── src/main/java/.../
 │       └── services/              # Xử lý gửi email bất đồng bộ qua Gmail SMTP (@EnableAsync)
 │
-├── nginx/
-│   └── nginx.conf                 # 🔀 Cấu hình Routing, Proxy Caching, Auth Subrequest
+├── envoy/
+│   └── envoy.yaml                 # 🔀 Cấu hình Envoy Gateway (routing, ext_authz)
 │
 ├── postgres-init/
 │   └── create-databases.sql       # 🐘 Script tự khởi động 4 DB độc lập cho microservices
@@ -245,7 +256,7 @@ Làm việc trong thầm lặng phía sau luồng gọi chính `@EnableAsync`.
 | `POST` | `/api/auth/change-password` | ✅ | Người dùng đổi mật khẩu mới (Cần Auth hợp lệ). |
 | `POST` | `/api/auth/manager` | ✅ ADMIN | Cấp tài khoản cấp độ Manager. |
 | `POST` | `/api/auth/staff` | ✅ ADMIN/MANAGER | Cấp tài khoản nhân sự Staff. |
-| `GET` | `/api/auth/auth-check` | ✅ | Internal API. Trạm kiểm soát của Nginx. |
+| `GET` | `/internal/auth/check` | ✅ | Internal API. Trạm kiểm soát của Envoy. |
 
 ### 2. User Service (`/api/users`)
 
@@ -271,9 +282,11 @@ Làm việc trong thầm lặng phía sau luồng gọi chính `@EnableAsync`.
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
 | `POST` | `/api/showtimes/search` | ❌ Public | Khách xem bảng lịch chiếu tương tác tìm suất phù hợp. |
+| `POST` | `/api/showtimes/search-with-film` | ❌ Public | Tìm suất chiếu và kèm thông tin phim (batch gRPC). |
 | `POST` | `/api/showtimes` | ✅ MGMT | Tạo lịch chiếu hệ thống tự quét va chạm Collision thời gian. |
 | `PATCH` | `/api/showtimes/{id}` | ✅ MGMT | Tinh chỉnh thông tin nhanh. |
 | `DELETE` | `/api/showtimes/{id}` | ✅ ADMIN | Bỏ lịch chiếu hệ thống (Cũng dùng Xóa Mềm). |
+| `GET` | `/api/showtimes/{id}/with-film` | ❌ Public | Lấy chi tiết suất chiếu kèm thông tin phim. |
 
 ---
 
@@ -281,7 +294,7 @@ Làm việc trong thầm lặng phía sau luồng gọi chính `@EnableAsync`.
 
 ### Chiến Lược "Database per Service"
 Tránh điểm chết thắt cổ chai của dạng cơ sở dữ liệu liền khối (Monolithic Database) truyền thống. Khóa liên kết ngoài (Foreign Key Constraints) bị loại bỏ có tính toán, các ID liên kết bằng chuẩn phân tán UUID.
-Với việc Nginx route tải chia để trị, khi có nhu cầu thì Postgresql có thể tự được dời cụm cluster riêng ra.
+Với việc Envoy điều phối và routing tải chia, khi có nhu cầu thì Postgresql có thể tự được dời cụm cluster riêng ra.
 
 Bốn cơ sở dữ liệu gồm: `identity_db`, `user_db`, `film_db`, `showtime_db` được nhúng tự động thông qua khối lệnh của `/postgres-init/create-databases.sql`.
 
@@ -289,7 +302,7 @@ Bốn cơ sở dữ liệu gồm: `identity_db`, `user_db`, `film_db`, `showtime
 Áp dụng kho Redis v7 cung cấp băng thông nghìn Request/sec:
 - **Tầng Xác Thực:** Giữ token vào RAM. Kể cả Database sập Identity Auth vẫn hoạt động liên tục vì Redis ôm hoàn toàn dữ liệu.
 - **Tầng Tạm Thời (Transient):** OTP mã hóa 6 số gán định trạng thái phá hủy (TTL - 300 giây).
-- **Tầng Gateway:** Nginx cache lại các luồng `GET /api/films` phổ biến khoảng 10 phút. Hạn chế triệt để Database Roundtrip vô ích.
+- **Tầng Gateway:** Envoy cache có thể được bật thêm khi cần để giảm Database roundtrip (hiện chưa bật trong config).
 
 ---
 
@@ -346,11 +359,22 @@ docker compose ps
 docker compose logs -f identity-service
 ```
 
+### Chạy Gateway Envoy theo chế độ Dev/Prod
+
+- **Prod (default):** Envoy route tới service trong Docker network.
+```bash
+docker compose up -d
+```
+- **Dev (service chạy local VS Code):** Envoy route về `host.docker.internal`.
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d
+```
+
 ### Tương quan Port Mạng Trở Về:
 
 | Dịch vụ / Hệ Tầng | Liên kết thực thi trên máy cá nhân |
 |---|---|
-| Nginx (Trung Tâm Gateway) | http://localhost:80 |
+| Envoy (Trung Tâm Gateway) | http://localhost:80 |
 | Identity Service Web API | http://localhost:9000 |
 | User Profile Web API | http://localhost:9001 |
 | PostgreSQL Relational | `localhost:5433` (User: postgres / 123456) |
@@ -446,7 +470,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ✅ **Các Mảnh Ghép Xong Nhiệm Vụ:**
 1. Khung Sườn Multi-Module Microservices với chuẩn Common Library phân bố.
-2. Hoàn tất Nginx Gateway áp dụng Reverse Proxy Caching & Auth Custom Hook Pattern. Xây trạm điều phối bảo mật gốc.
+2. Hoàn tất Envoy Gateway áp dụng ext_authz và routing chuẩn, thay thế Nginx trong kiến trúc.
 3. Bộ Token hoàn thiện (Role Check, OTP Timeout 5min Limit 3 lần, Refresh Token Flow).
 4. Khảm Redis Error Handler Logic phân tán tải cực mạnh.
 5. Triển khai Cursor Paging vào khối dữ liệu Film Data để tăng cường sức truy xuất vô hạn không giảm tốc.
@@ -520,6 +544,12 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Tránh mutate list sort đầu vào trong search showtime để giảm side-effect khó debug.
 - Dọn duplicate `authentication.setDetails` trong filter để giảm work thừa.
 - Tối ưu query phim và showtime: tránh thao tác `toLowerCase` lặp lại, dùng `IN` cho enum status, thêm guard khi cursor thiếu field và ưu tiên so khớp UUID trực tiếp khi keyword là UUID.
+
+### 🗓️ 05/04/2026 — Chuẩn hóa API Gateway với Envoy (Production-ready)
+**Nội dung cập nhật:**
+- Thay Nginx gateway bằng **Envoy Proxy** để phù hợp hơn với kiến trúc microservices/gRPC.
+- Cấu hình `ext_authz` gọi `identity-service/api/auth/auth-check` để xác thực tập trung và tự động forward `X-User-ID`, `X-User-Role`.
+- Thiết lập routing cho các service backend qua Envoy.
 
 ---
 > Hệ thống kiến trúc mở được chế tác và kiểm tra tổng quát toàn bộ luồng logic lần cuối vào **04/04/2026**. Thiết kế để sãn sàng đáp ứng quy mô High-Availability Online Cinema System.

@@ -15,6 +15,7 @@ import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
+import com.cinema.showtime_service.dto.response.ShowTimeWithFilmResponse;
 import com.cinema.showtime_service.entity.ShowTime;
 import com.cinema.showtime_service.grpc.BookingGrpcClient;
 import com.cinema.showtime_service.grpc.FilmGrpcClient;
@@ -33,8 +34,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -103,6 +106,15 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
         return showTimeMapper.toResponse(showTime);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ShowTimeWithFilmResponse getShowTimeByIdWithFilm(UUID id) {
+        ShowTime showTime = showTimeRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+        FilmResponse film = filmGrpcClient.getFilmById(showTime.getFilmId());
+        return toWithFilmResponse(showTime, film);
     }
 
     @Override
@@ -207,5 +219,64 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
         showTime.setIsDeleted(true);
         showTimeRepository.save(showTime);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CursorPageResponse<ShowTimeWithFilmResponse> searchShowtimesWithFilm(
+            CursorPageRequest<ShowTimeField> request) {
+        CursorPageResponse<ShowTimeResponse> base = searchShowtimes(request);
+        List<ShowTimeResponse> showtimes = base.getData();
+
+        List<UUID> filmIds = showtimes.stream()
+                .map(ShowTimeResponse::getFilmId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<UUID, FilmResponse> filmMap = filmIds.isEmpty()
+                ? Map.of()
+                : filmGrpcClient.getFilmsByIds(filmIds);
+
+        List<ShowTimeWithFilmResponse> data = showtimes.stream()
+                .map(showtime -> toWithFilmResponse(showtime, filmMap.get(showtime.getFilmId())))
+                .collect(Collectors.toList());
+
+        return CursorPageResponse.<ShowTimeWithFilmResponse>builder()
+                .data(data)
+                .nextCursor(base.getNextCursor())
+                .prevCursor(base.getPrevCursor())
+                .hasNext(base.isHasNext())
+                .size(base.getSize())
+                .build();
+    }
+
+    private ShowTimeWithFilmResponse toWithFilmResponse(ShowTimeResponse showtime, FilmResponse film) {
+        return ShowTimeWithFilmResponse.builder()
+                .id(showtime.getId())
+                .hallId(showtime.getHallId())
+                .filmId(showtime.getFilmId())
+                .film(film)
+                .startDateTime(showtime.getStartDateTime())
+                .endDateTime(showtime.getEndDateTime())
+                .status(showtime.getStatus())
+                .isDeleted(showtime.isDeleted())
+                .timeCreated(showtime.getTimeCreated())
+                .timeUpdated(showtime.getTimeUpdated())
+                .build();
+    }
+
+    private ShowTimeWithFilmResponse toWithFilmResponse(ShowTime showtime, FilmResponse film) {
+        return ShowTimeWithFilmResponse.builder()
+                .id(showtime.getId())
+                .hallId(showtime.getHallId())
+                .filmId(showtime.getFilmId())
+                .film(film)
+                .startDateTime(showtime.getStartDateTime())
+                .endDateTime(showtime.getEndDateTime())
+                .status(showtime.getStatus())
+                .isDeleted(Boolean.TRUE.equals(showtime.getIsDeleted()))
+                .timeCreated(showtime.getTimeCreated())
+                .timeUpdated(showtime.getTimeUpdated())
+                .build();
     }
 }

@@ -97,8 +97,5 @@ public class UserController extends BaseController {
         return created(registerCustomerResponse);
     }
 
-    @GetMapping("/auth-check")
-    public ResponseEntity<?> authCheck() {
-        return ResponseEntity.ok().build();
-    }
+    // auth-check moved to internal controller
 }

@@ -1,0 +1,6 @@
+services:
+  envoy:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./envoy/envoy.dev.yaml:/etc/envoy/envoy.yaml:ro

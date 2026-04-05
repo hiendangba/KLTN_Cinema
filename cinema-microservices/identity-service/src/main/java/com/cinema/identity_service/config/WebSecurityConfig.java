@@ -29,7 +29,7 @@ public class WebSecurityConfig {
                 .cors(cors -> {
                 }) // 🔥 bật CORS tại đây
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/auth-check").authenticated()
+                        .requestMatchers("/internal/auth/check").authenticated()
                         .requestMatchers("/api/auth/manager", "/api/auth/staff", "/api/auth/change-password").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(
