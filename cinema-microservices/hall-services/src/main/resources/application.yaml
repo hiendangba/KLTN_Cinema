@@ -1,3 +1,28 @@
 spring:
   application:
-    name: hall-services
+    name: ${APP_NAME:hall-services}
+  mvc:
+    trailing-slash:
+      match: true
+  devtools:
+    restart:
+      enabled: false
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/hall_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:123456}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:true}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9197}
+
+server:
+  port: ${SERVER_PORT:8097}

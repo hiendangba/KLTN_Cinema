@@ -66,6 +66,9 @@ public enum ErrorCode {
 
         HALL_NOT_FOUND("4301", "Phòng chiếu không tìm thấy", HttpStatus.NOT_FOUND),
         CINEMA_NOT_FOUND("4302", "Cinema không tìm thấy", HttpStatus.NOT_FOUND),
+        HALL_NAME_EXISTED("4303", "Ten phong chieu da ton tai trong cinema", HttpStatus.CONFLICT),
+        SEAT_NOT_FOUND("4304", "Ghe khong tim thay trong phong chieu", HttpStatus.NOT_FOUND),
+        HALL_MAINTENANCE("4305", "Phong chieu dang bao tri", HttpStatus.BAD_REQUEST),
 
         EMAIL_SEND_FAILED("9100", "Gửi email thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
         FILM_SERVICE_ERROR("9101", "Lỗi khi gọi Film Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
@@ -78,3 +81,5 @@ public enum ErrorCode {
         private final String message;
         private final HttpStatus httpStatus;
 }
+
+

@@ -37,7 +37,8 @@ public class HallGrpcClient {
                 throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.HALL_SERVICE_ERROR));
             }
 
-            if (reply.getHall() == null || reply.getHall().getId().isBlank() || reply.getHall().getCinemaId().isBlank()) {
+            if (reply.getHall() == null || reply.getHall().getId().isBlank()
+                    || reply.getHall().getCinemaId().isBlank()) {
                 throw new BusinessException(ErrorCode.HALL_NOT_FOUND);
             }
 

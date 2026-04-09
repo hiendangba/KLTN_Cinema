@@ -1,0 +1,63 @@
+package com.cinema.hall_services.controller;
+
+import com.cinema.controller.BaseController;
+import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.hall_services.dto.request.HallCreateRequest;
+import com.cinema.hall_services.dto.request.HallField;
+import com.cinema.hall_services.dto.request.UpdateHallLayoutRequest;
+import com.cinema.hall_services.dto.response.HallResponse;
+import com.cinema.hall_services.services.HallService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/halls")
+@Slf4j
+@RequiredArgsConstructor
+public class HallController extends BaseController {
+    private final HallService hallService;
+
+    @PostMapping
+    public ResponseEntity<APIResponse<HallResponse>> createHall(
+            @Valid @RequestBody HallCreateRequest request,
+            HttpServletRequest httpRequest) {
+        HallResponse response = hallService.createHall(request, httpRequest);
+        return created(response);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<APIResponse<HallResponse>> getHallById(@PathVariable UUID id) {
+        HallResponse response = hallService.getHallById(id);
+        return ok(response);
+    }
+
+    @PostMapping("/search")
+    public ResponseEntity<APIResponse<CursorPageResponse<HallResponse>>> searchHalls(
+            @RequestBody CursorPageRequest<HallField> request) {
+        CursorPageResponse<HallResponse> response = hallService.searchHalls(request);
+        return ok(response);
+    }
+
+    @PatchMapping("/{id}/layout")
+    public ResponseEntity<APIResponse<HallResponse>> updateHallLayout(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateHallLayoutRequest request,
+            HttpServletRequest httpRequest) {
+        HallResponse response = hallService.updateHallLayout(id, request, httpRequest);
+        return ok(response);
+    }
+}

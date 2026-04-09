@@ -7,6 +7,8 @@ services:
     profiles: ["docker-apps"]
   showtime-service:
     profiles: ["docker-apps"]
+  hall-services:
+    profiles: ["docker-apps"]
   email-service:
     profiles: ["docker-apps"]
   envoy:

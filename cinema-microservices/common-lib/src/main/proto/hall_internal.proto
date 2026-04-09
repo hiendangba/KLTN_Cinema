@@ -18,6 +18,7 @@ message HallPayload {
   string id = 1;
   string cinema_id = 2;
   string name = 3;
+  string layout_json = 4;
 }
 
 message GetHallByIdReply {

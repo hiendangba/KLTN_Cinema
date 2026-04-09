@@ -48,7 +48,7 @@ spring:
         cinema:
           address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
         hall:
-          address: "${HALL_GRPC_HOST:localhost}:${HALL_GRPC_PORT:9193}"
+          address: "${HALL_GRPC_HOST:localhost}:${HALL_GRPC_PORT:9197}"
 rabbitmq:
   host: ${SPRING_RABBITMQ_HOST:rabbitmq}
   port: ${SPRING_RABBITMQ_PORT:5672}

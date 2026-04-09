@@ -54,6 +54,8 @@ services:
       FILM_GRPC_PORT: 9192
       BOOKING_GRPC_HOST: booking-service
       BOOKING_GRPC_PORT: 9195
+      HALL_GRPC_HOST: hall-services
+      HALL_GRPC_PORT: 9197
     expose:
       - "8094"
     depends_on:
@@ -61,6 +63,25 @@ services:
       - redis
       - rabbitmq
       - film-service
+      - hall-services
+
+  hall-services:
+    build:
+      context: .
+      dockerfile: ./hall-services/Dockerfile
+    environment:
+      DB_URL: jdbc:postgresql://pg:5432/hall_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: 123456
+      JPA_DDL_AUTO: update
+      JPA_SHOW_SQL: true
+      GRPC_SERVER_PORT: 9197
+      SERVER_PORT: 8097
+    expose:
+      - "9197"
+      - "8097"
+    depends_on:
+      - postgres
 
   email-service:
     build:

@@ -305,6 +305,15 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `GET` | `/api/showtimes/pricing-policies/{id}` | ✅ MGMT | Lấy chi tiết một policy giá trong cinema hiện tại của user. |
 | `GET` | `/api/showtimes/pricing-policies` | ✅ MGMT | Lấy danh sách policy giá của cinema hiện tại. |
 
+### 5. Hall Service (`/api/halls`)
+
+| Method | Endpoint | Auth | Mo ta |
+|---|---|---|---|
+| `POST` | `/api/halls` | MGMT | Tao hall moi voi `layoutJson` (JSON so do ghe de FE render). |
+| `GET` | `/api/halls/{id}` | Public | Lay chi tiet hall va tra `layoutJson` day du. |
+| `POST` | `/api/halls/search` | Public | Tim hall bang cursor pagination. |
+| `PATCH` | `/api/halls/{id}/layout` | MGMT | Cap nhat toan bo `layoutJson` cua hall. |
+
 ---
 
 ## 🐘 Cơ Sở Dữ Liệu & Caching
@@ -313,7 +322,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 Tránh điểm chết thắt cổ chai của dạng cơ sở dữ liệu liền khối (Monolithic Database) truyền thống. Khóa liên kết ngoài (Foreign Key Constraints) bị loại bỏ có tính toán, các ID liên kết bằng chuẩn phân tán UUID.
 Với việc Envoy điều phối và routing tải chia, khi có nhu cầu thì Postgresql có thể tự được dời cụm cluster riêng ra.
 
-Bốn cơ sở dữ liệu gồm: `identity_db`, `user_db`, `film_db`, `showtime_db` được nhúng tự động thông qua khối lệnh của `/postgres-init/create-databases.sql`.
+Nam co s? d? li?u g?m: `identity_db`, `user_db`, `film_db`, `showtime_db`, `hall_db` du?c nh�ng t? d?ng th�ng qua kh?i l?nh c?a `/postgres-init/create-databases.sql`.
 
 ### Chiến Lược Redis
 Áp dụng kho Redis v7 cung cấp băng thông nghìn Request/sec:
@@ -470,6 +479,19 @@ CINEMA_GRPC_PORT=9196
 - Rule nghiep vu: `pricing_policy` da duoc gan cho bat ky `showtime` nao thi khong duoc update hoac delete nua.
 - Rule nghiep vu bo sung: policy chi duoc truy cap/su dung khi thuoc dung cinema cua manager hien tai.
 
+
+**[hall-services]**
+```env
+SERVER_PORT=8097
+GRPC_SERVER_PORT=9197
+DB_URL=jdbc:postgresql://pg:5432/hall_db
+```
+
+**Schema note for `hall-services`:**
+- `hall` luu `layout_json` dang JSON de FE render so do ghe.
+- `layout_json` ho tro loai o ghe va o `AISLE` (duong di).
+- gRPC noi bo `GetHallById` dung cho service khac (vi du `showtime-service`).
+
 **[email-service]**
 ```env
 SERVER_PORT=8093
@@ -590,7 +612,15 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - `GET /api/showtimes/pricing-policies/{id}`
   - `GET /api/showtimes/pricing-policies`
 - Khoa nghiep vu cho pricing policy: chi duoc sua/xoa khi policy do chua duoc showtime nao su dung.
-- Giữ nguyên pattern kien truc cua `showtime-service`: controller -> service -> repository -> mapper, va build reactor da pass bang Maven wrapper.
 
+### 10/04/2026 - Hall layoutJson and AISLE update
+**Noi dung cap nhat:**
+- Refactor `hall-services` theo model `Hall` dung `layoutJson` (JSON) thay vi bang `Seat` roi.
+- API hall cho FE gom: `POST /api/halls`, `GET /api/halls/{id}`, `POST /api/halls/search`, `PATCH /api/halls/{id}/layout`.
+- Bo sung seat type `AISLE` de bieu dien o duong di trong so do ghe.
+- Bo sung gRPC server `HallInternalService/GetHallById` va cau hinh `GRPC_SERVER_PORT=9197`.
+- Cap nhat `compose.yaml`, `compose.dev.yaml`, `envoy.dev.yaml`, `envoy.prod.yaml`, `postgres-init/create-databases.sql` de deploy dong bo.
+- Dieu chinh `showtime-service` dung `HALL_GRPC_PORT` mac dinh `9197`.
+- Build compile da pass voi Maven wrapper: `hall-services` + `common-lib`.
 ---
 > Hệ thống kiến trúc mở được chế tác và kiểm tra tổng quát toàn bộ luồng logic lần cuối vào **04/04/2026**. Thiết kế để sãn sàng đáp ứng quy mô High-Availability Online Cinema System.
