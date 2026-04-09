@@ -11,21 +11,36 @@ import java.util.UUID;
 
 public interface ShowTimeRepository extends JpaRepository<ShowTime, UUID> {
 
-    // Chỉ kiểm tra xem cái nào là đã lên lịch hoặc đang chiếu thôi
-    // StartDatetime < endTime : Suất mới có thời gian bắt đầu nhỏ hơn thời gian kết
-    // thúc của phim mới
-    // EndDateTime > startTime: Suất mới có thời gian kết thúc nhỏ hơn thời gian bắt
-    // đầu của phim mới
+    boolean existsByPricingPolicyIdAndIsDeletedFalse(UUID pricingPolicyId);
+
     @Query(value = """
             SELECT * FROM show_time s
             WHERE s.hall_id = :hallId
               AND s.start_date_time < :endTime
               AND s.end_date_time > :startTime
               AND s.status IN ('SCHEDULED', 'ONGOING')
+              AND s.is_deleted = false
             ORDER BY s.end_date_time DESC
             LIMIT 1
             """, nativeQuery = true)
     Optional<ShowTime> findOverlapping(
+            @Param("hallId") UUID hallId,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime);
+
+    @Query(value = """
+            SELECT * FROM show_time s
+            WHERE s.hall_id = :hallId
+              AND s.id <> :showTimeId
+              AND s.start_date_time < :endTime
+              AND s.end_date_time > :startTime
+              AND s.status IN ('SCHEDULED', 'ONGOING')
+              AND s.is_deleted = false
+            ORDER BY s.end_date_time DESC
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<ShowTime> findOverlappingExcludingId(
+            @Param("showTimeId") UUID showTimeId,
             @Param("hallId") UUID hallId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);

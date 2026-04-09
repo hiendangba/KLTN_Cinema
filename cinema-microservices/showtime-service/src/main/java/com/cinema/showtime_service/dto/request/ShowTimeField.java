@@ -1,15 +1,15 @@
 package com.cinema.showtime_service.dto.request;
 
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
-
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.showtime_service.entity.ShowTime;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Slf4j
@@ -19,6 +19,7 @@ public enum ShowTimeField {
     END_DATE_TIME("endDateTime", LocalDateTime.class),
     HALL_ID("hallId", UUID.class),
     FILM_ID("filmId", UUID.class),
+    PRICING_POLICY_ID("pricingPolicyId", UUID.class),
     STATUS("status", Integer.class),
     IS_DELETED("isDeleted", Boolean.class),
     TIME_CREATED("timeCreated", LocalDateTime.class),
@@ -67,6 +68,9 @@ public enum ShowTimeField {
                         break;
                     case FILM_ID:
                         values[i] = entity.getFilmId();
+                        break;
+                    case PRICING_POLICY_ID:
+                        values[i] = entity.getPricingPolicyId();
                         break;
                     case STATUS:
                         values[i] = entity.getStatus();

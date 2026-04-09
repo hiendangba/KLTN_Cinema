@@ -1,13 +1,22 @@
 package com.cinema.showtime_service.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
+import com.cinema.Enum.ShowTimeEnum;
 import com.github.f4b6a3.uuid.UuidCreator;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import com.cinema.Enum.ShowTimeEnum;
 
 @Entity
 @Table(name = "show_time")
@@ -32,6 +41,9 @@ public class ShowTime {
     @Column(name = "film_id", columnDefinition = "uuid", nullable = false)
     private UUID filmId;
 
+    @Column(name = "pricing_policy_id", columnDefinition = "uuid", nullable = false)
+    private UUID pricingPolicyId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private ShowTimeEnum.ShowTimeStatus status;
@@ -48,7 +60,7 @@ public class ShowTime {
     @PrePersist
     public void prePersist() {
         if (this.id == null) {
-            this.id = UuidCreator.getTimeOrderedEpoch(); // UUIDv7
+            this.id = UuidCreator.getTimeOrderedEpoch();
         }
         isDeleted = false;
         timeCreated = LocalDateTime.now();

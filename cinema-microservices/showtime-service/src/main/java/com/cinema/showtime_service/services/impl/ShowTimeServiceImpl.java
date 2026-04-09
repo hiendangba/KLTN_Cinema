@@ -12,14 +12,21 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
+import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
+import com.cinema.showtime_service.dto.response.HallResponse;
+import com.cinema.showtime_service.dto.response.PricingPolicyResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
-import com.cinema.showtime_service.dto.response.ShowTimeWithFilmResponse;
+import com.cinema.showtime_service.entity.PricingPolicy;
 import com.cinema.showtime_service.entity.ShowTime;
 import com.cinema.showtime_service.grpc.BookingGrpcClient;
+import com.cinema.showtime_service.grpc.CinemaGrpcClient;
 import com.cinema.showtime_service.grpc.FilmGrpcClient;
+import com.cinema.showtime_service.grpc.HallGrpcClient;
+import com.cinema.showtime_service.mapper.PricingPolicyMapper;
 import com.cinema.showtime_service.mapper.ShowTimeMapper;
+import com.cinema.showtime_service.repository.PricingPolicyRepository;
 import com.cinema.showtime_service.repository.ShowTimeRepository;
 import com.cinema.showtime_service.repository.ShowTimeRepositoryImpl;
 import com.cinema.showtime_service.services.ShowTimeService;
@@ -33,11 +40,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -49,13 +56,46 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     ShowTimeRepository showTimeRepository;
     ShowTimeRepositoryImpl showTimeRepositoryImpl;
     ShowTimeMapper showTimeMapper;
+    PricingPolicyMapper pricingPolicyMapper;
     FilmGrpcClient filmGrpcClient;
     BookingGrpcClient bookingGrpcClient;
+    CinemaGrpcClient cinemaGrpcClient;
+    HallGrpcClient hallGrpcClient;
+    PricingPolicyRepository pricingPolicyRepository;
 
     @Override
     @Transactional(readOnly = true)
     public CursorPageResponse<ShowTimeResponse> searchShowtimes(CursorPageRequest<ShowTimeField> request) {
-        log.info("Lấy danh sách showtime (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
+        CursorPageResponse<ShowTimeResponse> base = searchShowtimesBase(request);
+        List<ShowTimeResponse> showtimes = new ArrayList<>(base.getData());
+
+        List<UUID> filmIds = showtimes.stream()
+                .map(ShowTimeResponse::getFilmId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        Map<UUID, FilmResponse> filmMap = filmIds.isEmpty()
+                ? Map.of()
+                : filmGrpcClient.getFilmsByIds(filmIds);
+
+        Map<UUID, HallResponse> hallMap = getHallResponseMap(showtimes);
+
+        showtimes.forEach(showtime -> {
+            showtime.setFilm(filmMap.get(showtime.getFilmId()));
+            showtime.setHall(hallMap.get(showtime.getHallId()));
+        });
+
+        return CursorPageResponse.<ShowTimeResponse>builder()
+                .data(showtimes)
+                .nextCursor(base.getNextCursor())
+                .prevCursor(base.getPrevCursor())
+                .hasNext(base.isHasNext())
+                .size(base.getSize())
+                .build();
+    }
+
+    private CursorPageResponse<ShowTimeResponse> searchShowtimesBase(CursorPageRequest<ShowTimeField> request) {
+        log.info("Lay danh sach showtime (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
                 request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
                 request.getFilterBy());
 
@@ -89,9 +129,11 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             }
         }
 
+        Map<UUID, PricingPolicyResponse> pricingPolicyMap = getPricingPolicyResponseMap(showTimes);
+
         return CursorPageResponse.<ShowTimeResponse>builder()
                 .data(showTimes.stream()
-                        .map(showTimeMapper::toResponse)
+                        .map(showTime -> toShowTimeResponse(showTime, pricingPolicyMap.get(showTime.getPricingPolicyId())))
                         .collect(Collectors.toList()))
                 .nextCursor(nextCursor)
                 .prevCursor(prevCursor)
@@ -105,26 +147,24 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     public ShowTimeResponse getShowTimeById(UUID id) {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
-        return showTimeMapper.toResponse(showTime);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public ShowTimeWithFilmResponse getShowTimeByIdWithFilm(UUID id) {
-        ShowTime showTime = showTimeRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
         FilmResponse film = filmGrpcClient.getFilmById(showTime.getFilmId());
-        return toWithFilmResponse(showTime, film);
+        PricingPolicyResponse pricingPolicy = getPricingPolicyResponse(showTime.getPricingPolicyId());
+        HallResponse hall = hallGrpcClient.getHallById(showTime.getHallId());
+        ShowTimeResponse response = toShowTimeResponse(showTime, pricingPolicy);
+        response.setFilm(film);
+        response.setHall(hall);
+        return response;
     }
 
     @Override
+    @Transactional
     public ResultResponse<ShowTimeResponse> createShowTime(
             ShowTimeCreateRequest showTimeCreateRequest,
             HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!"MANAGER".equals(role)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        validateHallInCinema(showTimeCreateRequest.getHallId(), cinemaId);
+        validatePricingPolicy(showTimeCreateRequest.getPricingPolicyId(), cinemaId);
 
         FilmResponse filmResponse = filmGrpcClient.getFilmById(showTimeCreateRequest.getFilmId());
 
@@ -138,6 +178,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
         ResultResponse<ShowTimeResponse> resultResponse = new ResultResponse<>();
         List<SuccessResponse<ShowTimeResponse>> showTimeResponses = new ArrayList<>();
+        List<ShowTime> createdShowTimes = new ArrayList<>();
 
         while (startTime.plusMinutes(duration).isBefore(endTime)) {
             Optional<ShowTime> overlapping = showTimeRepository.findOverlapping(
@@ -150,7 +191,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 showTimeCreateRequest.setEndDateTime(startTime.plusMinutes(duration));
                 ShowTime showTime = showTimeMapper.toEntity(showTimeCreateRequest);
                 showTime = showTimeRepository.save(showTime);
-                showTimeResponses.add(new SuccessResponse<>(showTimeMapper.toResponse(showTime)));
+                createdShowTimes.add(showTime);
                 startTime = startTime.plusMinutes(duration);
                 continue;
             }
@@ -158,8 +199,14 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             startTime = overlapping.get().getEndDateTime();
         }
 
-        if (showTimeResponses.isEmpty()) {
+        if (createdShowTimes.isEmpty()) {
             throw new BusinessException(ErrorCode.ALL_TIME_SLOT_OCCUPIED);
+        }
+
+        Map<UUID, PricingPolicyResponse> pricingPolicyMap = getPricingPolicyResponseMap(createdShowTimes);
+        for (ShowTime showTime : createdShowTimes) {
+            showTimeResponses.add(new SuccessResponse<>(
+                    toShowTimeResponse(showTime, pricingPolicyMap.get(showTime.getPricingPolicyId()))));
         }
 
         resultResponse.setSuccessResponse(showTimeResponses);
@@ -167,15 +214,87 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     }
 
     @Override
+    @Transactional
+    public ShowTimeResponse updateShowTime(
+            UUID id,
+            UpdateShowTimeRequest updateShowTimeRequest,
+            HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+
+        ShowTime showTime = getEditableShowTime(id);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        validateHallInCinema(showTime.getHallId(), cinemaId);
+        validatePricingPolicy(updateShowTimeRequest.getPricingPolicyId(), cinemaId);
+
+        FilmResponse filmResponse = filmGrpcClient.getFilmById(showTime.getFilmId());
+        long duration = (long) filmResponse.getDuration() + 30;
+        LocalDateTime requestedStartTime = updateShowTimeRequest.getStartDateTime();
+        LocalDateTime requestedEndTime = updateShowTimeRequest.getEndDateTime();
+
+        if (requestedEndTime.isBefore(requestedStartTime.plusMinutes(duration))) {
+            throw new BusinessException(ErrorCode.INVALID_END_TIME);
+        }
+
+        Optional<ShowTime> overlapping = showTimeRepository.findOverlappingExcludingId(
+                showTime.getId(),
+                showTime.getHallId(),
+                requestedStartTime,
+                requestedEndTime);
+
+        if (overlapping.isPresent()) {
+            throw new BusinessException(ErrorCode.ALL_TIME_SLOT_OCCUPIED);
+        }
+
+        showTime.setPricingPolicyId(updateShowTimeRequest.getPricingPolicyId());
+        showTime.setStartDateTime(requestedStartTime);
+        showTime.setEndDateTime(requestedEndTime);
+        showTime.setStatus(updateShowTimeRequest.getStatus());
+        showTime = showTimeRepository.save(showTime);
+
+        return toShowTimeResponse(showTime, getPricingPolicyResponse(showTime.getPricingPolicyId()));
+    }
+
+    @Override
+    @Transactional
     public ShowTimeResponse updateShowTimeStatus(
             UUID id,
             UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
             HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!"MANAGER".equals(role)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+        validateManagerRole(httpRequest);
+
+        ShowTime showTime = getEditableShowTime(id);
+        showTime.setStatus(updateShowTimeStatusRequest.getStatus());
+        showTimeRepository.save(showTime);
+        return toShowTimeResponse(showTime, getPricingPolicyResponse(showTime.getPricingPolicyId()));
+    }
+
+    @Override
+    @Transactional
+    public void deleteShowTime(UUID id, HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+
+        ShowTime showTime = showTimeRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+
+        if (bookingGrpcClient.isShowtimeBooked(id)) {
+            throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
         }
 
+        if (showTime.getIsDeleted()) {
+            throw new BusinessException(ErrorCode.DELETED_SHOWTIME);
+        }
+
+        showTime.setIsDeleted(true);
+        showTimeRepository.save(showTime);
+    }
+
+    private ShowTimeResponse toShowTimeResponse(ShowTime showTime, PricingPolicyResponse pricingPolicy) {
+        ShowTimeResponse response = showTimeMapper.toResponse(showTime);
+        response.setPricingPolicy(pricingPolicy);
+        return response;
+    }
+
+    private ShowTime getEditableShowTime(UUID id) {
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
         if (showTime.getIsDeleted()) {
@@ -193,90 +312,68 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         if (showTime.getStatus().equals(ShowTimeEnum.ShowTimeStatus.FINISHED)) {
             throw new BusinessException(ErrorCode.NOT_UPDATE_FINISHED_SHOWTIME);
         }
-
-        showTime.setStatus(updateShowTimeStatusRequest.getStatus());
-        showTimeRepository.save(showTime);
-        return showTimeMapper.toResponse(showTime);
+        return showTime;
     }
 
-    @Override
-    public void deleteShowTime(UUID id, HttpServletRequest httpRequest) {
+    private void validateManagerRole(HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!"MANAGER".equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-
-        ShowTime showTime = showTimeRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
-
-        if (bookingGrpcClient.isShowtimeBooked(id)) {
-            throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
-        }
-
-        if (showTime.getIsDeleted()) {
-            throw new BusinessException(ErrorCode.DELETED_SHOWTIME);
-        }
-
-        showTime.setIsDeleted(true);
-        showTimeRepository.save(showTime);
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public CursorPageResponse<ShowTimeWithFilmResponse> searchShowtimesWithFilm(
-            CursorPageRequest<ShowTimeField> request) {
-        CursorPageResponse<ShowTimeResponse> base = searchShowtimes(request);
-        List<ShowTimeResponse> showtimes = base.getData();
+    private void validatePricingPolicy(UUID pricingPolicyId, UUID cinemaId) {
+        PricingPolicy pricingPolicy = pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
 
-        List<UUID> filmIds = showtimes.stream()
-                .map(ShowTimeResponse::getFilmId)
+        if (!cinemaId.equals(pricingPolicy.getCinemaId())) {
+            throw new BusinessException(ErrorCode.PRICING_POLICY_NOT_IN_CINEMA);
+        }
+    }
+
+    private void validateHallInCinema(UUID hallId, UUID cinemaId) {
+        UUID hallCinemaId = hallGrpcClient.getCinemaIdByHallId(hallId);
+        if (!cinemaId.equals(hallCinemaId)) {
+            throw new BusinessException(ErrorCode.HALL_NOT_IN_CINEMA);
+        }
+    }
+
+    private PricingPolicyResponse getPricingPolicyResponse(UUID pricingPolicyId) {
+        return pricingPolicyRepository.findById(pricingPolicyId)
+                .map(pricingPolicyMapper::toResponse)
+                .orElse(null);
+    }
+
+    private Map<UUID, PricingPolicyResponse> getPricingPolicyResponseMap(List<ShowTime> showTimes) {
+        List<UUID> pricingPolicyIds = showTimes.stream()
+                .map(ShowTime::getPricingPolicyId)
                 .distinct()
                 .collect(Collectors.toList());
 
-        Map<UUID, FilmResponse> filmMap = filmIds.isEmpty()
+        return pricingPolicyIds.isEmpty()
                 ? Map.of()
-                : filmGrpcClient.getFilmsByIds(filmIds);
-
-        List<ShowTimeWithFilmResponse> data = showtimes.stream()
-                .map(showtime -> toWithFilmResponse(showtime, filmMap.get(showtime.getFilmId())))
-                .collect(Collectors.toList());
-
-        return CursorPageResponse.<ShowTimeWithFilmResponse>builder()
-                .data(data)
-                .nextCursor(base.getNextCursor())
-                .prevCursor(base.getPrevCursor())
-                .hasNext(base.isHasNext())
-                .size(base.getSize())
-                .build();
+                : pricingPolicyRepository.findAllById(pricingPolicyIds).stream()
+                .collect(Collectors.toMap(PricingPolicy::getId, pricingPolicyMapper::toResponse));
     }
 
-    private ShowTimeWithFilmResponse toWithFilmResponse(ShowTimeResponse showtime, FilmResponse film) {
-        return ShowTimeWithFilmResponse.builder()
-                .id(showtime.getId())
-                .hallId(showtime.getHallId())
-                .filmId(showtime.getFilmId())
-                .film(film)
-                .startDateTime(showtime.getStartDateTime())
-                .endDateTime(showtime.getEndDateTime())
-                .status(showtime.getStatus())
-                .isDeleted(showtime.isDeleted())
-                .timeCreated(showtime.getTimeCreated())
-                .timeUpdated(showtime.getTimeUpdated())
-                .build();
+    private Map<UUID, HallResponse> getHallResponseMap(List<ShowTimeResponse> showtimes) {
+        Map<UUID, HallResponse> hallMap = new HashMap<>();
+        for (UUID hallId : showtimes.stream().map(ShowTimeResponse::getHallId).distinct().toList()) {
+            hallMap.put(hallId, hallGrpcClient.getHallById(hallId));
+        }
+        return hallMap;
     }
 
-    private ShowTimeWithFilmResponse toWithFilmResponse(ShowTime showtime, FilmResponse film) {
-        return ShowTimeWithFilmResponse.builder()
-                .id(showtime.getId())
-                .hallId(showtime.getHallId())
-                .filmId(showtime.getFilmId())
-                .film(film)
-                .startDateTime(showtime.getStartDateTime())
-                .endDateTime(showtime.getEndDateTime())
-                .status(showtime.getStatus())
-                .isDeleted(Boolean.TRUE.equals(showtime.getIsDeleted()))
-                .timeCreated(showtime.getTimeCreated())
-                .timeUpdated(showtime.getTimeUpdated())
-                .build();
+    private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
+        String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
+        if (userIdRaw == null || userIdRaw.isBlank()) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        try {
+            return cinemaGrpcClient.getCinemaIdByUserId(UUID.fromString(userIdRaw));
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+        }
     }
 }

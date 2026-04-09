@@ -1,6 +1,5 @@
 package com.cinema.showtime_service.dto.response;
 
-import com.cinema.Enum.ShowTimeEnum;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,15 +15,13 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class ShowTimeWithFilmResponse {
+public class PricingPolicyResponse {
     UUID id;
-    UUID hallId;
-    UUID filmId;
-    FilmResponse film;
-    HallResponse hall;
-    LocalDateTime startDateTime;
-    LocalDateTime endDateTime;
-    ShowTimeEnum.ShowTimeStatus status;
+    String name;
+    Long standardPrice;
+    Long vipPrice;
+    Long couplePrice;
+    UUID cinemaId;
     boolean isDeleted;
     LocalDateTime timeCreated;
     LocalDateTime timeUpdated;

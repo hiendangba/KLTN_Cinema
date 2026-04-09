@@ -213,11 +213,13 @@ public class ShowTimeRepositoryImpl {
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.like(root.get(ShowTimeField.HALL_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
         predicates.add(cb.like(root.get(ShowTimeField.FILM_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
+        predicates.add(cb.like(root.get(ShowTimeField.PRICING_POLICY_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
 
         try {
             UUID keywordUuid = UUID.fromString(keyword);
             predicates.add(cb.equal(root.get(ShowTimeField.HALL_ID.getEntityField()), keywordUuid));
             predicates.add(cb.equal(root.get(ShowTimeField.FILM_ID.getEntityField()), keywordUuid));
+            predicates.add(cb.equal(root.get(ShowTimeField.PRICING_POLICY_ID.getEntityField()), keywordUuid));
         } catch (IllegalArgumentException ignored) {
         }
 

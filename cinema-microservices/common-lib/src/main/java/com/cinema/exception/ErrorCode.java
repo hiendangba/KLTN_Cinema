@@ -59,13 +59,19 @@ public enum ErrorCode {
         NOT_UPDATE_FINISHED_SHOWTIME("4206", "Không thể cập nhật trạng thái của suất chiếu đã kết thúc",
                         HttpStatus.BAD_REQUEST),
         DELETED_SHOWTIME("4207", "Xuất chiếu đã bị xóa trước đó rồi", HttpStatus.BAD_REQUEST),
+        INVALID_PRICING_ORDER("4208", "Giá STANDARD phải nhỏ hơn giá VIP và giá VIP phải nhỏ hơn giá COUPLE",
+                        HttpStatus.BAD_REQUEST),
+        PRICING_POLICY_NOT_IN_CINEMA("4209", "Pricing policy không thuộc cinema hiện tại", HttpStatus.BAD_REQUEST),
+        HALL_NOT_IN_CINEMA("4210", "Hall không thuộc cinema hiện tại", HttpStatus.BAD_REQUEST),
 
         HALL_NOT_FOUND("4301", "Phòng chiếu không tìm thấy", HttpStatus.NOT_FOUND),
+        CINEMA_NOT_FOUND("4302", "Cinema không tìm thấy", HttpStatus.NOT_FOUND),
 
         EMAIL_SEND_FAILED("9100", "Gửi email thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
         FILM_SERVICE_ERROR("9101", "Lỗi khi gọi Film Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         HALL_SERVICE_ERROR("9102", "Lỗi khi gọi Hall Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         BOOKING_SERVICE_ERROR("9104", "Lỗi khi gọi Booking Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
+        CINEMA_SERVICE_ERROR("9105", "Lỗi khi gọi Cinema Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         UN_SUPPORTED_FIELD_TYPE("9103", "Loại dữ liệu của trường không được hỗ trợ", HttpStatus.BAD_REQUEST);
 
         private final String code;

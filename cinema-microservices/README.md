@@ -110,6 +110,7 @@ Các luồng đã được chuyển sang **gRPC**:
 - Email được đẩy vào RabbitMQ để `email-service` xử lý bất đồng bộ.
 - `showtime-service` -> `film-service`: lấy chi tiết phim theo `filmId`.
 - `showtime-service` -> `booking-service`: chuẩn hóa contract kiểm tra showtime đã được đặt vé hay chưa.
+- `showtime-service` -> `cinema-service`: lấy `cinemaId` theo `userId` (GetCinemaByUserId) để scope dữ liệu pricing policy theo rạp.
 
 Contract gRPC được đặt tập trung trong `common-lib/src/main/proto` để mọi service dùng chung một chuẩn message/stub nội bộ. Việc bind server/client hiện đi qua cấu hình `spring.grpc.*` trong `application.yaml` cho các luồng RPC còn lại.
 
@@ -235,6 +236,9 @@ Kho báu nội dung hệ thống.
 Bộ não hệ thống lập lịch chiếu phim hằng ngày.
 - **Collision Rules Engine**: Không cho phép tạo đè suất chiếu. Bộ máy sẽ phân tích lịch của phòng chiếu mục tiêu, cảnh báo và từ chối nếu thời lượng bị lố giờ sang suất chiếu khác.
 - Theo dõi sát vòng đời thực tiễn của suất (Pending -> Screening -> Ended).
+- Quản lý **Pricing Policy** ngay trong `showtime-service` để giá vé đi cùng ngữ cảnh suất chiếu thay vì gắn cố định vào hall.
+- Mỗi `showtime` hiện giữ `pricingPolicyId`, còn response showtime trả kèm object `pricingPolicy` để Frontend đọc giá trực tiếp.
+- Pricing policy được scope theo `cinemaId`; service lấy `cinemaId` từ `cinema-service` qua gRPC `GetCinemaByUserId` dựa trên `X-User-ID`.
 
 ### 6. `email-service`
 Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải request đồng bộ.
@@ -284,12 +288,22 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/showtimes/search` | ❌ Public | Khách xem bảng lịch chiếu tương tác tìm suất phù hợp. |
-| `POST` | `/api/showtimes/search-with-film` | ❌ Public | Tìm suất chiếu và kèm thông tin phim (batch gRPC). |
-| `POST` | `/api/showtimes` | ✅ MGMT | Tạo lịch chiếu hệ thống tự quét va chạm Collision thời gian. |
-| `PATCH` | `/api/showtimes/{id}` | ✅ MGMT | Tinh chỉnh thông tin nhanh. |
+| `POST` | `/api/showtimes/search` | ❌ Public | Lấy danh sách suất chiếu và trả full thông tin `film`, `hall`, `pricingPolicy`. |
+| `POST` | `/api/showtimes` | ✅ MGMT | Tạo lịch chiếu hàng loạt theo khung giờ và gắn `pricingPolicyId` cho toàn bộ batch. |
+| `PUT` | `/api/showtimes/{id}` | ✅ MGMT | Cập nhật chi tiết một showtime gồm thời gian, trạng thái và `pricingPolicyId`. |
+| `PATCH` | `/api/showtimes/{id}` | ✅ MGMT | Tinh chỉnh nhanh trạng thái showtime. |
 | `DELETE` | `/api/showtimes/{id}` | ✅ ADMIN | Bỏ lịch chiếu hệ thống (Cũng dùng Xóa Mềm). |
-| `GET` | `/api/showtimes/{id}/with-film` | ❌ Public | Lấy chi tiết suất chiếu kèm thông tin phim. |
+| `GET` | `/api/showtimes/{id}` | ❌ Public | Lấy chi tiết suất chiếu và trả full thông tin `film`, `hall`, `pricingPolicy`. |
+
+### 4.1. Showtime Pricing Policy (`/api/showtimes/pricing-policies`)
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| `POST` | `/api/showtimes/pricing-policies` | ✅ MGMT | Tạo mới một policy giá cho ghế `STANDARD`, `VIP`, `COUPLE`. |
+| `PUT` | `/api/showtimes/pricing-policies/{id}` | ✅ MGMT | Cập nhật bộ giá của policy, chỉ áp dụng khi policy chưa được showtime nào sử dụng. |
+| `DELETE` | `/api/showtimes/pricing-policies/{id}` | ✅ MGMT | Xóa mềm policy giá, chỉ áp dụng khi policy chưa được showtime nào sử dụng. |
+| `GET` | `/api/showtimes/pricing-policies/{id}` | ✅ MGMT | Lấy chi tiết một policy giá trong cinema hiện tại của user. |
+| `GET` | `/api/showtimes/pricing-policies` | ✅ MGMT | Lấy danh sách policy giá của cinema hiện tại. |
 
 ---
 
@@ -444,7 +458,17 @@ FILM_GRPC_HOST=film-service
 FILM_GRPC_PORT=9192
 BOOKING_GRPC_HOST=booking-service
 BOOKING_GRPC_PORT=9195
+CINEMA_GRPC_HOST=cinema-service
+CINEMA_GRPC_PORT=9196
 ```
+
+**Schema note for `showtime-service`:**
+- `show_time` co cot `pricing_policy_id` de lien ket logic toi bang `pricing_policy`.
+- `pricing_policy` luu bo gia co ban cho `STANDARD`, `VIP`, `COUPLE`.
+- `pricing_policy` co them cot `cinema_id` de phan tach bo gia theo tung cinema.
+- Khi client goi API showtime, response se tra kem `pricingPolicyId` va object `pricingPolicy`.
+- Rule nghiep vu: `pricing_policy` da duoc gan cho bat ky `showtime` nao thi khong duoc update hoac delete nua.
+- Rule nghiep vu bo sung: policy chi duoc truy cap/su dung khi thuoc dung cinema cua manager hien tai.
 
 **[email-service]**
 ```env
@@ -548,6 +572,25 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Cấu hình `ext_authz` gọi `identity-service/internal/auth/check` để xác thực tập trung và tự động forward `X-User-ID`, `X-User-Role`.
 - Thiết lập routing cho các service backend qua Envoy.
 - Tách 2 cấu hình Envoy cho **dev/prod** qua `envoy.dev.yaml` và `envoy.prod.yaml` + `compose.dev.yaml`.
+
+### 09/04/2026 - Showtime pricing policy
+**Noi dung cap nhat:**
+- Loai bo DTO `ShowTimeWithFilmResponse`; thong nhat tat ca API showtime tra ve `ShowTimeResponse` (da gom `film`, `hall`, `pricingPolicy`).
+- Loai bo endpoint cu `/api/showtimes/search-with-film` va `/api/showtimes/{id}/with-film`; thay bang `/api/showtimes/search` va `/api/showtimes/{id}`.
+- Them entity `PricingPolicy` vao `showtime-service` de quan ly gia `STANDARD`, `VIP`, `COUPLE`.
+- Them cot `pricingPolicyId` vao `ShowTime` va noi vao luong tao showtime hang loat.
+- Mo rong response `showtime` de tra kem `pricingPolicyId` va object `pricingPolicy`.
+- Them cot `cinemaId` vao `pricing_policy` va validate policy theo cinema.
+- Tich hop gRPC `showtime-service` -> `cinema-service` (`GetCinemaByUserId`) de resolve `cinemaId` theo `X-User-ID`.
+- Bo sung `PUT /api/showtimes/{id}` de cap nhat chi tiet showtime, bao gom thay doi policy gia.
+- Bo sung CRUD API cho `pricing policy`:
+  - `POST /api/showtimes/pricing-policies`
+  - `PUT /api/showtimes/pricing-policies/{id}`
+  - `DELETE /api/showtimes/pricing-policies/{id}`
+  - `GET /api/showtimes/pricing-policies/{id}`
+  - `GET /api/showtimes/pricing-policies`
+- Khoa nghiep vu cho pricing policy: chi duoc sua/xoa khi policy do chua duoc showtime nao su dung.
+- Giữ nguyên pattern kien truc cua `showtime-service`: controller -> service -> repository -> mapper, va build reactor da pass bang Maven wrapper.
 
 ---
 > Hệ thống kiến trúc mở được chế tác và kiểm tra tổng quát toàn bộ luồng logic lần cuối vào **04/04/2026**. Thiết kế để sãn sàng đáp ứng quy mô High-Availability Online Cinema System.
