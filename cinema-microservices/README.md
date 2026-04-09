@@ -1,4 +1,4 @@
-# 🎬 CinemaStar — Hệ Thống Đặt Vé Rạp Phim (Microservices)
+﻿# 🎬 CinemaStar — Hệ Thống Đặt Vé Rạp Phim (Microservices)
 
 > **Khóa luận tốt nghiệp** — Hệ thống đặt vé xem phim trực tuyến hiện đại, xây dựng trên kiến trúc Microservices tinh gọn, bảo mật và hiệu suất cao.
 
@@ -307,12 +307,12 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 
 ### 5. Hall Service (`/api/halls`)
 
-| Method | Endpoint | Auth | Mo ta |
+| Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/halls` | MGMT | Tao hall moi voi `layoutJson` (JSON so do ghe de FE render). |
-| `GET` | `/api/halls/{id}` | Public | Lay chi tiet hall va tra `layoutJson` day du. |
-| `POST` | `/api/halls/search` | Public | Tim hall bang cursor pagination. |
-| `PATCH` | `/api/halls/{id}/layout` | MGMT | Cap nhat toan bo `layoutJson` cua hall. |
+| `POST` | `/api/halls` | ✅ MGMT | Tạo hall mới với `layoutJson` (JSON sơ đồ ghế để FE render). |
+| `GET` | `/api/halls/{id}` | ❌ Public | Lấy chi tiết hall và trả `layoutJson` đầy đủ. |
+| `POST` | `/api/halls/search` | ❌ Public | Tìm hall bằng cursor pagination. |
+| `PATCH` | `/api/halls/{id}/layout` | ✅ MGMT | Cập nhật toàn bộ `layoutJson` của hall. |
 
 ---
 
@@ -322,7 +322,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 Tránh điểm chết thắt cổ chai của dạng cơ sở dữ liệu liền khối (Monolithic Database) truyền thống. Khóa liên kết ngoài (Foreign Key Constraints) bị loại bỏ có tính toán, các ID liên kết bằng chuẩn phân tán UUID.
 Với việc Envoy điều phối và routing tải chia, khi có nhu cầu thì Postgresql có thể tự được dời cụm cluster riêng ra.
 
-Nam co s? d? li?u g?m: `identity_db`, `user_db`, `film_db`, `showtime_db`, `hall_db` du?c nh�ng t? d?ng th�ng qua kh?i l?nh c?a `/postgres-init/create-databases.sql`.
+Năm cơ sở dữ liệu gồm: `identity_db`, `user_db`, `film_db`, `showtime_db`, `hall_db` được nhúng tự động thông qua khối lệnh của `/postgres-init/create-databases.sql`.
 
 ### Chiến Lược Redis
 Áp dụng kho Redis v7 cung cấp băng thông nghìn Request/sec:
@@ -472,12 +472,12 @@ CINEMA_GRPC_PORT=9196
 ```
 
 **Schema note for `showtime-service`:**
-- `show_time` co cot `pricing_policy_id` de lien ket logic toi bang `pricing_policy`.
-- `pricing_policy` luu bo gia co ban cho `STANDARD`, `VIP`, `COUPLE`.
-- `pricing_policy` co them cot `cinema_id` de phan tach bo gia theo tung cinema.
-- Khi client goi API showtime, response se tra kem `pricingPolicyId` va object `pricingPolicy`.
-- Rule nghiep vu: `pricing_policy` da duoc gan cho bat ky `showtime` nao thi khong duoc update hoac delete nua.
-- Rule nghiep vu bo sung: policy chi duoc truy cap/su dung khi thuoc dung cinema cua manager hien tai.
+- `show_time` có cột `pricing_policy_id` để liên kết logic tới bảng `pricing_policy`.
+- `pricing_policy` lưu bộ giá cơ bản cho `STANDARD`, `VIP`, `COUPLE`.
+- `pricing_policy` có thêm cột `cinema_id` để phân tách bộ giá theo từng cinema.
+- Khi client gọi API showtime, response sẽ trả kèm `pricingPolicyId` và object `pricingPolicy`.
+- Rule nghiệp vụ: `pricing_policy` đã được gán cho bất kỳ `showtime` nào thì không được update hoặc delete nữa.
+- Rule nghiệp vụ bổ sung: policy chỉ được truy cập/sử dụng khi thuộc đúng cinema của manager hiện tại.
 
 
 **[hall-services]**
@@ -488,9 +488,9 @@ DB_URL=jdbc:postgresql://pg:5432/hall_db
 ```
 
 **Schema note for `hall-services`:**
-- `hall` luu `layout_json` dang JSON de FE render so do ghe.
-- `layout_json` ho tro loai o ghe va o `AISLE` (duong di).
-- gRPC noi bo `GetHallById` dung cho service khac (vi du `showtime-service`).
+- `hall` lưu `layout_json` dạng JSON để FE render sơ đồ ghế.
+- `layout_json` hỗ trợ loại ô ghế và ô `AISLE` (đường đi).
+- gRPC nội bộ `GetHallById` dùng cho service khác (ví dụ `showtime-service`).
 
 **[email-service]**
 ```env
@@ -596,31 +596,33 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Tách 2 cấu hình Envoy cho **dev/prod** qua `envoy.dev.yaml` và `envoy.prod.yaml` + `compose.dev.yaml`.
 
 ### 09/04/2026 - Showtime pricing policy
-**Noi dung cap nhat:**
-- Loai bo DTO `ShowTimeWithFilmResponse`; thong nhat tat ca API showtime tra ve `ShowTimeResponse` (da gom `film`, `hall`, `pricingPolicy`).
-- Loai bo endpoint cu `/api/showtimes/search-with-film` va `/api/showtimes/{id}/with-film`; thay bang `/api/showtimes/search` va `/api/showtimes/{id}`.
-- Them entity `PricingPolicy` vao `showtime-service` de quan ly gia `STANDARD`, `VIP`, `COUPLE`.
-- Them cot `pricingPolicyId` vao `ShowTime` va noi vao luong tao showtime hang loat.
-- Mo rong response `showtime` de tra kem `pricingPolicyId` va object `pricingPolicy`.
-- Them cot `cinemaId` vao `pricing_policy` va validate policy theo cinema.
-- Tich hop gRPC `showtime-service` -> `cinema-service` (`GetCinemaByUserId`) de resolve `cinemaId` theo `X-User-ID`.
-- Bo sung `PUT /api/showtimes/{id}` de cap nhat chi tiet showtime, bao gom thay doi policy gia.
-- Bo sung CRUD API cho `pricing policy`:
+**Nội dung cập nhật:**
+- Loại bỏ DTO `ShowTimeWithFilmResponse`; thống nhất tất cả API showtime trả về `ShowTimeResponse` (đã gồm `film`, `hall`, `pricingPolicy`).
+- Loại bỏ endpoint cũ `/api/showtimes/search-with-film` và `/api/showtimes/{id}/with-film`; thay bằng `/api/showtimes/search` và `/api/showtimes/{id}`.
+- Thêm entity `PricingPolicy` vào `showtime-service` để quản lý giá `STANDARD`, `VIP`, `COUPLE`.
+- Thêm cột `pricingPolicyId` vào `ShowTime` và nối vào luồng tạo showtime hàng loạt.
+- Mở rộng response `showtime` để trả kèm `pricingPolicyId` và object `pricingPolicy`.
+- Thêm cột `cinemaId` vào `pricing_policy` và validate policy theo cinema.
+- Tích hợp gRPC `showtime-service` -> `cinema-service` (`GetCinemaByUserId`) để resolve `cinemaId` theo `X-User-ID`.
+- Bổ sung `PUT /api/showtimes/{id}` để cập nhật chi tiết showtime, bao gồm thay đổi policy giá.
+- Bổ sung CRUD API cho `pricing policy`:
   - `POST /api/showtimes/pricing-policies`
   - `PUT /api/showtimes/pricing-policies/{id}`
   - `DELETE /api/showtimes/pricing-policies/{id}`
   - `GET /api/showtimes/pricing-policies/{id}`
   - `GET /api/showtimes/pricing-policies`
-- Khoa nghiep vu cho pricing policy: chi duoc sua/xoa khi policy do chua duoc showtime nao su dung.
+- Khóa nghiệp vụ cho pricing policy: chỉ được sửa/xóa khi policy đó chưa được showtime nào sử dụng.
 
 ### 10/04/2026 - Hall layoutJson and AISLE update
-**Noi dung cap nhat:**
-- Refactor `hall-services` theo model `Hall` dung `layoutJson` (JSON) thay vi bang `Seat` roi.
-- API hall cho FE gom: `POST /api/halls`, `GET /api/halls/{id}`, `POST /api/halls/search`, `PATCH /api/halls/{id}/layout`.
-- Bo sung seat type `AISLE` de bieu dien o duong di trong so do ghe.
-- Bo sung gRPC server `HallInternalService/GetHallById` va cau hinh `GRPC_SERVER_PORT=9197`.
-- Cap nhat `compose.yaml`, `compose.dev.yaml`, `envoy.dev.yaml`, `envoy.prod.yaml`, `postgres-init/create-databases.sql` de deploy dong bo.
-- Dieu chinh `showtime-service` dung `HALL_GRPC_PORT` mac dinh `9197`.
-- Build compile da pass voi Maven wrapper: `hall-services` + `common-lib`.
+**Nội dung cập nhật:**
+- Refactor `hall-services` theo model `Hall` dùng `layoutJson` (JSON) thay vì bảng `Seat` rời.
+- API hall cho FE gồm: `POST /api/halls`, `GET /api/halls/{id}`, `POST /api/halls/search`, `PATCH /api/halls/{id}/layout`.
+- Bổ sung seat type `AISLE` để biểu diễn ô đường đi trong sơ đồ ghế.
+- Bổ sung gRPC server `HallInternalService/GetHallById` và cấu hình `GRPC_SERVER_PORT=9197`.
+- Cập nhật `compose.yaml`, `compose.dev.yaml`, `envoy.dev.yaml`, `envoy.prod.yaml`, `postgres-init/create-databases.sql` để deploy đồng bộ.
+- Điều chỉnh `showtime-service` dùng `HALL_GRPC_PORT` mặc định `9197`.
+- Build compile đã pass với Maven wrapper: `hall-services` + `common-lib`.
+- Chuẩn hóa lại nội dung tổng kết README theo mốc cập nhật mới nhất ngày `10/04/2026`.
 ---
-> Hệ thống kiến trúc mở được chế tác và kiểm tra tổng quát toàn bộ luồng logic lần cuối vào **04/04/2026**. Thiết kế để sãn sàng đáp ứng quy mô High-Availability Online Cinema System.
+> Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **10/04/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
+
