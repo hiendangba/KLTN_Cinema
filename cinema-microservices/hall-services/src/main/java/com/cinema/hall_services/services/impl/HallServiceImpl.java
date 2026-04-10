@@ -12,6 +12,7 @@ import com.cinema.hall_services.dto.request.HallField;
 import com.cinema.hall_services.dto.request.UpdateHallLayoutRequest;
 import com.cinema.hall_services.dto.request.UpdateHallRequest;
 import com.cinema.hall_services.dto.request.UpdateHallStatusRequest;
+import com.cinema.hall_services.dto.response.CinemaResponse;
 import com.cinema.hall_services.dto.response.HallResponse;
 import com.cinema.hall_services.entity.Hall;
 import com.cinema.hall_services.grpc.CinemaGrpcClient;
@@ -192,6 +193,9 @@ public class HallServiceImpl implements HallService {
     private HallResponse toHallResponse(Hall hall) {
         HallResponse response = hallMapper.toResponse(hall);
         response.setLayoutJson(toJsonNode(hall.getLayoutJson()));
+        response.setCinemaResponse(CinemaResponse.builder()
+                .id(hall.getCinemaId())
+                .build());
         return response;
     }
 

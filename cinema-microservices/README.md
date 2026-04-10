@@ -650,3 +650,9 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Files: `README.md`
 - Result: All modules now compile successfully with `-DskipTests` in local verification.
 
+### 2026-04-10 20:15 (UTC+07:00) - Extend hall response with cinema payload
+- Request: Add `cinemaResponse` in `HallResponse` and keep README action logging updated.
+- Actions: Added `CinemaResponse` DTO in `hall-services`, extended `HallResponse` with `cinemaResponse`, mapped response population from `HallServiceImpl`, and updated mapper ignore rules for new field.
+- Files: `hall-services/src/main/java/com/cinema/hall_services/dto/response/CinemaResponse.java`, `hall-services/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `hall-services/src/main/java/com/cinema/hall_services/mapper/HallMapper.java`, `README.md`
+- Result: Hall API response now includes a `cinemaResponse` object with cinema id (and optional name field for future expansion).
+

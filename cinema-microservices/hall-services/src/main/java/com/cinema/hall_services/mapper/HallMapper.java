@@ -20,6 +20,7 @@ public interface HallMapper {
     Hall toEntity(HallCreateRequest request);
 
     @Mapping(target = "layoutJson", ignore = true)
+    @Mapping(target = "cinemaResponse", ignore = true)
     HallResponse toResponse(Hall hall);
 
     @Mapping(target = "id", ignore = true)
