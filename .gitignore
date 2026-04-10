@@ -31,4 +31,5 @@ out/
 .env
 .env.local
 .env.*.local
-**/.env
+
+.agents

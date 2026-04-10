@@ -626,3 +626,19 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 ---
 > Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **10/04/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
 
+---
+
+## 🤖 AI Action Log
+
+### 2026-04-10 18:59 (UTC+07:00) - Create README action logging skill
+- Request: Review existing skills quickly and create a skill that logs each future request into README.md.
+- Actions: Created `.agents/skills/readme-action-logger/SKILL.md` and set up append-log rules for each completed task.
+- Files: `.agents/skills/readme-action-logger/SKILL.md`, `README.md`
+- Result: The repository is ready to use README action logging for subsequent requests.
+
+### 2026-04-10 19:00 (UTC+07:00) - Switch AI action logs to English
+- Request: Write action log entries in English.
+- Actions: Updated the logger skill rules to enforce English entries and translated the existing log entry to English.
+- Files: `.agents/skills/readme-action-logger/SKILL.md`, `README.md`
+- Result: AI action logs are now standardized in English.
+
