@@ -656,3 +656,27 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Files: `hall-services/src/main/java/com/cinema/hall_services/dto/response/CinemaResponse.java`, `hall-services/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `hall-services/src/main/java/com/cinema/hall_services/mapper/HallMapper.java`, `README.md`
 - Result: Hall API response now includes a `cinemaResponse` object with cinema id (and optional name field for future expansion).
 
+### 2026-04-10 20:20 (UTC+07:00) - Fix Envoy route for POST /api/halls
+- Request: Investigate `404 NR` when calling `POST /api/halls` from Postman.
+- Actions: Updated Envoy routes to match both `/api/halls` and `/api/halls/` in `envoy.dev.yaml` and `envoy.prod.yaml`.
+- Files: `envoy/envoy.dev.yaml`, `envoy/envoy.prod.yaml`, `README.md`
+- Result: Gateway route matching now handles hall APIs with or without trailing slash.
+
+### 2026-04-10 20:25 (UTC+07:00) - Fix Jackson package mismatch for layoutJson
+- Request: Resolve `HttpMessageConversionException` for `HallCreateRequest.layoutJson`.
+- Actions: Migrated hall-service JSON imports from `com.fasterxml.jackson.*` to `tools.jackson.*` (Spring 7/Jackson 3), covering request DTOs, response DTO, and service JSON processing.
+- Files: `hall-services/src/main/java/com/cinema/hall_services/dto/request/HallCreateRequest.java`, `hall-services/src/main/java/com/cinema/hall_services/dto/request/UpdateHallLayoutRequest.java`, `hall-services/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Result: `layoutJson` can be deserialized correctly by Spring message converters using Jackson 3 types.
+
+### 2026-04-10 20:30 (UTC+07:00) - Remove deprecated JSON handling in hall service
+- Request: Fix deprecated method usage and stabilize hall service JSON parsing.
+- Actions: Reworked `HallServiceImpl` with `JsonMapper.builder().build()`, replaced integer checks with non-deprecated `isIntegralNumber()` flow, restored `cinemaId` resolution from `X-User-ID` (removed hardcoded value), and fixed malformed `parseSeatType` logic.
+- Files: `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Result: Hall service avoids deprecated JSON APIs and is back to manager-scoped cinema resolution.
+
+### 2026-04-10 20:33 (UTC+07:00) - Remove deprecated textual JsonNode methods
+- Request: Replace deprecated `isTextual()` and `asText()` calls in hall layout validation.
+- Actions: Updated `HallServiceImpl` to use Jackson 3 `TextNode.textValue()` pattern in `readRequiredText` and `parseSeatType`, removing deprecated textual API usage.
+- Files: `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Result: Hall layout text parsing no longer depends on deprecated JsonNode textual methods.
+

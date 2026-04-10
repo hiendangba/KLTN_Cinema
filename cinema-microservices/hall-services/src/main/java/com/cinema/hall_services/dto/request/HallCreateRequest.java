@@ -1,7 +1,6 @@
 package com.cinema.hall_services.dto.request;
 
 import com.cinema.Enum.HallEnum;
-import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
@@ -10,6 +9,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import tools.jackson.databind.JsonNode;
 @Data
 @Builder
 @NoArgsConstructor
