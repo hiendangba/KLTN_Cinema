@@ -8,6 +8,7 @@ option java_outer_classname = "CinemaInternalProto";
 
 service CinemaInternalService {
   rpc GetCinemaByUserId(GetCinemaByUserIdRequest) returns (GetCinemaByUserIdReply);
+  rpc GetCinemaById(GetCinemaByIdRequest) returns (GetCinemaByIdReply);
 }
 
 message GetCinemaByUserIdRequest {
@@ -20,6 +21,17 @@ message CinemaPayload {
 }
 
 message GetCinemaByUserIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  CinemaPayload cinema = 4;
+}
+
+message GetCinemaByIdRequest {
+  string cinema_id = 1;
+}
+
+message GetCinemaByIdReply {
   bool success = 1;
   string error_key = 2;
   string message = 3;

@@ -58,9 +58,8 @@ public class HallServiceImpl implements HallService {
     @Override
     @Transactional
     public HallResponse createHall(HallCreateRequest request, HttpServletRequest httpRequest) {
-        // validateManagerRole(httpRequest);
-        // UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        UUID cinemaId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         if (hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(cinemaId, request.getName())) {
             throw new BusinessException(ErrorCode.HALL_NAME_EXISTED);
         }
@@ -195,10 +194,24 @@ public class HallServiceImpl implements HallService {
     private HallResponse toHallResponse(Hall hall) {
         HallResponse response = hallMapper.toResponse(hall);
         response.setLayoutJson(toJsonNode(hall.getLayoutJson()));
-        response.setCinemaResponse(CinemaResponse.builder()
-                .id(hall.getCinemaId())
-                .build());
+        response.setCinemaResponse(resolveCinemaResponse(hall.getCinemaId()));
         return response;
+    }
+
+    private CinemaResponse resolveCinemaResponse(UUID cinemaId) {
+        try {
+            String cinemaName = cinemaGrpcClient.getCinemaNameById(cinemaId);
+            return CinemaResponse.builder()
+                    .id(cinemaId)
+                    .name(cinemaName)
+                    .build();
+        } catch (BusinessException ex) {
+            log.warn("Cannot enrich cinema payload for hall response. cinemaId={}, errorCode={}",
+                    cinemaId, ex.getErrorCode());
+            return CinemaResponse.builder()
+                    .id(cinemaId)
+                    .build();
+        }
     }
 
     private String toJsonString(JsonNode jsonNode) {
