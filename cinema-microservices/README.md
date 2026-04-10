@@ -642,3 +642,9 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Files: `.agents/skills/readme-action-logger/SKILL.md`, `README.md`
 - Result: AI action logs are now standardized in English.
 
+### 2026-04-10 19:20 (UTC+07:00) - Diagnose and verify full project build
+- Request: Re-check the whole project because it was failing and identify the cause.
+- Actions: Ran compile checks across all modules, rebuilt and installed `common-lib`, installed parent POM to local Maven repo, and re-verified every service compile.
+- Files: `README.md`
+- Result: All modules now compile successfully with `-DskipTests` in local verification.
+

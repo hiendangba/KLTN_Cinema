@@ -29,7 +29,8 @@ public class BookingGrpcClient {
                             .build());
 
             if (!reply.getSuccess()) {
-                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.BOOKING_SERVICE_ERROR));
+                throw new BusinessException(
+                        GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.BOOKING_SERVICE_ERROR));
             }
 
             return reply.getBooked();
