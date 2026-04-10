@@ -8,7 +8,6 @@ import com.cinema.grpc.hall.HallInternalServiceGrpc;
 import com.cinema.grpc.hall.HallPayload;
 import com.cinema.hall_services.dto.response.HallResponse;
 import com.cinema.hall_services.services.HallService;
-import io.grpc.BindableService;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,8 +19,7 @@ import java.util.UUID;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class HallInternalGrpcService extends HallInternalServiceGrpc.HallInternalServiceImplBase
-        implements BindableService {
+public class HallInternalGrpcService extends HallInternalServiceGrpc.HallInternalServiceImplBase {
 
     private final HallService hallService;
 

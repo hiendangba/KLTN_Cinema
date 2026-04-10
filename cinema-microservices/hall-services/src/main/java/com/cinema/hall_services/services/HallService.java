@@ -4,7 +4,9 @@ import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.hall_services.dto.request.HallCreateRequest;
 import com.cinema.hall_services.dto.request.HallField;
+import com.cinema.hall_services.dto.request.UpdateHallRequest;
 import com.cinema.hall_services.dto.request.UpdateHallLayoutRequest;
+import com.cinema.hall_services.dto.request.UpdateHallStatusRequest;
 import com.cinema.hall_services.dto.response.HallResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -17,5 +19,11 @@ public interface HallService {
 
     CursorPageResponse<HallResponse> searchHalls(CursorPageRequest<HallField> request);
 
+    HallResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest);
+
+    HallResponse updateHallStatus(UUID hallId, UpdateHallStatusRequest request, HttpServletRequest httpRequest);
+
     HallResponse updateHallLayout(UUID hallId, UpdateHallLayoutRequest request, HttpServletRequest httpRequest);
+
+    void deleteHall(UUID hallId, HttpServletRequest httpRequest);
 }

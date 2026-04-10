@@ -10,4 +10,6 @@ public interface HallRepository extends JpaRepository<Hall, UUID> {
     Optional<Hall> findByIdAndIsDeletedFalse(UUID id);
 
     boolean existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(UUID cinemaId, String name);
+
+    boolean existsByCinemaIdAndNameIgnoreCaseAndIdNotAndIsDeletedFalse(UUID cinemaId, String name, UUID id);
 }

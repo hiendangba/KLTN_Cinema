@@ -195,7 +195,7 @@ public class UserServiceImpl implements UserService {
     public RegisterCustomerResponse createStaff(RegisterStaffRequest registerStaffRequest,
             HttpServletRequest request) {
         String role = request.getHeader(HeaderNames.X_USER_ROLE);
-        if (!("ADMIN".equals(role) || "MANAGER".equals(role))) {
+        if (!(HeaderNames.ROLE_ADMIN.equals(role) || HeaderNames.ROLE_MANAGER.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 

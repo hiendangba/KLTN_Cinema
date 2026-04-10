@@ -6,7 +6,9 @@ import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.hall_services.dto.request.HallCreateRequest;
 import com.cinema.hall_services.dto.request.HallField;
+import com.cinema.hall_services.dto.request.UpdateHallRequest;
 import com.cinema.hall_services.dto.request.UpdateHallLayoutRequest;
+import com.cinema.hall_services.dto.request.UpdateHallStatusRequest;
 import com.cinema.hall_services.dto.response.HallResponse;
 import com.cinema.hall_services.services.HallService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,10 +16,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -59,5 +63,29 @@ public class HallController extends BaseController {
             HttpServletRequest httpRequest) {
         HallResponse response = hallService.updateHallLayout(id, request, httpRequest);
         return ok(response);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<APIResponse<HallResponse>> updateHall(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateHallRequest request,
+            HttpServletRequest httpRequest) {
+        HallResponse response = hallService.updateHall(id, request, httpRequest);
+        return ok(response);
+    }
+
+    @PatchMapping("/{id}")
+    public ResponseEntity<APIResponse<HallResponse>> updateHallStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateHallStatusRequest request,
+            HttpServletRequest httpRequest) {
+        HallResponse response = hallService.updateHallStatus(id, request, httpRequest);
+        return ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<APIResponse<Void>> deleteHall(@PathVariable UUID id, HttpServletRequest httpRequest) {
+        hallService.deleteHall(id, httpRequest);
+        return ok(null);
     }
 }

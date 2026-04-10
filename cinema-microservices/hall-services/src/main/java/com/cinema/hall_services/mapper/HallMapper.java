@@ -1,15 +1,18 @@
 package com.cinema.hall_services.mapper;
 
 import com.cinema.hall_services.dto.request.HallCreateRequest;
+import com.cinema.hall_services.dto.request.UpdateHallRequest;
 import com.cinema.hall_services.dto.response.HallResponse;
 import com.cinema.hall_services.entity.Hall;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
 import org.mapstruct.ReportingPolicy;
 
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR)
 public interface HallMapper {
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "cinemaId", ignore = true)
     @Mapping(target = "layoutJson", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
@@ -18,4 +21,13 @@ public interface HallMapper {
 
     @Mapping(target = "layoutJson", ignore = true)
     HallResponse toResponse(Hall hall);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "cinemaId", ignore = true)
+    @Mapping(target = "layoutJson", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "isDeleted", ignore = true)
+    @Mapping(target = "timeCreated", ignore = true)
+    @Mapping(target = "timeUpdated", ignore = true)
+    void updateEntityFromRequest(@MappingTarget Hall hall, UpdateHallRequest request);
 }

@@ -485,6 +485,8 @@ CINEMA_GRPC_PORT=9196
 SERVER_PORT=8097
 GRPC_SERVER_PORT=9197
 DB_URL=jdbc:postgresql://pg:5432/hall_db
+CINEMA_GRPC_HOST=cinema-service
+CINEMA_GRPC_PORT=9196
 ```
 
 **Schema note for `hall-services`:**

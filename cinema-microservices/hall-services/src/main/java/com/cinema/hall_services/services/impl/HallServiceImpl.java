@@ -10,8 +10,11 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.hall_services.dto.request.HallCreateRequest;
 import com.cinema.hall_services.dto.request.HallField;
 import com.cinema.hall_services.dto.request.UpdateHallLayoutRequest;
+import com.cinema.hall_services.dto.request.UpdateHallRequest;
+import com.cinema.hall_services.dto.request.UpdateHallStatusRequest;
 import com.cinema.hall_services.dto.response.HallResponse;
 import com.cinema.hall_services.entity.Hall;
+import com.cinema.hall_services.grpc.CinemaGrpcClient;
 import com.cinema.hall_services.mapper.HallMapper;
 import com.cinema.hall_services.repository.HallRepository;
 import com.cinema.hall_services.repository.HallRepositoryImpl;
@@ -24,34 +27,46 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class HallServiceImpl implements HallService {
 
+    private static final Set<String> REQUIRED_LAYOUT_ITEM_FIELDS = Set.of(
+            "id", "type", "seatType", "row", "col", "rowspan", "colspan", "seatCount");
+
     HallRepository hallRepository;
     HallRepositoryImpl hallRepositoryImpl;
     HallMapper hallMapper;
+    CinemaGrpcClient cinemaGrpcClient;
     ObjectMapper objectMapper;
 
     @Override
     @Transactional
     public HallResponse createHall(HallCreateRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
 
-        if (hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(request.getCinemaId(), request.getName())) {
+        if (hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(cinemaId, request.getName())) {
             throw new BusinessException(ErrorCode.HALL_NAME_EXISTED);
         }
+
         validateLayoutJson(request.getLayoutJson());
 
         Hall hall = hallMapper.toEntity(request);
+        hall.setCinemaId(cinemaId);
         hall.setStatus(request.getStatus() == null ? HallEnum.HallStatus.ACTIVE : request.getStatus());
         hall.setLayoutJson(toJsonString(request.getLayoutJson()));
         hall = hallRepository.save(hall);
@@ -61,9 +76,7 @@ public class HallServiceImpl implements HallService {
     @Override
     @Transactional(readOnly = true)
     public HallResponse getHallById(UUID id) {
-        Hall hall = hallRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.HALL_NOT_FOUND));
-        return toHallResponse(hall);
+        return toHallResponse(getActiveHallOrThrow(id));
     }
 
     @Override
@@ -111,20 +124,69 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional
+    public HallResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        Hall hall = getManagedHallOrThrow(hallId, cinemaId);
+
+        if (hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIdNotAndIsDeletedFalse(
+                hall.getCinemaId(), request.getName(), hallId)) {
+            throw new BusinessException(ErrorCode.HALL_NAME_EXISTED);
+        }
+
+        hallMapper.updateEntityFromRequest(hall, request);
+        hall = hallRepository.save(hall);
+        return toHallResponse(hall);
+    }
+
+    @Override
+    @Transactional
+    public HallResponse updateHallStatus(UUID hallId, UpdateHallStatusRequest request, HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        Hall hall = getManagedHallOrThrow(hallId, cinemaId);
+        hall.setStatus(request.getStatus());
+        hall = hallRepository.save(hall);
+        return toHallResponse(hall);
+    }
+
+    @Override
+    @Transactional
     public HallResponse updateHallLayout(UUID hallId, UpdateHallLayoutRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-
-        Hall hall = hallRepository.findByIdAndIsDeletedFalse(hallId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.HALL_NOT_FOUND));
-
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        Hall hall = getManagedHallOrThrow(hallId, cinemaId);
         if (hall.getStatus() == HallEnum.HallStatus.MAINTENANCE) {
             throw new BusinessException(ErrorCode.HALL_MAINTENANCE);
         }
-        validateLayoutJson(request.getLayoutJson());
 
+        validateLayoutJson(request.getLayoutJson());
         hall.setLayoutJson(toJsonString(request.getLayoutJson()));
         hall = hallRepository.save(hall);
         return toHallResponse(hall);
+    }
+
+    @Override
+    @Transactional
+    public void deleteHall(UUID hallId, HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        Hall hall = getManagedHallOrThrow(hallId, cinemaId);
+        hall.setIsDeleted(true);
+        hallRepository.save(hall);
+    }
+
+    private Hall getActiveHallOrThrow(UUID hallId) {
+        return hallRepository.findByIdAndIsDeletedFalse(hallId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.HALL_NOT_FOUND));
+    }
+
+    private Hall getManagedHallOrThrow(UUID hallId, UUID cinemaId) {
+        Hall hall = getActiveHallOrThrow(hallId);
+        if (!cinemaId.equals(hall.getCinemaId())) {
+            throw new BusinessException(ErrorCode.HALL_NOT_IN_CINEMA);
+        }
+        return hall;
     }
 
     private HallResponse toHallResponse(Hall hall) {
@@ -141,38 +203,6 @@ public class HallServiceImpl implements HallService {
         }
     }
 
-    private void validateLayoutJson(JsonNode layoutJson) {
-        if (layoutJson == null || layoutJson.isNull() || layoutJson.isMissingNode()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        validateSeatTypeNode(layoutJson);
-    }
-
-    private void validateSeatTypeNode(JsonNode node) {
-        if (node == null || node.isNull()) {
-            return;
-        }
-
-        if (node.isArray()) {
-            for (JsonNode child : node) {
-                validateSeatTypeNode(child);
-            }
-            return;
-        }
-
-        if (node.isObject()) {
-            JsonNode seatTypeNode = node.has("seatType") ? node.get("seatType") : node.get("type");
-            if (seatTypeNode != null && seatTypeNode.isTextual()) {
-                try {
-                    HallEnum.SeatType.valueOf(seatTypeNode.asText());
-                } catch (IllegalArgumentException ex) {
-                    throw new BusinessException(ErrorCode.INVALID_INPUT);
-                }
-            }
-            node.fields().forEachRemaining(field -> validateSeatTypeNode(field.getValue()));
-        }
-    }
-
     private JsonNode toJsonNode(String rawJson) {
         try {
             return objectMapper.readTree(rawJson);
@@ -181,10 +211,161 @@ public class HallServiceImpl implements HallService {
         }
     }
 
+    private void validateLayoutJson(JsonNode layoutJson) {
+        if (layoutJson == null || layoutJson.isNull() || !layoutJson.isObject()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        if (layoutJson.size() != 1 || !layoutJson.has("items")) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        JsonNode itemsNode = layoutJson.get("items");
+        if (itemsNode == null || !itemsNode.isArray()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        Set<String> itemIds = new HashSet<>();
+        Set<String> occupiedCells = new HashSet<>();
+
+        for (int i = 0; i < itemsNode.size(); i++) {
+            JsonNode itemNode = itemsNode.get(i);
+            validateLayoutItem(itemNode, i, itemIds, occupiedCells);
+        }
+    }
+
+    private void validateLayoutItem(JsonNode itemNode, int itemIndex, Set<String> itemIds, Set<String> occupiedCells) {
+        if (itemNode == null || !itemNode.isObject()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        for (String requiredField : REQUIRED_LAYOUT_ITEM_FIELDS) {
+            if (!itemNode.has(requiredField)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+        }
+
+        String id = readRequiredText(itemNode, "id");
+        if (!itemIds.add(id)) {
+            log.warn("Duplicated layout item id detected: {}", id);
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        String type = readRequiredText(itemNode, "type").toUpperCase(Locale.ROOT);
+        if (!("SEAT".equals(type) || "AISLE".equals(type))) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        int row = readPositiveInt(itemNode, "row");
+        int col = readPositiveInt(itemNode, "col");
+        int rowspan = readPositiveInt(itemNode, "rowspan");
+        int colspan = readPositiveInt(itemNode, "colspan");
+        int seatCount = readNonNegativeInt(itemNode, "seatCount");
+
+        JsonNode seatTypeNode = itemNode.get("seatType");
+        if ("AISLE".equals(type)) {
+            if (seatTypeNode != null && !seatTypeNode.isNull()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            if (seatCount != 0) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+        } else {
+            HallEnum.SeatType seatType = parseSeatType(seatTypeNode);
+            if (seatType == HallEnum.SeatType.AISLE) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            if (seatCount < 1) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            if (seatType == HallEnum.SeatType.COUPLE && (rowspan != 1 || colspan != 2 || seatCount != 2)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+        }
+
+        int endRow = row + rowspan - 1;
+        int endCol = col + colspan - 1;
+
+        for (int r = row; r <= endRow; r++) {
+            for (int c = col; c <= endCol; c++) {
+                String cellKey = r + ":" + c;
+                if (!occupiedCells.add(cellKey)) {
+                    log.warn("Overlapped cell detected at item index {}: {}", itemIndex, cellKey);
+                    throw new BusinessException(ErrorCode.INVALID_INPUT);
+                }
+            }
+        }
+    }
+
+    private String readRequiredText(JsonNode itemNode, String fieldName) {
+        JsonNode valueNode = itemNode.get(fieldName);
+        if (valueNode == null || valueNode.isNull() || !valueNode.isTextual() || valueNode.asText().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return valueNode.asText().trim();
+    }
+
+    private int readPositiveInt(JsonNode itemNode, String fieldName) {
+        JsonNode valueNode = itemNode.get(fieldName);
+        if (valueNode == null || !valueNode.canConvertToInt()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        int value = valueNode.asInt();
+        if (value < 1) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return value;
+    }
+
+    private int readNonNegativeInt(JsonNode itemNode, String fieldName) {
+        JsonNode valueNode = itemNode.get(fieldName);
+        if (valueNode == null || !valueNode.canConvertToInt()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        int value = valueNode.asInt();
+        if (value < 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return value;
+    }
+
+    private HallEnum.SeatType parseSeatType(JsonNode seatTypeNode) {
+        if (seatTypeNode == null || seatTypeNode.isNull() || !seatTypeNode.isTextual() || seatTypeNode.asText().isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        try {
+            return HallEnum.SeatType.valueOf(seatTypeNode.asText().trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+    }
+
     private void validateManagerRole(HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!"MANAGER".equals(role)) {
+        if (!HeaderNames.ROLE_MANAGER.equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
+        String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
+        if (userIdRaw == null || userIdRaw.isBlank()) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        try {
+            return cinemaGrpcClient.getCinemaIdByUserId(UUID.fromString(userIdRaw));
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+        } catch (BusinessException ex) {
+            if (ex.getErrorCode() == ErrorCode.CINEMA_NOT_FOUND
+                    || ex.getErrorCode() == ErrorCode.NOT_FOUND
+                    || ex.getErrorCode() == ErrorCode.USER_NOT_FOUND) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            throw ex;
         }
     }
 }

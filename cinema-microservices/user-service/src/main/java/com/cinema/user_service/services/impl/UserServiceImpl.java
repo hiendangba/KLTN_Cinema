@@ -105,7 +105,7 @@ public class UserServiceImpl implements UserService {
         }
 
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!("ADMIN".equals(role))) {
+        if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
@@ -171,7 +171,7 @@ public class UserServiceImpl implements UserService {
         }
 
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!("MANAGER".equals(role))) {
+        if (!(HeaderNames.ROLE_MANAGER.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
@@ -203,7 +203,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request) {
         String role = request.getHeader(HeaderNames.X_USER_ROLE);
-        if (!("ADMIN".equals(role) || "MANAGER".equals(role))) {
+        if (!(HeaderNames.ROLE_ADMIN.equals(role) || HeaderNames.ROLE_MANAGER.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
@@ -224,7 +224,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public PageResponse<UserResponse> getAllManager(PageRequest<?> pageRequest, HttpServletRequest request) {
         String role = request.getHeader(HeaderNames.X_USER_ROLE);
-        if (!"ADMIN".equals(role)) {
+        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 

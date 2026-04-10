@@ -317,7 +317,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!"MANAGER".equals(role)) {
+        if (!HeaderNames.ROLE_MANAGER.equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
