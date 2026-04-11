@@ -5,7 +5,7 @@ services:
       dockerfile: ./identity-service/Dockerfile
     env_file: ./identity-service/src/main/resources/.env
     environment:
-      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"
@@ -35,7 +35,7 @@ services:
       dockerfile: ./user-service/Dockerfile
     env_file: ./user-service/src/main/resources/.env
     environment:
-      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"
@@ -63,7 +63,7 @@ services:
       dockerfile: ./film-service/Dockerfile
     env_file: ./film-service/src/main/resources/.env
     environment:
-      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=80m -XX:ReservedCodeCacheSize=40m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"
@@ -92,7 +92,7 @@ services:
       dockerfile: ./showtime-service/Dockerfile
     env_file: ./showtime-service/src/main/resources/.env
     environment:
-      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=80m -XX:ReservedCodeCacheSize=40m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       DB_POOL_MAX_SIZE: "4"
       DB_POOL_MIN_IDLE: "1"
@@ -126,7 +126,7 @@ services:
       context: .
       dockerfile: ./hall-service/Dockerfile
     environment:
-      JAVA_OPTS: "-Xms48m -Xmx144m -XX:+UseSerialGC -XX:MaxMetaspaceSize=72m -XX:ReservedCodeCacheSize=40m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms48m -Xmx144m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       DB_POOL_MAX_SIZE: "4"
       DB_POOL_MIN_IDLE: "1"
@@ -151,7 +151,7 @@ services:
       dockerfile: ./email-service/Dockerfile
     env_file: ./email-service/src/main/resources/.env
     environment:
-      JAVA_OPTS: "-Xms48m -Xmx128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=72m -XX:ReservedCodeCacheSize=32m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms48m -Xmx128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"
       SPRING_RABBITMQ_HOST: rabbitmq
