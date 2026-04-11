@@ -3,7 +3,7 @@ FROM maven:3.9.6-eclipse-temurin-17 AS builder
 WORKDIR /app
 
 COPY . /app
-RUN --mount=type=cache,target=/root/.m2 mvn -T 1 -Dmaven.artifact.threads=1 -DskipTests -pl film-service -am package
+RUN --mount=type=cache,target=/root/.m2 mvn -DskipTests -pl film-service -am package
 
 FROM eclipse-temurin:17
 WORKDIR /app

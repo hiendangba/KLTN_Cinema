@@ -295,7 +295,7 @@ public class ShowTimeRepositoryImpl {
 
     @SuppressWarnings("unchecked")
     private Path<? extends Comparable<?>> comparablePath(Root<ShowTime> root, String fieldName) {
-        return (Path<? extends Comparable<?>>) root.get(fieldName);
+        return (Path<? extends Comparable<?>>) (Path<?>) root.get(fieldName);
     }
 
     @SuppressWarnings("unchecked")

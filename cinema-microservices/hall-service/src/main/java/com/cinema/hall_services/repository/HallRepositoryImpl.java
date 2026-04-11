@@ -286,7 +286,7 @@ public class HallRepositoryImpl {
 
     @SuppressWarnings("unchecked")
     private Path<? extends Comparable<?>> comparablePath(Root<Hall> root, String fieldName) {
-        return (Path<? extends Comparable<?>>) root.get(fieldName);
+        return (Path<? extends Comparable<?>>) (Path<?>) root.get(fieldName);
     }
 
     @SuppressWarnings("unchecked")

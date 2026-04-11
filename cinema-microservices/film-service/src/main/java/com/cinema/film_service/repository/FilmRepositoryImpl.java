@@ -285,7 +285,7 @@ public class FilmRepositoryImpl {
 
     @SuppressWarnings("unchecked")
     private Path<? extends Comparable<?>> comparablePath(Root<Film> root, String fieldName) {
-        return (Path<? extends Comparable<?>>) root.get(fieldName);
+        return (Path<? extends Comparable<?>>) (Path<?>) root.get(fieldName);
     }
 
     @SuppressWarnings("unchecked")
