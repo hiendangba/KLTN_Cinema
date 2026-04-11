@@ -1,0 +1,213 @@
+services:
+  identity-service:
+    image: ${IMAGE_REPO}/identity-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    env_file: ./identity-service/src/main/resources/.env
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_POOL_MAX_SIZE: "5"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://pg:5432/identity_db
+      REDIS_HOST: redis
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
+      USER_SERVICE_URL: http://user-service:8091/api/users
+      EMAIL_SERVICE_URL: http://email-service:8093/api/email
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+    expose:
+      - "8090"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    mem_limit: 320m
+
+  user-service:
+    image: ${IMAGE_REPO}/user-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    env_file: ./user-service/src/main/resources/.env
+    environment:
+      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_POOL_MAX_SIZE: "6"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://pg:5432/user_db
+      REDIS_HOST: redis
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      GRPC_SERVER_PORT: 9191
+    expose:
+      - "9191"
+      - "8091"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    mem_limit: 352m
+
+  film-service:
+    image: ${IMAGE_REPO}/film-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    env_file: ./film-service/src/main/resources/.env
+    environment:
+      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://pg:5432/film_db
+      REDIS_HOST: redis
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      USER_SERVICE_URL: http://user-service:8091/api/users
+      GRPC_SERVER_PORT: 9192
+    expose:
+      - "9192"
+      - "8092"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    mem_limit: 224m
+
+  showtime-service:
+    image: ${IMAGE_REPO}/showtime-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    env_file: ./showtime-service/src/main/resources/.env
+    environment:
+      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://pg:5432/showtime_db
+      REDIS_HOST: redis
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      USER_SERVICE_URL: http://user-service:8091/api/users
+      FILM_SERVICE_URL: http://film-service:8092/api/films
+      HALL_SERVICE_URL: http://hall-services:8097/api/halls
+      FILM_GRPC_HOST: film-service
+      FILM_GRPC_PORT: 9192
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      HALL_GRPC_HOST: hall-services
+      HALL_GRPC_PORT: 9197
+    expose:
+      - "8094"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - film-service
+      - hall-services
+    mem_limit: 224m
+
+  hall-services:
+    image: ${IMAGE_REPO}/hall-services:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      JAVA_OPTS: "-Xms48m -Xmx144m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://pg:5432/hall_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: 123456
+      JPA_DDL_AUTO: update
+      CINEMA_GRPC_HOST: cinema-service
+      CINEMA_GRPC_PORT: 9196
+      GRPC_SERVER_PORT: 9197
+      SERVER_PORT: 8097
+    expose:
+      - "9197"
+      - "8097"
+    depends_on:
+      - postgres
+    mem_limit: 208m
+
+  email-service:
+    image: ${IMAGE_REPO}/email-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    env_file: ./email-service/src/main/resources/.env
+    environment:
+      JAVA_OPTS: "-Xms48m -Xmx128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+    expose:
+      - "8093"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    mem_limit: 192m
+
+  postgres:
+    image: postgres:16
+    container_name: pg
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    ports:
+      - "5433:5432"
+    mem_limit: 320m
+
+  redis:
+    image: redis:7
+    container_name: redis-container
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    mem_limit: 96m
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    mem_limit: 192m
+
+  envoy:
+    image: envoyproxy/envoy:v1.31.2
+    container_name: api-gateway
+    ports:
+      - "80:80"
+      - "9901:9901"
+    volumes:
+      - ./envoy/envoy.prod.yaml:/etc/envoy/envoy.yaml:ro
+    command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
+    mem_limit: 96m
+
+volumes:
+  pgdata:
+  redis_data:
+  rabbitmq_data:
