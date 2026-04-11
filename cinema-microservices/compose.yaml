@@ -5,6 +5,7 @@ services:
       dockerfile: ./identity-service/Dockerfile
     env_file: ./identity-service/src/main/resources/.env
     environment:
+      JAVA_OPTS: "-Xms128m -Xmx320m"
       DB_URL: jdbc:postgresql://pg:5432/identity_db
       REDIS_HOST: redis
       USER_GRPC_HOST: user-service
@@ -28,6 +29,7 @@ services:
       dockerfile: ./user-service/Dockerfile
     env_file: ./user-service/src/main/resources/.env
     environment:
+      JAVA_OPTS: "-Xms128m -Xmx384m"
       DB_URL: jdbc:postgresql://pg:5432/user_db
       REDIS_HOST: redis
       SPRING_RABBITMQ_HOST: rabbitmq
@@ -49,6 +51,7 @@ services:
       dockerfile: ./film-service/Dockerfile
     env_file: ./film-service/src/main/resources/.env
     environment:
+      JAVA_OPTS: "-Xms96m -Xmx192m"
       DB_URL: jdbc:postgresql://pg:5432/film_db
       REDIS_HOST: redis
       SPRING_RABBITMQ_HOST: rabbitmq
@@ -71,6 +74,7 @@ services:
       dockerfile: ./showtime-service/Dockerfile
     env_file: ./showtime-service/src/main/resources/.env
     environment:
+      JAVA_OPTS: "-Xms96m -Xmx192m"
       DB_URL: jdbc:postgresql://pg:5432/showtime_db
       REDIS_HOST: redis
       SPRING_RABBITMQ_HOST: rabbitmq
@@ -100,6 +104,7 @@ services:
       context: .
       dockerfile: ./hall-service/Dockerfile
     environment:
+      JAVA_OPTS: "-Xms96m -Xmx192m"
       DB_URL: jdbc:postgresql://pg:5432/hall_db
       DB_USERNAME: postgres
       DB_PASSWORD: 123456
@@ -120,6 +125,7 @@ services:
       dockerfile: ./email-service/Dockerfile
     env_file: ./email-service/src/main/resources/.env
     environment:
+      JAVA_OPTS: "-Xms96m -Xmx192m"
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: admin
