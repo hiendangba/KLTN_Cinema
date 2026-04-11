@@ -12,6 +12,12 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:4}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:120000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:600000}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT:20000}
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:none}
@@ -19,7 +25,7 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
   grpc:
     server:
       port: ${GRPC_SERVER_PORT:9197}

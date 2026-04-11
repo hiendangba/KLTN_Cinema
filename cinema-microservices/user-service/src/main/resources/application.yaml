@@ -7,15 +7,21 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:6}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:120000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:600000}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT:20000}
 
   jpa:
     hibernate:
       ddl-auto: ${JPA_DDL_AUTO:update}
-    show-sql: ${JPA_SHOW_SQL:true}
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: true
+        format_sql: false
   data:
     redis:
       #      url: ${REDIS_URL:}
@@ -28,9 +34,9 @@ spring:
         enabled: false
       lettuce:
         pool:
-          max-active: ${REDIS_POOL_MAX_ACTIVE:20}
-          max-idle: ${REDIS_POOL_MAX_IDLE:10}
-          min-idle: ${REDIS_POOL_MIN_IDLE:5}
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:4}
+          min-idle: ${REDIS_POOL_MIN_IDLE:1}
           max-wait: ${REDIS_POOL_MAX_WAIT:-1}
         shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:100}
   rabbitmq:
