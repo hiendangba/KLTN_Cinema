@@ -33,8 +33,21 @@ public class FilmInternalGrpcService extends FilmInternalServiceGrpc.FilmInterna
     public void getFilmById(
             GetFilmByIdRequest request,
             StreamObserver<GetFilmByIdReply> responseObserver) {
+        UUID filmId;
         try {
-            FilmResponse film = filmService.getFilmById(UUID.fromString(request.getFilmId()));
+            filmId = UUID.fromString(request.getFilmId());
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(GetFilmByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+            return;
+        }
+
+        try {
+            FilmResponse film = filmService.getFilmById(filmId);
             responseObserver.onNext(GetFilmByIdReply.newBuilder()
                     .setSuccess(true)
                     .setMessage("Film fetched successfully")
@@ -63,11 +76,22 @@ public class FilmInternalGrpcService extends FilmInternalServiceGrpc.FilmInterna
     public void getFilmsByIds(
             GetFilmsByIdsRequest request,
             StreamObserver<GetFilmsByIdsReply> responseObserver) {
+        List<UUID> ids;
         try {
-            List<UUID> ids = request.getFilmIdsList().stream()
+            ids = request.getFilmIdsList().stream()
                     .map(UUID::fromString)
                     .collect(Collectors.toList());
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(GetFilmsByIdsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+            return;
+        }
 
+        try {
             com.cinema.film_service.dto.request.BatchFilmRequest batchRequest =
                     new com.cinema.film_service.dto.request.BatchFilmRequest();
             batchRequest.setIds(ids);

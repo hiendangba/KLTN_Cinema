@@ -3,8 +3,10 @@ package com.cinema.film_service.dto.request;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
+import com.cinema.Enum.FilmEnum;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
@@ -27,8 +29,8 @@ public enum FilmField {
     TRAILER("trailer", String.class),
     COUNTRY("country", String.class),
     LANGUAGE("language", String.class),
-    AGE_RATING("ageRating", Integer.class),
-    STATUS("status", Integer.class),
+    AGE_RATING("ageRating", FilmEnum.AgeRating.class),
+    STATUS("status", FilmEnum.FilmStatus.class),
     IS_DELETED("isDeleted", Boolean.class),
     TIME_CREATED("timeCreated", java.time.LocalDateTime.class),
     TIME_UPDATED("timeUpdated", java.time.LocalDateTime.class);
@@ -42,19 +44,37 @@ public enum FilmField {
     }
 
     public static Comparable<?> convertValue(String value, Class<?> dataType) {
-        if (dataType == String.class) {
-            return value;
-        } else if (dataType == Integer.class) {
-            return Integer.parseInt(value);
-        } else if (dataType == Boolean.class) {
-            return Boolean.parseBoolean(value);
-        } else if (dataType == UUID.class) {
-            return UUID.fromString(value);
-        } else if (dataType == LocalDate.class) {
-            return LocalDate.parse(value);
-        } else if (dataType == LocalDateTime.class) {
-            return LocalDateTime.parse(value);
+        if (value == null) {
+            throw new BusinessException(ErrorCode.INVALID_FORMAT);
         }
+
+        String normalizedValue = value.trim();
+
+        try {
+            if (dataType == String.class) {
+                return normalizedValue;
+            } else if (dataType == Integer.class) {
+                return Integer.parseInt(normalizedValue);
+            } else if (dataType == Boolean.class) {
+                if (!"true".equalsIgnoreCase(normalizedValue) && !"false".equalsIgnoreCase(normalizedValue)) {
+                    throw new IllegalArgumentException("Boolean value must be true or false");
+                }
+                return Boolean.parseBoolean(normalizedValue);
+            } else if (dataType == UUID.class) {
+                return UUID.fromString(normalizedValue);
+            } else if (dataType == LocalDate.class) {
+                return LocalDate.parse(normalizedValue);
+            } else if (dataType == LocalDateTime.class) {
+                return LocalDateTime.parse(normalizedValue);
+            } else if (dataType == FilmEnum.AgeRating.class) {
+                return FilmEnum.AgeRating.valueOf(normalizedValue.toUpperCase(Locale.ROOT));
+            } else if (dataType == FilmEnum.FilmStatus.class) {
+                return FilmEnum.FilmStatus.valueOf(normalizedValue.toUpperCase(Locale.ROOT));
+            }
+        } catch (RuntimeException ex) {
+            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+        }
+
         throw new BusinessException(ErrorCode.UN_SUPPORTED_FIELD_TYPE);
     }
 

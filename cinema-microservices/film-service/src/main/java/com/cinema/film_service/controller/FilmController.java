@@ -17,8 +17,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -31,7 +29,7 @@ public class FilmController extends BaseController {
 
     @PostMapping("/search")
     public ResponseEntity<APIResponse<CursorPageResponse<FilmResponse>>> searchFilms(
-            @RequestBody CursorPageRequest<FilmField> request) {
+            @Valid @RequestBody CursorPageRequest<FilmField> request) {
         CursorPageResponse<FilmResponse> response = filmService.searchFilms(request);
         return ok(response);
     }

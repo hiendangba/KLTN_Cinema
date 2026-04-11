@@ -48,6 +48,9 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                     .build());
             responseObserver.onNext(success("Customer profile created successfully"));
             responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
         } catch (BusinessException ex) {
             responseObserver.onNext(failure(ex));
             responseObserver.onCompleted();
@@ -76,6 +79,9 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                     .accountName(blankToNull(request.getAccountName()))
                     .build());
             responseObserver.onNext(success("Manager profile created successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
             responseObserver.onCompleted();
         } catch (BusinessException ex) {
             responseObserver.onNext(failure(ex));
@@ -106,6 +112,9 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                     .build());
             responseObserver.onNext(success("Staff profile created successfully"));
             responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
         } catch (BusinessException ex) {
             responseObserver.onNext(failure(ex));
             responseObserver.onCompleted();
@@ -126,6 +135,13 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                     .setSuccess(true)
                     .setExists(response.isExists())
                     .setMessage(response.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(CheckUserExistsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
                     .build());
             responseObserver.onCompleted();
         } catch (BusinessException ex) {

@@ -36,7 +36,7 @@ public class ShowTimeController extends BaseController {
 
     @PostMapping("/search")
     public ResponseEntity<APIResponse<CursorPageResponse<ShowTimeResponse>>> searchShowtimes(
-            @RequestBody CursorPageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request) {
+            @Valid @RequestBody CursorPageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request) {
         CursorPageResponse<ShowTimeResponse> response = showTimeService.searchShowtimes(request);
         return ok(response);
     }
@@ -62,7 +62,7 @@ public class ShowTimeController extends BaseController {
     @PatchMapping("/{id}")
     public ResponseEntity<APIResponse<ShowTimeResponse>> updateShowTimeStatus(
             @Valid @PathVariable UUID id,
-            @RequestBody UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
+            @Valid @RequestBody UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
             HttpServletRequest httpRequest) {
         ShowTimeResponse response = showTimeService.updateShowTimeStatus(id, updateShowTimeStatusRequest, httpRequest);
         return ok(response);

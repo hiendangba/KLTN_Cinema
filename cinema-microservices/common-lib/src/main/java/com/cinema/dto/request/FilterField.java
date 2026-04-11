@@ -1,6 +1,8 @@
 package com.cinema.dto.request;
 
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,8 +19,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class FilterField<T extends Enum<T>> {
+    @NotNull(message = "Filter field is required")
     private T field;
+    @NotBlank(message = "Operator is required")
     @Pattern(regexp = "^(EQ|LIKE|GTE|LTE|NEQ|IN|BETWEEN)$", message = "Operator must be one of: EQ, LIKE , GTE, LTE, NEQ, IN, BETWEEN")
     private String operator;
+    @NotNull(message = "Filter value is required")
     private Object value;
 }

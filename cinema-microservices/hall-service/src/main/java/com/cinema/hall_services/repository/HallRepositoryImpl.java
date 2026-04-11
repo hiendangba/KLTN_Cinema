@@ -1,12 +1,11 @@
-package com.cinema.showtime_service.repository;
+package com.cinema.hall_services.repository;
 
-import com.cinema.Enum.ShowTimeEnum;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
-import com.cinema.showtime_service.dto.request.ShowTimeField;
-import com.cinema.showtime_service.entity.ShowTime;
+import com.cinema.hall_services.dto.request.HallField;
+import com.cinema.hall_services.entity.Hall;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -28,55 +27,55 @@ import java.util.UUID;
 
 @RequiredArgsConstructor
 @Repository
-public class ShowTimeRepositoryImpl {
+public class HallRepositoryImpl {
     @PersistenceContext
     private final EntityManager entityManager;
 
-    public List<ShowTime> searchWithCursorAndSortAndFilter(
+    public List<Hall> searchWithCursorAndSortAndFilter(
             String[] cursorParts,
             String keyword,
             int size,
-            List<SortField<ShowTimeField>> sortBy,
-            List<FilterField<ShowTimeField>> filterBy) {
+            List<SortField<HallField>> sortBy,
+            List<FilterField<HallField>> filterBy) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<ShowTime> cq = cb.createQuery(ShowTime.class);
-        Root<ShowTime> root = cq.from(ShowTime.class);
+        CriteriaQuery<Hall> cq = cb.createQuery(Hall.class);
+        Root<Hall> root = cq.from(Hall.class);
 
         List<Predicate> predicates = buildPredicates(cb, root, cursorParts, keyword, sortBy, filterBy, false);
         cq.where(predicates.toArray(new Predicate[0]));
         cq.orderBy(buildOrders(cb, root, sortBy));
 
-        TypedQuery<ShowTime> query = entityManager.createQuery(cq);
+        TypedQuery<Hall> query = entityManager.createQuery(cq);
         query.setMaxResults(size + 1);
         return query.getResultList();
     }
 
-    public List<ShowTime> previousCursor(
+    public List<Hall> previousCursor(
             String[] cursorParts,
             String keyword,
             int size,
-            List<SortField<ShowTimeField>> sortBy,
-            List<FilterField<ShowTimeField>> filterBy) {
+            List<SortField<HallField>> sortBy,
+            List<FilterField<HallField>> filterBy) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<ShowTime> cq = cb.createQuery(ShowTime.class);
-        Root<ShowTime> root = cq.from(ShowTime.class);
+        CriteriaQuery<Hall> cq = cb.createQuery(Hall.class);
+        Root<Hall> root = cq.from(Hall.class);
 
         List<Predicate> predicates = buildPredicates(cb, root, cursorParts, keyword, sortBy, filterBy, true);
         cq.where(predicates.toArray(new Predicate[0]));
         cq.orderBy(buildOrders(cb, root, sortBy));
 
-        TypedQuery<ShowTime> query = entityManager.createQuery(cq);
+        TypedQuery<Hall> query = entityManager.createQuery(cq);
         query.setMaxResults(size);
         return query.getResultList();
     }
 
     private List<Predicate> buildPredicates(
             CriteriaBuilder cb,
-            Root<ShowTime> root,
+            Root<Hall> root,
             String[] cursorParts,
             String keyword,
-            List<SortField<ShowTimeField>> sortBy,
-            List<FilterField<ShowTimeField>> filterBy,
+            List<SortField<HallField>> sortBy,
+            List<FilterField<HallField>> filterBy,
             boolean previous) {
         List<Predicate> predicates = new ArrayList<>();
 
@@ -88,13 +87,13 @@ public class ShowTimeRepositoryImpl {
                 List<Predicate> andPredicates = new ArrayList<>();
 
                 for (int j = 0; j < level; j++) {
-                    SortField<ShowTimeField> prevSort = sortBy.get(j);
-                    Comparable<?> eqValue = ShowTimeField.convertValue(cursorParts[j], prevSort.getField().getDataType());
+                    SortField<HallField> prevSort = sortBy.get(j);
+                    Comparable<?> eqValue = HallField.convertValue(cursorParts[j], prevSort.getField().getDataType());
                     andPredicates.add(cb.equal(root.get(prevSort.getField().getEntityField()), eqValue));
                 }
 
-                SortField<ShowTimeField> currentSort = sortBy.get(level);
-                Comparable<?> cmpValue = ShowTimeField.convertValue(cursorParts[level], currentSort.getField().getDataType());
+                SortField<HallField> currentSort = sortBy.get(level);
+                Comparable<?> cmpValue = HallField.convertValue(cursorParts[level], currentSort.getField().getDataType());
                 String fieldName = currentSort.getField().getEntityField();
                 Path<? extends Comparable<?>> fieldPath = comparablePath(root, fieldName);
 
@@ -122,25 +121,17 @@ public class ShowTimeRepositoryImpl {
             predicates.add(keywordPredicate);
         }
 
-        Predicate statusPredicate = root.get(ShowTimeField.STATUS.getEntityField()).in(
-                ShowTimeEnum.ShowTimeStatus.SCHEDULED,
-                ShowTimeEnum.ShowTimeStatus.ONGOING);
-        predicates.add(statusPredicate);
-
         if (filterBy != null) {
-            for (FilterField<ShowTimeField> filter : filterBy) {
+            for (FilterField<HallField> filter : filterBy) {
                 predicates.add(buildFilterPredicate(cb, root, filter));
             }
         }
 
-        predicates.add(cb.isFalse(root.get(ShowTimeField.IS_DELETED.getEntityField())));
+        predicates.add(cb.isFalse(root.get(HallField.IS_DELETED.getEntityField())));
         return predicates;
     }
 
-    private Predicate buildFilterPredicate(
-            CriteriaBuilder cb,
-            Root<ShowTime> root,
-            FilterField<ShowTimeField> filter) {
+    private Predicate buildFilterPredicate(CriteriaBuilder cb, Root<Hall> root, FilterField<HallField> filter) {
         if (filter == null || filter.getField() == null || filter.getOperator() == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -171,7 +162,7 @@ public class ShowTimeRepositoryImpl {
 
     private Predicate buildLikePredicate(
             CriteriaBuilder cb,
-            Root<ShowTime> root,
+            Root<Hall> root,
             String fieldName,
             Class<?> dataType,
             Object rawValue) {
@@ -192,7 +183,7 @@ public class ShowTimeRepositoryImpl {
 
     private Predicate buildComparePredicate(
             CriteriaBuilder cb,
-            Root<ShowTime> root,
+            Root<Hall> root,
             String fieldName,
             Class<?> dataType,
             Object rawValue,
@@ -208,7 +199,7 @@ public class ShowTimeRepositoryImpl {
 
     private Predicate buildInPredicate(
             CriteriaBuilder cb,
-            Root<ShowTime> root,
+            Root<Hall> root,
             String fieldName,
             Class<?> dataType,
             Object rawValue) {
@@ -226,7 +217,7 @@ public class ShowTimeRepositoryImpl {
 
     private Predicate buildBetweenPredicate(
             CriteriaBuilder cb,
-            Root<ShowTime> root,
+            Root<Hall> root,
             String fieldName,
             Class<?> dataType,
             Object rawValue) {
@@ -253,7 +244,7 @@ public class ShowTimeRepositoryImpl {
         if (rawValue == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-        return ShowTimeField.convertValue(String.valueOf(rawValue), dataType);
+        return HallField.convertValue(String.valueOf(rawValue), dataType);
     }
 
     private List<Comparable<?>> convertMultipleValues(Object rawValue, Class<?> dataType) {
@@ -294,7 +285,7 @@ public class ShowTimeRepositoryImpl {
     }
 
     @SuppressWarnings("unchecked")
-    private Path<? extends Comparable<?>> comparablePath(Root<ShowTime> root, String fieldName) {
+    private Path<? extends Comparable<?>> comparablePath(Root<Hall> root, String fieldName) {
         return (Path<? extends Comparable<?>>) root.get(fieldName);
     }
 
@@ -339,10 +330,10 @@ public class ShowTimeRepositoryImpl {
         return (Comparable<Object>) value;
     }
 
-    private List<Order> buildOrders(CriteriaBuilder cb, Root<ShowTime> root, List<SortField<ShowTimeField>> sortBy) {
+    private List<Order> buildOrders(CriteriaBuilder cb, Root<Hall> root, List<SortField<HallField>> sortBy) {
         List<Order> orders = new ArrayList<>();
         if (sortBy != null && !sortBy.isEmpty()) {
-            for (SortField<ShowTimeField> sort : sortBy) {
+            for (SortField<HallField> sort : sortBy) {
                 String field = sort.getField().getEntityField();
                 if ("DESC".equalsIgnoreCase(sort.getDirection())) {
                     orders.add(cb.desc(root.get(field)));
@@ -354,21 +345,19 @@ public class ShowTimeRepositoryImpl {
         return orders;
     }
 
-    private Predicate buildKeywordPredicate(CriteriaBuilder cb, Root<ShowTime> root, String keyword) {
+    private Predicate buildKeywordPredicate(CriteriaBuilder cb, Root<Hall> root, String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return null;
         }
 
         List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.like(root.get(ShowTimeField.HALL_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
-        predicates.add(cb.like(root.get(ShowTimeField.FILM_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
-        predicates.add(cb.like(root.get(ShowTimeField.PRICING_POLICY_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
+        predicates.add(cb.like(cb.lower(root.get(HallField.NAME.getEntityField())), "%" + keyword.toLowerCase() + "%"));
+        predicates.add(cb.like(root.get(HallField.CINEMA_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
 
         try {
             UUID keywordUuid = UUID.fromString(keyword);
-            predicates.add(cb.equal(root.get(ShowTimeField.HALL_ID.getEntityField()), keywordUuid));
-            predicates.add(cb.equal(root.get(ShowTimeField.FILM_ID.getEntityField()), keywordUuid));
-            predicates.add(cb.equal(root.get(ShowTimeField.PRICING_POLICY_ID.getEntityField()), keywordUuid));
+            predicates.add(cb.equal(root.get(HallField.ID.getEntityField()), keywordUuid));
+            predicates.add(cb.equal(root.get(HallField.CINEMA_ID.getEntityField()), keywordUuid));
         } catch (IllegalArgumentException ignored) {
         }
 

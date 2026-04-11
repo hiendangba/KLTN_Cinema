@@ -4,6 +4,7 @@ package com.cinema.dto.request;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,8 +31,10 @@ public class CursorPageRequest<T extends Enum<T>> {
     @Size(max = 255, message = "Keyword must not exceed 255 characters")
     private String keyword;
 
+    @Valid
     private List<SortField<T>> sortBy;
 
+    @Valid
     private List<FilterField<T>> filterBy;
 
     /**

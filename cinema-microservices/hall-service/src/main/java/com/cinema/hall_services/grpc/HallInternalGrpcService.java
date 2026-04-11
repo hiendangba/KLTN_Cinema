@@ -25,8 +25,21 @@ public class HallInternalGrpcService extends HallInternalServiceGrpc.HallInterna
 
     @Override
     public void getHallById(GetHallByIdRequest request, StreamObserver<GetHallByIdReply> responseObserver) {
+        UUID hallId;
         try {
-            HallResponse hall = hallService.getHallById(UUID.fromString(request.getHallId()));
+            hallId = UUID.fromString(request.getHallId());
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(GetHallByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+            return;
+        }
+
+        try {
+            HallResponse hall = hallService.getHallById(hallId);
             responseObserver.onNext(GetHallByIdReply.newBuilder()
                     .setSuccess(true)
                     .setMessage("Hall fetched successfully")

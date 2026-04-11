@@ -190,6 +190,17 @@ Nếu bạn là developer hoặc AI agent cần tài liệu kỹ thuật chi ti�
 
 ---
 
+## Nhật Ký Skill AI
+
+- Quy ước: sau mỗi lần Codex chỉnh sửa code, cần nêu rõ tên skill đã dùng trong phần báo cáo.
+- 11/04/2026:
+  - Skills: `java-pro`, `backend-dev-guidelines`, `api-documentation`
+  - Phạm vi áp dụng: `common-lib`, `hall-service`, `film-service`, `showtime-service`, `user-service`, `compose/pom`
+  - Skills: `java-pro`, `backend-dev-guidelines`
+  - Phạm vi áp dụng: sửa lỗi generic Criteria API (`Path<Comparable>`) tại `film-service`, đồng bộ `hall-service`, `showtime-service`
+
+---
+
 ## Phụ Lục Thuật Ngữ
 
 - OTP: Mã xác thực dùng một lần.

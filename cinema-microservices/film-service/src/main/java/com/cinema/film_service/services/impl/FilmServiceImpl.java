@@ -127,9 +127,7 @@ public class FilmServiceImpl implements FilmService {
 
         // Truyền thẳng các DTO filter/sort vào repository
         List<SortField<FilmField>> sortFields = request.getSortBy();
-        if (sortFields == null) {
-            sortFields = new ArrayList<>();
-        }
+        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
         // Luôn thêm ID làm sort cuối để đảm bảo thứ tự ổn định
         sortFields.add(new SortField<>(FilmField.ID, "ASC"));
         List<FilterField<FilmField>> filterFields = request.getFilterBy();

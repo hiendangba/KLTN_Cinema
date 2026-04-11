@@ -51,7 +51,7 @@ public class HallController extends BaseController {
 
     @PostMapping("/search")
     public ResponseEntity<APIResponse<CursorPageResponse<HallResponse>>> searchHalls(
-            @RequestBody CursorPageRequest<HallField> request) {
+            @Valid @RequestBody CursorPageRequest<HallField> request) {
         CursorPageResponse<HallResponse> response = hallService.searchHalls(request);
         return ok(response);
     }

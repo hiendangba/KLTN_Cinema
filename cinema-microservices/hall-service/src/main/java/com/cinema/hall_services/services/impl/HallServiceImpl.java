@@ -34,9 +34,11 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.StringNode;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -110,10 +112,13 @@ public class HallServiceImpl implements HallService {
             if (!prevHalls.isEmpty() && prevHalls.size() == size) {
                 prevCursor = CursorPageRequest.encodeCompositeCursor(
                         HallField.getFieldValues(prevHalls.get(size - 1), sortFields));
-            }
+                }
         }
 
-        List<HallResponse> data = halls.stream().map(this::toHallResponse).toList();
+        Map<UUID, CinemaResponse> cinemaResponseCache = new HashMap<>();
+        List<HallResponse> data = halls.stream()
+                .map(hall -> toHallResponse(hall, cinemaResponseCache))
+                .toList();
 
         return CursorPageResponse.<HallResponse>builder()
                 .data(data)
@@ -192,9 +197,13 @@ public class HallServiceImpl implements HallService {
     }
 
     private HallResponse toHallResponse(Hall hall) {
+        return toHallResponse(hall, new HashMap<>());
+    }
+
+    private HallResponse toHallResponse(Hall hall, Map<UUID, CinemaResponse> cinemaResponseCache) {
         HallResponse response = hallMapper.toResponse(hall);
         response.setLayoutJson(toJsonNode(hall.getLayoutJson()));
-        response.setCinemaResponse(resolveCinemaResponse(hall.getCinemaId()));
+        response.setCinemaResponse(cinemaResponseCache.computeIfAbsent(hall.getCinemaId(), this::resolveCinemaResponse));
         return response;
     }
 

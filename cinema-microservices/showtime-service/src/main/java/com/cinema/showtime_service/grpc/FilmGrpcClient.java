@@ -42,7 +42,11 @@ public class FilmGrpcClient {
             }
 
             return toResponse(reply.getFilm());
+        } catch (BusinessException ex) {
+            throw ex;
         } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.FILM_SERVICE_ERROR);
+        } catch (RuntimeException ex) {
             throw new BusinessException(ErrorCode.FILM_SERVICE_ERROR);
         }
     }
@@ -61,7 +65,11 @@ public class FilmGrpcClient {
                     .map(this::toResponse)
                     .filter(response -> response.getId() != null)
                     .collect(Collectors.toMap(FilmResponse::getId, response -> response, (a, b) -> a));
+        } catch (BusinessException ex) {
+            throw ex;
         } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.FILM_SERVICE_ERROR);
+        } catch (RuntimeException ex) {
             throw new BusinessException(ErrorCode.FILM_SERVICE_ERROR);
         }
     }
