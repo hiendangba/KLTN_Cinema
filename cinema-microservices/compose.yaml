@@ -12,6 +12,8 @@ services:
       DB_POOL_MAX_SIZE: "5"
       DB_POOL_MIN_IDLE: "1"
       DB_URL: jdbc:postgresql://pg:5432/identity_db
+      DB_USERNAME: identity_user
+      DB_PASSWORD: identity_pass
       REDIS_HOST: redis
       USER_GRPC_HOST: user-service
       USER_GRPC_PORT: 9191
@@ -42,6 +44,8 @@ services:
       DB_POOL_MAX_SIZE: "6"
       DB_POOL_MIN_IDLE: "1"
       DB_URL: jdbc:postgresql://pg:5432/user_db
+      DB_USERNAME: user_user
+      DB_PASSWORD: user_pass
       REDIS_HOST: redis
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
@@ -70,6 +74,8 @@ services:
       DB_POOL_MAX_SIZE: "4"
       DB_POOL_MIN_IDLE: "1"
       DB_URL: jdbc:postgresql://pg:5432/film_db
+      DB_USERNAME: film_user
+      DB_PASSWORD: film_pass
       REDIS_HOST: redis
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
@@ -97,6 +103,8 @@ services:
       DB_POOL_MAX_SIZE: "4"
       DB_POOL_MIN_IDLE: "1"
       DB_URL: jdbc:postgresql://pg:5432/showtime_db
+      DB_USERNAME: showtime_user
+      DB_PASSWORD: showtime_pass
       REDIS_HOST: redis
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
@@ -131,8 +139,8 @@ services:
       DB_POOL_MAX_SIZE: "4"
       DB_POOL_MIN_IDLE: "1"
       DB_URL: jdbc:postgresql://pg:5432/hall_db
-      DB_USERNAME: postgres
-      DB_PASSWORD: 123456
+      DB_USERNAME: hall_user
+      DB_PASSWORD: hall_pass
       JPA_DDL_AUTO: update
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
@@ -208,9 +216,11 @@ services:
     container_name: api-gateway
     ports:
       - "80:80"
+      - "443:443"
       - "9901:9901"
     volumes:
       - ./envoy/envoy.prod.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy/certs:/etc/envoy/certs:ro
     command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
     mem_limit: 96m
 volumes:

@@ -198,6 +198,9 @@ Nếu bạn là developer hoặc AI agent cần tài liệu kỹ thuật chi ti�
   - Phạm vi áp dụng: `common-lib`, `hall-service`, `film-service`, `showtime-service`, `user-service`, `compose/pom`
   - Skills: `java-pro`, `backend-dev-guidelines`
   - Phạm vi áp dụng: sửa lỗi generic Criteria API (`Path<Comparable>`) tại `film-service`, đồng bộ `hall-service`, `showtime-service`
+- 14/04/2026:
+  - Skills: `architecture`
+  - Phạm vi áp dụng: chuẩn hóa cấu hình production không dùng `env_file`, khai báo biến tập trung qua `environment` cho toàn bộ services trong `compose.prod.yaml`
 
 ---
 

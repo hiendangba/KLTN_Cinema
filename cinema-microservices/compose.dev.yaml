@@ -58,6 +58,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./envoy/envoy.dev.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy/certs:/etc/envoy/certs:ro
     depends_on: []
 
 volumes:

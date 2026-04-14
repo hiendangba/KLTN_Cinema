@@ -10,7 +10,50 @@ static_resources:
             - name: envoy.filters.network.http_connection_manager
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
-                stat_prefix: ingress_http
+                stat_prefix: ingress_http_redirect
+                normalize_path: true
+                use_remote_address: true
+                xff_num_trusted_hops: 1
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                route_config:
+                  name: redirect_to_https
+                  virtual_hosts:
+                    - name: redirect
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          redirect:
+                            https_redirect: true
+                http_filters:
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+
+    - name: listener_https
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 443
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /etc/envoy/certs/fullchain.pem
+                    private_key:
+                      filename: /etc/envoy/certs/privkey.pem
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_https
                 normalize_path: true
                 use_remote_address: true
                 xff_num_trusted_hops: 1
@@ -19,6 +62,9 @@ static_resources:
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
                 http_filters:
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
                   - name: envoy.filters.http.ext_authz
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
@@ -46,6 +92,16 @@ static_resources:
                   virtual_hosts:
                     - name: backend
                       domains: ["*"]
+                      cors:
+                        allow_origin_string_match:
+                          - exact: "https://cinemastar.onrender.com"
+                          - exact: "http://localhost:5173"
+                          - exact: "http://localhost:5174"
+                        allow_methods: "GET,POST,PUT,DELETE,PATCH,OPTIONS"
+                        allow_headers: "authorization,content-type,x-requested-with,accept,origin"
+                        expose_headers: "authorization,content-type,x-request-id,x-gateway"
+                        allow_credentials: true
+                        max_age: "86400"
                       response_headers_to_add:
                         - header:
                             key: x-gateway

@@ -1,5 +1,23 @@
-CREATE DATABASE user_db;
-CREATE DATABASE identity_db;
-CREATE DATABASE film_db;
-CREATE DATABASE showtime_db;
-CREATE DATABASE hall_db;
+CREATE USER identity_user WITH PASSWORD 'identity_pass';
+CREATE USER user_user WITH PASSWORD 'user_pass';
+CREATE USER film_user WITH PASSWORD 'film_pass';
+CREATE USER showtime_user WITH PASSWORD 'showtime_pass';
+CREATE USER hall_user WITH PASSWORD 'hall_pass';
+
+CREATE DATABASE identity_db OWNER identity_user;
+CREATE DATABASE user_db OWNER user_user;
+CREATE DATABASE film_db OWNER film_user;
+CREATE DATABASE showtime_db OWNER showtime_user;
+CREATE DATABASE hall_db OWNER hall_user;
+
+REVOKE ALL ON DATABASE identity_db FROM PUBLIC;
+REVOKE ALL ON DATABASE user_db FROM PUBLIC;
+REVOKE ALL ON DATABASE film_db FROM PUBLIC;
+REVOKE ALL ON DATABASE showtime_db FROM PUBLIC;
+REVOKE ALL ON DATABASE hall_db FROM PUBLIC;
+
+GRANT ALL PRIVILEGES ON DATABASE identity_db TO identity_user;
+GRANT ALL PRIVILEGES ON DATABASE user_db TO user_user;
+GRANT ALL PRIVILEGES ON DATABASE film_db TO film_user;
+GRANT ALL PRIVILEGES ON DATABASE showtime_db TO showtime_user;
+GRANT ALL PRIVILEGES ON DATABASE hall_db TO hall_user;
