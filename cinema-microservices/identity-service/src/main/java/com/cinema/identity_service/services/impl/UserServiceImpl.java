@@ -175,6 +175,9 @@ public class UserServiceImpl implements UserService {
             log.info("Manager created in user-service: managerId={}, email={}", savedManager.getId(),
                     managerRequest.getEmail());
 
+        } catch (BusinessException e) {
+            log.error("Failed to create manager in user-service: email={}", managerRequest.getEmail(), e);
+            throw e;
         } catch (Exception e) {
             log.error("Failed to create manager in user-service: email={}", managerRequest.getEmail(), e);
             throw new BusinessException(ErrorCode.NOT_CREATED);
@@ -237,6 +240,9 @@ public class UserServiceImpl implements UserService {
             log.info("Staff created in user-service: staffId={}, email={}", savedStaff.getId(),
                     staffRequest.getEmail());
 
+        } catch (BusinessException e) {
+            log.error("Failed to create staff in user-service: email={}", staffRequest.getEmail(), e);
+            throw e;
         } catch (Exception e) {
             log.error("Failed to create staff in user-service: email={}", staffRequest.getEmail(), e);
             throw new BusinessException(ErrorCode.NOT_CREATED);
@@ -485,6 +491,11 @@ public class UserServiceImpl implements UserService {
                     log.info("User created in user-service: userId={}, email={}", user.getId(),
                             registerCustomerRequest.getEmail());
 
+                } catch (BusinessException e) {
+                    log.error(
+                            "Failed to create user in user-service: email={}",
+                            registerCustomerRequest.getEmail(), e);
+                    throw e;
                 } catch (Exception e) {
                     log.error(
                             "Failed to create user in user-service: email={}",

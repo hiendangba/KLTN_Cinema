@@ -1,0 +1,7 @@
+services:
+  envoy:
+    volumes:
+      - ./envoy/envoy.local.yaml:/etc/envoy/envoy.yaml:ro
+    ports:
+      - "80:80"
+      - "9901:9901"
