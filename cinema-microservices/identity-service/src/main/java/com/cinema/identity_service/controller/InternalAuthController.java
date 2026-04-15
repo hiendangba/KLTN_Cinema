@@ -9,7 +9,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/internal/auth")
 public class InternalAuthController {
 
-    @RequestMapping(path = { "/check", "/check/**", "/**" }, method = { RequestMethod.GET, RequestMethod.POST })
+    @RequestMapping(
+            path = {"/check", "/check/**"},
+            method = {
+                    RequestMethod.GET,
+                    RequestMethod.POST,
+                    RequestMethod.PUT,
+                    RequestMethod.PATCH,
+                    RequestMethod.DELETE,
+                    RequestMethod.OPTIONS,
+                    RequestMethod.HEAD
+            })
     public ResponseEntity<Void> authCheck() {
         return ResponseEntity.ok().build();
     }

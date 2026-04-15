@@ -47,7 +47,7 @@ public class FilmController extends BaseController {
         return ok(response);
     }
 
-    @PostMapping({"", "/"})
+    @PostMapping
     public ResponseEntity<APIResponse<FilmResponse>> createFilm(@Valid @RequestBody CreateFilmRequest request,
                                                                 HttpServletRequest httpRequest) {
         log.info("Request tạo phim: {}", request.getTitle());

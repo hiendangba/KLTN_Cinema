@@ -6,7 +6,7 @@ import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 
 import org.springframework.scheduling.annotation.EnableAsync;
 
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.cinema.email_service", "com.cinema.exception"})
 @EnableRabbit
 @EnableAsync
 public class EmailServiceApplication {

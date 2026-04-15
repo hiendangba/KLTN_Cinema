@@ -126,37 +126,25 @@ static_resources:
                           route:
                             cluster: film-service
                             timeout: 30s
-                          typed_per_filter_config:
-                            envoy.filters.http.ext_authz:
-                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
-                              disabled: false
+
                         - match:
                             prefix: /api/showtimes/
                           route:
                             cluster: showtime-service
                             timeout: 30s
-                          typed_per_filter_config:
-                            envoy.filters.http.ext_authz:
-                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
-                              disabled: false
+
                         - match:
                             path: /api/halls
                           route:
                             cluster: hall-services
                             timeout: 30s
-                          typed_per_filter_config:
-                            envoy.filters.http.ext_authz:
-                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
-                              disabled: false
+
                         - match:
                             prefix: /api/halls/
                           route:
                             cluster: hall-services
                             timeout: 30s
-                          typed_per_filter_config:
-                            envoy.filters.http.ext_authz:
-                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
-                              disabled: false
+
                         - match:
                             prefix: /api/email/
                           route:

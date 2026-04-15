@@ -44,6 +44,9 @@ public class FilmServiceImpl implements FilmService {
     @Override
     public FilmResponse createFilm(CreateFilmRequest request, HttpServletRequest httpRequest) {
         log.info("Tạo mới phim: {}", request.getTitle());
+        log.info("httpRequest: " + httpRequest.getHeader(HeaderNames.X_USER_ROLE));
+        log.info("httpRequest: " + httpRequest.getHeaderNames());
+        log.info("httpRequestName: " + HeaderNames.X_USER_ROLE);
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
