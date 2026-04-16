@@ -19,8 +19,8 @@ public abstract class BaseController {
                 .body(buildResponse(true, "CREATED", "Created successfully", data));
     }
 
-    protected ResponseEntity<Void> noContent() {
-        return ResponseEntity.noContent().build();
+    protected ResponseEntity<APIResponse<Void>> noContent() {
+        return ok(null);
     }
 
     private <T> APIResponse<T> buildResponse(boolean success, String code, String message, T data) {

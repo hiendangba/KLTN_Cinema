@@ -64,9 +64,9 @@ public class FilmController extends BaseController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteFilm(@PathVariable UUID id, HttpServletRequest httpRequest) {
+    public ResponseEntity<APIResponse<Void>> deleteFilm(@PathVariable UUID id, HttpServletRequest httpRequest) {
         log.info("Request xóa phim với ID: {}", id);
         filmService.deleteFilm(id, httpRequest);
-        return noContent();
+        return ok(null);
     }
 }
