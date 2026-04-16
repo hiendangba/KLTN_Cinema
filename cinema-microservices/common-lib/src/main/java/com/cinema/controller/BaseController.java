@@ -7,20 +7,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import java.time.LocalDateTime;
+
 @Slf4j
 public abstract class BaseController {
 
     protected <T> ResponseEntity<APIResponse<T>> ok(T data) {
         return ResponseEntity.ok(buildResponse(true, "SUCCESS", "Operation successful", data));
     }
+
     protected <T> ResponseEntity<APIResponse<T>> created(T data) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(buildResponse(true, "CREATED", "Created successfully", data));
-    }
-
-    protected ResponseEntity<APIResponse<Void>> noContent() {
-        return ok(null);
     }
 
     private <T> APIResponse<T> buildResponse(boolean success, String code, String message, T data) {
@@ -36,7 +34,8 @@ public abstract class BaseController {
 
     private String getRequestPath() {
         try {
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder
+                    .getRequestAttributes();
             if (attributes != null) {
                 return attributes.getRequest().getRequestURI();
             }
