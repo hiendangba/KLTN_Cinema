@@ -1,6 +1,7 @@
 package com.cinema.showtime_service.services;
 
 import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
@@ -16,13 +17,13 @@ public interface ShowTimeService {
     ResultResponse<ShowTimeResponse> createShowTime(ShowTimeCreateRequest showTimeCreateRequest,
                                                     HttpServletRequest httpRequest);
 
-    ShowTimeResponse updateShowTime(UUID id, UpdateShowTimeRequest updateShowTimeRequest,
-                                    HttpServletRequest httpRequest);
+    ActionMessageResponse updateShowTime(UUID id, UpdateShowTimeRequest updateShowTimeRequest,
+                                         HttpServletRequest httpRequest);
 
-    ShowTimeResponse updateShowTimeStatus(UUID id, UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
-                                          HttpServletRequest httpRequest);
+    ActionMessageResponse updateShowTimeStatus(UUID id, UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
+                                               HttpServletRequest httpRequest);
 
-    void deleteShowTime(UUID id, HttpServletRequest httpRequest);
+    ActionMessageResponse deleteShowTime(UUID id, HttpServletRequest httpRequest);
 
     CursorPageResponse<ShowTimeResponse> searchShowtimes(
             CursorPageRequest<ShowTimeField> request);

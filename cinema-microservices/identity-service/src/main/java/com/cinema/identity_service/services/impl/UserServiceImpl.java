@@ -2,6 +2,7 @@ package com.cinema.identity_service.services.impl;
 
 import com.cinema.Enum.UserEnum;
 import com.cinema.dto.request.SendEmailRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
@@ -79,6 +80,7 @@ public class UserServiceImpl implements UserService {
     static int MAX_VERIFY_ATTEMPTS = 3;
     static int MAX_SEND_COUNT = 4;
 
+    // Register customer account: create OTP payload, cache verification state, and queue OTP email.
     @Override
     public RegisterCustomerResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
             HttpServletResponse response) {
@@ -125,24 +127,25 @@ public class UserServiceImpl implements UserService {
 
         internalEmailDispatchService.sendAsync(new SendEmailRequest(
                 registerCustomerRequest.getEmail(),
-                "Đăng ký tài khoản thành công",
-                "Chào mừng bạn đến với CinemaStar!",
-                "Mã OTP của bạn là: " + otp + "</p>"));
+                "\u0110\u0103ng k\u00FD t\u00E0i kho\u1EA3n th\u00E0nh c\u00F4ng",
+                "Ch\u00E0o m\u1EEBng b\u1EA1n \u0111\u1EBFn v\u1EDBi CinemaStar!",
+                "M\u00E3 OTP c\u1EE7a b\u1EA1n l\u00E0: " + otp + "</p>"));
         log.info("OTP email dispatch queued for registration: email={}", registerCustomerRequest.getEmail());
         return RegisterCustomerResponse.builder()
-                .message("Mã OTP đã được gửi đến email của bạn")
+                .message("M\u00E3 OTP \u0111\u00E3 \u0111\u01B0\u1EE3c g\u1EEDi \u0111\u1EBFn email c\u1EE7a b\u1EA1n")
                 .build();
     }
 
+    // Create manager account in identity-service, then provision manager profile in user-service.
     @Override
     public RegisterCustomerResponse createManager(RegisterManagerRequest registerManagerRequest,
             HttpServletRequest request) {
-        // Kiểm tra email đã tồn tại
+        // Kiem tra email da ton tai
         if (userRepository.existsByEmail(registerManagerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
         }
 
-        // Tạo manager request với password mã hóa
+        // Tao manager request voi password da ma hoa
         RegisterManagerRequest managerRequest = RegisterManagerRequest.builder()
                 .name(registerManagerRequest.getName())
                 .email(registerManagerRequest.getEmail())
@@ -152,12 +155,12 @@ public class UserServiceImpl implements UserService {
                 .gender(registerManagerRequest.getGender())
                 .build();
 
-        // Lưu user vào identity-service database
+        // Luu user vao identity-service database
         User newManager = userMapper.toUser(managerRequest);
         User savedManager = userRepository.save(newManager);
 
         try {
-            // Gọi user-service để tạo profile manager
+            // Goi user-service de tao profile manager
             RegisterManagerRequest userServiceRequest = RegisterManagerRequest.builder()
                     .id(savedManager.getId())
                     .name(managerRequest.getName())
@@ -182,18 +185,19 @@ public class UserServiceImpl implements UserService {
             log.error("Failed to create manager in user-service: email={}", managerRequest.getEmail(), e);
             throw new BusinessException(ErrorCode.NOT_CREATED);
         }
-        // Gửi email chào mừng cho manager
+        // Gui email chao mung cho manager
         internalEmailDispatchService.sendAsync(new SendEmailRequest(
                 registerManagerRequest.getEmail(),
-                "Chào mừng bạn trở thành Manager",
-                "Tài khoản Manager đã được tạo thành công.",
-                "Chúc mừng bạn đã trở thành Manager tại CinemaStar!"));
+                "Ch\u00E0o m\u1EEBng b\u1EA1n tr\u1EDF th\u00E0nh Manager",
+                "T\u00E0i kho\u1EA3n Manager \u0111\u00E3 \u0111\u01B0\u1EE3c t\u1EA1o th\u00E0nh c\u00F4ng.",
+                "Ch\u00FAc m\u1EEBng b\u1EA1n \u0111\u00E3 tr\u1EDF th\u00E0nh Manager t\u1EA1i CinemaStar!"));
         log.info("Welcome email dispatch queued for manager: email={}", registerManagerRequest.getEmail());
         return RegisterCustomerResponse.builder()
-                .message("Tạo manager thành công")
+                .message("T\u1EA1o manager th\u00E0nh c\u00F4ng")
                 .build();
     }
 
+    // Create staff account in identity-service, then provision staff profile in user-service.
     @Override
     public RegisterCustomerResponse createStaff(RegisterStaffRequest registerStaffRequest,
             HttpServletRequest request) {
@@ -202,12 +206,12 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
-        // Kiểm tra email đã tồn tại
+        // Kiem tra email da ton tai
         if (userRepository.existsByEmail(registerStaffRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
         }
 
-        // Tạo staff request với password mã hóa
+        // Tao staff request voi password da ma hoa
         RegisterStaffRequest staffRequest = RegisterStaffRequest.builder()
                 .name(registerStaffRequest.getName())
                 .email(registerStaffRequest.getEmail())
@@ -217,12 +221,12 @@ public class UserServiceImpl implements UserService {
                 .gender(registerStaffRequest.getGender())
                 .build();
 
-        // Lưu user vào identity-service database
+        // Luu user vao identity-service database
         User newStaff = userMapper.toUser(staffRequest);
         User savedStaff = userRepository.save(newStaff);
 
         try {
-            // Gọi user-service để tạo profile staff
+            // Goi user-service de tao profile staff
             RegisterStaffRequest userServiceRequest = RegisterStaffRequest.builder()
                     .id(savedStaff.getId())
                     .name(staffRequest.getName())
@@ -250,18 +254,19 @@ public class UserServiceImpl implements UserService {
 
         internalEmailDispatchService.sendAsync(new SendEmailRequest(
                 registerStaffRequest.getEmail(),
-                "Chào mừng bạn trở thành Staff",
-                "Tài khoản Staff đã được tạo thành công.",
-                "Chúc mừng bạn đã trở thành Staff tại CinemaStar!"));
+                "Ch\u00E0o m\u1EEBng b\u1EA1n tr\u1EDF th\u00E0nh Staff",
+                "T\u00E0i kho\u1EA3n Staff \u0111\u00E3 \u0111\u01B0\u1EE3c t\u1EA1o th\u00E0nh c\u00F4ng.",
+                "Ch\u00FAc m\u1EEBng b\u1EA1n \u0111\u00E3 tr\u1EDF th\u00E0nh Staff t\u1EA1i CinemaStar!"));
         log.info("Welcome email dispatch queued for staff: email={}", registerStaffRequest.getEmail());
 
         return RegisterCustomerResponse.builder()
-                .message("Tạo staff thành công")
+                .message("T\u1EA1o staff th\u00E0nh c\u00F4ng")
                 .build();
     }
 
+    // Resend OTP with anti-abuse checks (token ownership, expiry window, and resend limit).
     @Override
-    public void resendOTP(HttpServletRequest request) {
+    public ActionMessageResponse resendOTP(HttpServletRequest request) {
         String cookieVerifyToken = null;
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
@@ -320,12 +325,16 @@ public class UserServiceImpl implements UserService {
 
         internalEmailDispatchService.sendAsync(new SendEmailRequest(
                 otpData.getSubject(),
-                "Gửi lại mã OTP",
-                "Bạn vừa yêu cầu gửi lại mã OTP.",
-                "Mã OTP của bạn là: " + newOtp + "</p>"));
+                "G\u1EEDi l\u1EA1i m\u00E3 OTP",
+                "B\u1EA1n v\u1EEBa y\u00EAu c\u1EA7u g\u1EEDi l\u1EA1i m\u00E3 OTP.",
+                "M\u00E3 OTP c\u1EE7a b\u1EA1n l\u00E0: " + newOtp + "</p>"));
         log.info("OTP email redispatch queued: email={}", otpData.getSubject());
+        return ActionMessageResponse.builder()
+                .message("G\u1EEDi l\u1EA1i m\u00E3 OTP th\u00E0nh c\u00F4ng")
+                .build();
     }
 
+    // Start forgot-password flow by issuing OTP and storing request context in Redis.
     @Override
     public ForgotPasswordResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest,
             HttpServletResponse response) {
@@ -362,21 +371,22 @@ public class UserServiceImpl implements UserService {
         log.warn("otp forgot generate :{}", otp);
         internalEmailDispatchService.sendAsync(new SendEmailRequest(
                 forgotPasswordRequest.getEmail(),
-                "Quên mật khẩu - OTP",
-                "Bạn vừa yêu cầu lấy lại mật khẩu.",
-                "Mã OTP của bạn là: " + otp + "</p>"));
+                "Qu\u00EAn m\u1EADt kh\u1EA9u - OTP",
+                "B\u1EA1n v\u1EEBa y\u00EAu c\u1EA7u l\u1EA5y l\u1EA1i m\u1EADt kh\u1EA9u.",
+                "M\u00E3 OTP c\u1EE7a b\u1EA1n l\u00E0: " + otp + "</p>"));
         log.info("OTP email dispatch queued for forgot password: email={}", forgotPasswordRequest.getEmail());
 
         return ForgotPasswordResponse.builder()
-                .message("Mã OTP đã được gửi đến email của bạn")
+                .message("M\u00E3 OTP \u0111\u00E3 \u0111\u01B0\u1EE3c g\u1EEDi \u0111\u1EBFn email c\u1EE7a b\u1EA1n")
                 .build();
     }
 
+    // Change password for authenticated user after validating old/new password constraints.
     @Override
     public ChangePasswordResponse changePassword(ChangePasswordRequest changePasswordRequest,
             HttpServletRequest request) {
 
-        // Kiểm tra mật khẩu cũ và mật khẩu mới có giống nhau hay không
+        // Kiem tra mat khau cu va mat khau moi co giong nhau hay khong
         if (changePasswordRequest.getOldPassword().equals(changePasswordRequest.getNewPassword())) {
             throw new BusinessException(ErrorCode.PASSWORD_DUPLICATED);
         }
@@ -398,21 +408,22 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userUUID)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND));
 
-        // Kiểm tra mật khẩu cũ có đúng hay không
+        // Kiem tra mat khau cu co dung hay khong
         if (!passwordEncoder.matches(changePasswordRequest.getOldPassword(), user.getPassword())) {
             throw new BusinessException(ErrorCode.PASSWORD_INCORRECT);
         }
 
-        // Update password (validation đã được kiểm tra ở ChangePasswordRequest)
+        // Update password (validation da duoc kiem tra o ChangePasswordRequest)
         user.setPassword(passwordEncoder.encode(changePasswordRequest.getNewPassword()));
         userRepository.save(user);
 
         log.info("Password changed for user: {}", userId);
         return ChangePasswordResponse.builder()
-                .message("Đổi mật khẩu thành công")
+                .message("\u0110\u1ED5i m\u1EADt kh\u1EA9u th\u00E0nh c\u00F4ng")
                 .build();
     }
 
+    // Verify OTP and execute follow-up action (register account or reset password).
     @Override
     public VerifyResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request) {
         String cookieVerifyToken = null;
@@ -536,21 +547,22 @@ public class UserServiceImpl implements UserService {
         redisTemplate.delete(OTP_SUBJECT_PREFIX + otpData.getSubject());
 
         return VerifyResponse.builder()
-                .message("Xác thực OTP thành công")
+                .message("X\u00E1c th\u1EF1c OTP th\u00E0nh c\u00F4ng")
                 .build();
     }
 
+    // Authenticate user, issue access/refresh tokens, and persist token state in Redis.
     @Override
     public LoginResponse login(LoginRequest loginRequest, HttpServletResponse response) {
         User user = userRepository.findByEmail(loginRequest.getEmail())
                 .orElseThrow(() -> new BusinessException(LOGIN_FAILED));
         if (user.getStatus().equals(UserEnum.UserStatus.LOCKED)) {
-            log.warn("Tài khoản đã bị khóa: {}", user.getId());
+            log.warn("T\u00E0i kho\u1EA3n \u0111\u00E3 b\u1ECB kh\u00F3a: {}", user.getId());
             throw new BusinessException(LOGIN_FAILED);
         }
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-            log.warn("Mật khẩu không khớp: {}", user.getId());
+            log.warn("M\u1EADt kh\u1EA9u kh\u00F4ng kh\u1EDBp: {}", user.getId());
             throw new BusinessException(LOGIN_FAILED);
         }
 
@@ -580,11 +592,14 @@ public class UserServiceImpl implements UserService {
         return LoginResponse.builder().accessToken(accessToken).build();
     }
 
+    // Revoke all active tokens for current user session scope.
     @Override
-    public void logout(HttpServletRequest request) {
+    public ActionMessageResponse logout(HttpServletRequest request) {
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return;
+            return ActionMessageResponse.builder()
+                    .message("\u0110\u0103ng xu\u1EA5t th\u00E0nh c\u00F4ng")
+                    .build();
         }
         String accessToken = authHeader.substring(7);
         try {
@@ -605,8 +620,12 @@ public class UserServiceImpl implements UserService {
         } catch (Exception e) {
             log.error("Exception : {}", e.getMessage());
         }
+        return ActionMessageResponse.builder()
+                .message("\u0110\u0103ng xu\u1EA5t th\u00E0nh c\u00F4ng")
+                .build();
     }
 
+    // Rotate refresh token and issue a new access token while preserving refresh TTL.
     @Override
     public LoginResponse refreshToken(HttpServletRequest request, HttpServletResponse response) {
         String cookieRefreshToken = null;
@@ -619,7 +638,7 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        // Nếu refresh_token không có trong cookie
+        // Neu refresh_token khong co trong cookie
         if (cookieRefreshToken == null) {
             throw new BusinessException(ErrorCode.REFRESH_TOKEN_MISSING);
         }
@@ -637,7 +656,7 @@ public class UserServiceImpl implements UserService {
                 throw new BusinessException(REFRESH_TOKEN_MISSING);
             }
 
-            // Nếu refreshtoken hết hạn
+            // Neu refresh token het han
             if (userIdStr == null) {
                 throw new BusinessException(REFRESH_TOKEN_MISSING);
             }
@@ -654,7 +673,7 @@ public class UserServiceImpl implements UserService {
             String userTokensKey = USER_TOKENS_PREFIX + userId;
 
             redisTemplate.delete(refreshTokenKey);
-            // Nếu còn token trên redis
+            // Neu van con access token tren redis
             if (Boolean.TRUE.equals(hasAccessToken)) {
                 redisTemplate.delete(accessTokenKey);
                 redisTemplate.opsForSet().remove(userTokensKey, tokenId);
@@ -663,12 +682,12 @@ public class UserServiceImpl implements UserService {
 
             redisTemplate.opsForSet().remove(userTokensKey, tokenId);
 
-            // tạo id mới
+            // Tao token id moi
             tokenId = UUID.randomUUID().toString();
             accessTokenKey = ACCESS_TOKEN_PREFIX + tokenId;
             refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenId;
 
-            // Tạo rotate token và thêm vào redis
+            // Tao rotate token va luu vao redis
             redisTemplate.opsForValue().set(accessTokenKey, userId, jwtServiceImpl.getAccessTokenExpiration(),
                     TimeUnit.MILLISECONDS);
             redisTemplate.opsForValue().set(refreshTokenKey, userId, ttlMillis, TimeUnit.MILLISECONDS);
@@ -689,7 +708,7 @@ public class UserServiceImpl implements UserService {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            // Nếu người dùng sửa giá trị refresh_token trên cookie
+            // Neu nguoi dung sua gia tri refresh_token tren cookie
             log.warn("Refresh token error", e);
             throw new BusinessException(REFRESH_TOKEN_MISSING);
         }

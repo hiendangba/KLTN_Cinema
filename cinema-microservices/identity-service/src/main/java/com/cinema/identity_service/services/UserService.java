@@ -1,5 +1,6 @@
 package com.cinema.identity_service.services;
 
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.identity_service.dto.request.ChangePasswordRequest;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
@@ -25,7 +26,7 @@ public interface UserService {
 
     VerifyResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request);
 
-    void resendOTP(HttpServletRequest request);
+    ActionMessageResponse resendOTP(HttpServletRequest request);
 
     ForgotPasswordResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest, HttpServletResponse response);
 
@@ -33,7 +34,7 @@ public interface UserService {
 
     LoginResponse login(LoginRequest loginRequest, HttpServletResponse response);
 
-    void logout(HttpServletRequest request);
+    ActionMessageResponse logout(HttpServletRequest request);
 
     LoginResponse refreshToken(HttpServletRequest request, HttpServletResponse response);
 }

@@ -2,6 +2,7 @@ package com.cinema.showtime_service.controller;
 
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.showtime_service.dto.request.PricingPolicyCreateRequest;
 import com.cinema.showtime_service.dto.request.PricingPolicyUpdateRequest;
 import com.cinema.showtime_service.dto.response.PricingPolicyResponse;
@@ -29,14 +30,14 @@ public class PricingPolicyController extends BaseController {
     private final PricingPolicyService pricingPolicyService;
 
     @PostMapping
-    public ResponseEntity<APIResponse<PricingPolicyResponse>> createPricingPolicy(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createPricingPolicy(
             @Valid @RequestBody PricingPolicyCreateRequest request,
             HttpServletRequest httpRequest) {
         return created(pricingPolicyService.createPricingPolicy(request, httpRequest));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<APIResponse<PricingPolicyResponse>> updatePricingPolicy(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updatePricingPolicy(
             @PathVariable UUID id,
             @Valid @RequestBody PricingPolicyUpdateRequest request,
             HttpServletRequest httpRequest) {
@@ -44,9 +45,9 @@ public class PricingPolicyController extends BaseController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<APIResponse<Void>> deletePricingPolicy(@PathVariable UUID id, HttpServletRequest httpRequest) {
-        pricingPolicyService.deletePricingPolicy(id, httpRequest);
-        return ok(null);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> deletePricingPolicy(@PathVariable UUID id,
+                                                                                   HttpServletRequest httpRequest) {
+        return ok(pricingPolicyService.deletePricingPolicy(id, httpRequest));
     }
 
     @GetMapping("/{id}")

@@ -4,6 +4,7 @@ import com.cinema.Enum.HallEnum;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
@@ -59,7 +60,7 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional
-    public HallResponse createHall(HallCreateRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse createHall(HallCreateRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         if (hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(cinemaId, request.getName())) {
@@ -72,8 +73,10 @@ public class HallServiceImpl implements HallService {
         hall.setCinemaId(cinemaId);
         hall.setStatus(request.getStatus() == null ? HallEnum.HallStatus.ACTIVE : request.getStatus());
         hall.setLayoutJson(toJsonString(request.getLayoutJson()));
-        hall = hallRepository.save(hall);
-        return toHallResponse(hall);
+        hallRepository.save(hall);
+        return ActionMessageResponse.builder()
+                .message("T\u1EA1o ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
@@ -131,7 +134,7 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional
-    public HallResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         Hall hall = getManagedHallOrThrow(hallId, cinemaId);
@@ -142,24 +145,30 @@ public class HallServiceImpl implements HallService {
         }
 
         hallMapper.updateEntityFromRequest(hall, request);
-        hall = hallRepository.save(hall);
-        return toHallResponse(hall);
+        hallRepository.save(hall);
+        return ActionMessageResponse.builder()
+                .message("C\u1EADp nh\u1EADt ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
     @Transactional
-    public HallResponse updateHallStatus(UUID hallId, UpdateHallStatusRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse updateHallStatus(UUID hallId, UpdateHallStatusRequest request,
+                                                  HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         Hall hall = getManagedHallOrThrow(hallId, cinemaId);
         hall.setStatus(request.getStatus());
-        hall = hallRepository.save(hall);
-        return toHallResponse(hall);
+        hallRepository.save(hall);
+        return ActionMessageResponse.builder()
+                .message("C\u1EADp nh\u1EADt tr\u1EA1ng th\u00E1i ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
     @Transactional
-    public HallResponse updateHallLayout(UUID hallId, UpdateHallLayoutRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse updateHallLayout(UUID hallId, UpdateHallLayoutRequest request,
+                                                  HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         Hall hall = getManagedHallOrThrow(hallId, cinemaId);
@@ -169,18 +178,23 @@ public class HallServiceImpl implements HallService {
 
         validateLayoutJson(request.getLayoutJson());
         hall.setLayoutJson(toJsonString(request.getLayoutJson()));
-        hall = hallRepository.save(hall);
-        return toHallResponse(hall);
+        hallRepository.save(hall);
+        return ActionMessageResponse.builder()
+                .message("C\u1EADp nh\u1EADt s\u01A1 \u0111\u1ED3 ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
     @Transactional
-    public void deleteHall(UUID hallId, HttpServletRequest httpRequest) {
+    public ActionMessageResponse deleteHall(UUID hallId, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         Hall hall = getManagedHallOrThrow(hallId, cinemaId);
         hall.setIsDeleted(true);
         hallRepository.save(hall);
+        return ActionMessageResponse.builder()
+                .message("X\u00F3a ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     private Hall getActiveHallOrThrow(UUID hallId) {

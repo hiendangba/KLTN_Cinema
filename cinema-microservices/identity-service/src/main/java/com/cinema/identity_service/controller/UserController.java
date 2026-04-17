@@ -2,6 +2,7 @@ package com.cinema.identity_service.controller;
 
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.identity_service.dto.request.ChangePasswordRequest;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
@@ -58,9 +59,9 @@ public class UserController extends BaseController {
     }
 
     @PostMapping("/resend-otp")
-    public ResponseEntity<APIResponse<LoginResponse>> resendOTP(HttpServletRequest request) {
-        userService.resendOTP(request);
-        return ok(null);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> resendOTP(HttpServletRequest request) {
+        ActionMessageResponse response = userService.resendOTP(request);
+        return ok(response);
     }
 
     @PostMapping("/login")
@@ -71,9 +72,9 @@ public class UserController extends BaseController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<APIResponse<Void>> logout(HttpServletRequest request) {
-        userService.logout(request);
-        return ok(null);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> logout(HttpServletRequest request) {
+        ActionMessageResponse response = userService.logout(request);
+        return ok(response);
     }
 
     @PostMapping("/refresh_token")

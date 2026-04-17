@@ -172,6 +172,18 @@ Có. Backend cung cấp API theo domain và có thể dùng cho web/mobile tùy 
 - Kiểm tra trạng thái phòng chiếu có đang bảo trì không.
 - Kiểm tra rule trùng tên phòng trong cùng cinema.
 
+### 5. Lỗi UTF-8/Mojibake (chuỗi hiển thị thành `MÃ£`, `Ã„`, ...)
+
+- Nguyên nhân thường gặp: file Java bị lưu sai encoding hoặc bị chuyển mã nhiều lần.
+- Chuẩn bắt buộc: lưu source dưới dạng `UTF-8` (không BOM).
+- Với chuỗi tiếng Việt quan trọng cho UI/email, có thể dùng Unicode escape Java (`\uXXXX`) để tránh lỗi môi trường.
+- Khi nghi ngờ file lỗi mã hóa, kiểm tra nhanh bằng cách tìm pattern bất thường như `MÃ`, `Ã„`, `Ã`.
+- Sau khi sửa, luôn chạy compile để xác nhận:
+
+```bash
+./mvnw -pl identity-service -am -DskipTests test-compile
+```
+
 ## Hỗ Trợ
 
 Nếu bạn là người dùng nghiệp vụ (vận hành rạp/QA/UAT), hãy gửi thông tin sau khi báo lỗi:
@@ -201,6 +213,9 @@ Nếu bạn là developer hoặc AI agent cần tài liệu kỹ thuật chi ti�
 - 14/04/2026:
   - Skills: `architecture`
   - Phạm vi áp dụng: chuẩn hóa cấu hình production không dùng `env_file`, khai báo biến tập trung qua `environment` cho toàn bộ services trong `compose.prod.yaml`
+- 17/04/2026:
+  - Skills: `backend-dev-guidelines`
+  - Phạm vi áp dụng: sửa lỗi UTF-8/mojibake và chuẩn hóa comment theo từng khối xử lý tại `identity-service/services/impl/UserServiceImpl.java`, bổ sung hướng dẫn xử lý encoding trong `README.md`
 
 ---
 

@@ -1,6 +1,7 @@
 package com.cinema.hall_services.services;
 
 import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.hall_services.dto.request.HallCreateRequest;
 import com.cinema.hall_services.dto.request.HallField;
@@ -13,17 +14,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 
 public interface HallService {
-    HallResponse createHall(HallCreateRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse createHall(HallCreateRequest request, HttpServletRequest httpRequest);
 
     HallResponse getHallById(UUID id);
 
     CursorPageResponse<HallResponse> searchHalls(CursorPageRequest<HallField> request);
 
-    HallResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest);
 
-    HallResponse updateHallStatus(UUID hallId, UpdateHallStatusRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse updateHallStatus(UUID hallId, UpdateHallStatusRequest request, HttpServletRequest httpRequest);
 
-    HallResponse updateHallLayout(UUID hallId, UpdateHallLayoutRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse updateHallLayout(UUID hallId, UpdateHallLayoutRequest request, HttpServletRequest httpRequest);
 
-    void deleteHall(UUID hallId, HttpServletRequest httpRequest);
+    ActionMessageResponse deleteHall(UUID hallId, HttpServletRequest httpRequest);
 }

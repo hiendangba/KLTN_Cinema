@@ -1,5 +1,6 @@
 package com.cinema.showtime_service.services.impl;
 
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
@@ -34,21 +35,23 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
 
     @Override
     @Transactional
-    public PricingPolicyResponse createPricingPolicy(PricingPolicyCreateRequest request,
-            HttpServletRequest httpRequest) {
+    public ActionMessageResponse createPricingPolicy(PricingPolicyCreateRequest request,
+                                                     HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         validatePricingOrder(request.getStandardPrice(), request.getVipPrice(), request.getCouplePrice());
         PricingPolicy pricingPolicy = pricingPolicyMapper.toEntity(request);
         pricingPolicy.setCinemaId(cinemaId);
-        pricingPolicy = pricingPolicyRepository.save(pricingPolicy);
-        return pricingPolicyMapper.toResponse(pricingPolicy);
+        pricingPolicyRepository.save(pricingPolicy);
+        return ActionMessageResponse.builder()
+                .message("T\u1EA1o ch\u00EDnh s\u00E1ch gi\u00E1 th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
     @Transactional
-    public PricingPolicyResponse updatePricingPolicy(UUID id, PricingPolicyUpdateRequest request,
-            HttpServletRequest httpRequest) {
+    public ActionMessageResponse updatePricingPolicy(UUID id, PricingPolicyUpdateRequest request,
+                                                     HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         PricingPolicy pricingPolicy = getActivePricingPolicy(id, cinemaId);
@@ -59,19 +62,24 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         pricingPolicy.setVipPrice(request.getVipPrice());
         pricingPolicy.setCouplePrice(request.getCouplePrice());
 
-        pricingPolicy = pricingPolicyRepository.save(pricingPolicy);
-        return pricingPolicyMapper.toResponse(pricingPolicy);
+        pricingPolicyRepository.save(pricingPolicy);
+        return ActionMessageResponse.builder()
+                .message("C\u1EADp nh\u1EADt ch\u00EDnh s\u00E1ch gi\u00E1 th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
     @Transactional
-    public void deletePricingPolicy(UUID id, HttpServletRequest httpRequest) {
+    public ActionMessageResponse deletePricingPolicy(UUID id, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         PricingPolicy pricingPolicy = getActivePricingPolicy(id, cinemaId);
         validatePricingPolicyNotUsed(id);
         pricingPolicy.setIsDeleted(true);
         pricingPolicyRepository.save(pricingPolicy);
+        return ActionMessageResponse.builder()
+                .message("X\u00F3a ch\u00EDnh s\u00E1ch gi\u00E1 th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override

@@ -6,6 +6,7 @@ import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.services.FilmService;
@@ -48,25 +49,30 @@ public class FilmController extends BaseController {
     }
 
     @PostMapping
-    public ResponseEntity<APIResponse<FilmResponse>> createFilm(@Valid @RequestBody CreateFilmRequest request,
-                                                                HttpServletRequest httpRequest) {
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createFilm(
+            @Valid @RequestBody CreateFilmRequest request,
+            HttpServletRequest httpRequest) {
         log.info("Request tạo phim: {}", request.getTitle());
-        FilmResponse response = filmService.createFilm(request, httpRequest);
+        ActionMessageResponse response = filmService.createFilm(request, httpRequest);
         return created(response);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<APIResponse<FilmResponse>> updateFilm(@PathVariable UUID id,
-                                                                @Valid @RequestBody UpdateFilmRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateFilm(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateFilmRequest request,
+            HttpServletRequest httpRequest) {
         log.info("Request cập nhật phim với ID: {}", id);
-        FilmResponse response = filmService.updateFilm(id, request, httpRequest);
+        ActionMessageResponse response = filmService.updateFilm(id, request, httpRequest);
         return ok(response);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<APIResponse<Void>> deleteFilm(@PathVariable UUID id, HttpServletRequest httpRequest) {
+    public ResponseEntity<APIResponse<ActionMessageResponse>> deleteFilm(
+            @PathVariable UUID id,
+            HttpServletRequest httpRequest) {
         log.info("Request xóa phim với ID: {}", id);
-        filmService.deleteFilm(id, httpRequest);
-        return ok(null);
+        ActionMessageResponse response = filmService.deleteFilm(id, httpRequest);
+        return ok(response);
     }
 }

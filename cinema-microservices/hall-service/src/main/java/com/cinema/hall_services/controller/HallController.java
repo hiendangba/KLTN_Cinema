@@ -3,6 +3,7 @@ package com.cinema.hall_services.controller;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.hall_services.dto.request.HallCreateRequest;
 import com.cinema.hall_services.dto.request.HallField;
@@ -36,10 +37,10 @@ public class HallController extends BaseController {
     private final HallService hallService;
 
     @PostMapping
-    public ResponseEntity<APIResponse<HallResponse>> createHall(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createHall(
             @Valid @RequestBody HallCreateRequest request,
             HttpServletRequest httpRequest) {
-        HallResponse response = hallService.createHall(request, httpRequest);
+        ActionMessageResponse response = hallService.createHall(request, httpRequest);
         return created(response);
     }
 
@@ -57,35 +58,36 @@ public class HallController extends BaseController {
     }
 
     @PatchMapping("/{id}/layout")
-    public ResponseEntity<APIResponse<HallResponse>> updateHallLayout(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateHallLayout(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateHallLayoutRequest request,
             HttpServletRequest httpRequest) {
-        HallResponse response = hallService.updateHallLayout(id, request, httpRequest);
+        ActionMessageResponse response = hallService.updateHallLayout(id, request, httpRequest);
         return ok(response);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<APIResponse<HallResponse>> updateHall(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateHall(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateHallRequest request,
             HttpServletRequest httpRequest) {
-        HallResponse response = hallService.updateHall(id, request, httpRequest);
+        ActionMessageResponse response = hallService.updateHall(id, request, httpRequest);
         return ok(response);
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<APIResponse<HallResponse>> updateHallStatus(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateHallStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateHallStatusRequest request,
             HttpServletRequest httpRequest) {
-        HallResponse response = hallService.updateHallStatus(id, request, httpRequest);
+        ActionMessageResponse response = hallService.updateHallStatus(id, request, httpRequest);
         return ok(response);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<APIResponse<Void>> deleteHall(@PathVariable UUID id, HttpServletRequest httpRequest) {
-        hallService.deleteHall(id, httpRequest);
-        return ok(null);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> deleteHall(@PathVariable UUID id,
+                                                                         HttpServletRequest httpRequest) {
+        ActionMessageResponse response = hallService.deleteHall(id, httpRequest);
+        return ok(response);
     }
 }

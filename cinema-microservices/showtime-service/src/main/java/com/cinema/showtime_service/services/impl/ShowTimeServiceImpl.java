@@ -4,6 +4,7 @@ import com.cinema.Enum.ShowTimeEnum;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.dto.response.SuccessResponse;
@@ -215,7 +216,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     @Transactional
-    public ShowTimeResponse updateShowTime(
+    public ActionMessageResponse updateShowTime(
             UUID id,
             UpdateShowTimeRequest updateShowTimeRequest,
             HttpServletRequest httpRequest) {
@@ -249,14 +250,15 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         showTime.setStartDateTime(requestedStartTime);
         showTime.setEndDateTime(requestedEndTime);
         showTime.setStatus(updateShowTimeRequest.getStatus());
-        showTime = showTimeRepository.save(showTime);
-
-        return toShowTimeResponse(showTime, getPricingPolicyResponse(showTime.getPricingPolicyId()));
+        showTimeRepository.save(showTime);
+        return ActionMessageResponse.builder()
+                .message("C\u1EADp nh\u1EADt su\u1EA5t chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
     @Transactional
-    public ShowTimeResponse updateShowTimeStatus(
+    public ActionMessageResponse updateShowTimeStatus(
             UUID id,
             UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
             HttpServletRequest httpRequest) {
@@ -265,12 +267,14 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         ShowTime showTime = getEditableShowTime(id);
         showTime.setStatus(updateShowTimeStatusRequest.getStatus());
         showTimeRepository.save(showTime);
-        return toShowTimeResponse(showTime, getPricingPolicyResponse(showTime.getPricingPolicyId()));
+        return ActionMessageResponse.builder()
+                .message("C\u1EADp nh\u1EADt tr\u1EA1ng th\u00E1i su\u1EA5t chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
     @Transactional
-    public void deleteShowTime(UUID id, HttpServletRequest httpRequest) {
+    public ActionMessageResponse deleteShowTime(UUID id, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
 
         ShowTime showTime = showTimeRepository.findById(id)
@@ -286,6 +290,9 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
         showTime.setIsDeleted(true);
         showTimeRepository.save(showTime);
+        return ActionMessageResponse.builder()
+                .message("X\u00F3a su\u1EA5t chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     private ShowTimeResponse toShowTimeResponse(ShowTime showTime, PricingPolicyResponse pricingPolicy) {

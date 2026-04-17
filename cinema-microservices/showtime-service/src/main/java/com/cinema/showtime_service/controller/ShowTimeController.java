@@ -3,6 +3,7 @@ package com.cinema.showtime_service.controller;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
@@ -45,33 +46,35 @@ public class ShowTimeController extends BaseController {
     public ResponseEntity<APIResponse<ResultResponse<ShowTimeResponse>>> createShowTime(
             @Valid @RequestBody ShowTimeCreateRequest showTimeCreateRequest, HttpServletRequest httpRequest) {
         log.info("Request tao showtime cho phim: {}", showTimeCreateRequest);
-        ResultResponse<ShowTimeResponse> response = showTimeService.createShowTime(showTimeCreateRequest,
-                httpRequest);
+        ResultResponse<ShowTimeResponse> response = showTimeService.createShowTime(showTimeCreateRequest, httpRequest);
         return created(response);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<APIResponse<ShowTimeResponse>> updateShowTime(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateShowTime(
             @Valid @PathVariable UUID id,
             @Valid @RequestBody UpdateShowTimeRequest updateShowTimeRequest,
             HttpServletRequest httpRequest) {
-        ShowTimeResponse response = showTimeService.updateShowTime(id, updateShowTimeRequest, httpRequest);
+        ActionMessageResponse response = showTimeService.updateShowTime(id, updateShowTimeRequest, httpRequest);
         return ok(response);
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<APIResponse<ShowTimeResponse>> updateShowTimeStatus(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateShowTimeStatus(
             @Valid @PathVariable UUID id,
             @Valid @RequestBody UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
             HttpServletRequest httpRequest) {
-        ShowTimeResponse response = showTimeService.updateShowTimeStatus(id, updateShowTimeStatusRequest, httpRequest);
+        ActionMessageResponse response = showTimeService.updateShowTimeStatus(id, updateShowTimeStatusRequest,
+                httpRequest);
         return ok(response);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<APIResponse<Void>> deleteShowTime(@PathVariable UUID id, HttpServletRequest httpRequest) {
-        showTimeService.deleteShowTime(id, httpRequest);
-        return ok(null);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> deleteShowTime(
+            @PathVariable UUID id,
+            HttpServletRequest httpRequest) {
+        ActionMessageResponse response = showTimeService.deleteShowTime(id, httpRequest);
+        return ok(response);
     }
 
     @GetMapping("/{id}")

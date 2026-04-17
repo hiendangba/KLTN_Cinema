@@ -7,6 +7,7 @@ import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.entity.Film;
@@ -42,8 +43,8 @@ public class FilmServiceImpl implements FilmService {
     private final FilmMapper filmMapper;
 
     @Override
-    public FilmResponse createFilm(CreateFilmRequest request, HttpServletRequest httpRequest) {
-        log.info("Tạo mới phim: {}", request.getTitle());
+    public ActionMessageResponse createFilm(CreateFilmRequest request, HttpServletRequest httpRequest) {
+        log.info("Táº¡o má»›i phim: {}", request.getTitle());
         log.info("httpRequest: " + httpRequest.getHeader(HeaderNames.X_USER_ROLE));
         log.info("httpRequest: " + httpRequest.getHeaderNames());
         log.info("httpRequestName: " + HeaderNames.X_USER_ROLE);
@@ -51,54 +52,58 @@ public class FilmServiceImpl implements FilmService {
         if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        // Kiểm tra tên phim và năm phát hành đã tồn tại hay chưa
+        // Kiá»ƒm tra tÃªn phim vÃ  nÄƒm phÃ¡t hÃ nh Ä‘Ã£ tá»“n táº¡i hay chÆ°a
         if (filmRepository.findByTitleAndReleaseDate(request.getTitle(), request.getReleaseDate()).isPresent()) {
-            log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
+            log.error("Phim '{}' phÃ¡t hÃ nh nÄƒm {} Ä‘Ã£ tá»“n táº¡i", request.getTitle(), request.getReleaseDate().getYear());
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
 
         Film film = filmMapper.toEntity(request);
         Film savedFilm = filmRepository.save(film);
-        log.info("Phim được tạo thành công với ID: {}", savedFilm.getId());
-        return filmMapper.toResponse(savedFilm);
+        log.info("Phim Ä‘Æ°á»£c táº¡o thÃ nh cÃ´ng vá»›i ID: {}", savedFilm.getId());
+        return ActionMessageResponse.builder()
+                .message("T\u1EA1o phim th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
-    public FilmResponse updateFilm(UUID id, UpdateFilmRequest request, HttpServletRequest httpRequest) {
-        log.info("Cập nhật phim với ID: {}", id);
+    public ActionMessageResponse updateFilm(UUID id, UpdateFilmRequest request, HttpServletRequest httpRequest) {
+        log.info("Cáº­p nháº­t phim vá»›i ID: {}", id);
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         Film film = filmRepository.findById(id)
                 .orElseThrow(() -> {
-                    log.error("Không tìm thấy phim với ID: {}", id);
+                    log.error("KhÃ´ng tÃ¬m tháº¥y phim vá»›i ID: {}", id);
                     return new BusinessException(ErrorCode.FILM_NOT_FOUND);
                 });
 
         filmMapper.updateEntityFromRequest(film, request);
 
-        // Kiểm tra tên phim và năm phát hành đã tồn tại ở phim khác hay chưa
+        // Kiá»ƒm tra tÃªn phim vÃ  nÄƒm phÃ¡t hÃ nh Ä‘Ã£ tá»“n táº¡i á»Ÿ phim khÃ¡c hay chÆ°a
         if (filmRepository.existsByTitleAndReleaseDateAndIdNot(request.getTitle(), request.getReleaseDate(), id)) {
-            log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
+            log.error("Phim '{}' phÃ¡t hÃ nh nÄƒm {} Ä‘Ã£ tá»“n táº¡i", request.getTitle(), request.getReleaseDate().getYear());
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
 
-        Film updatedFilm = filmRepository.save(film);
+        filmRepository.save(film);
 
-        log.info("Phim được cập nhật thành công: {}", id);
-        return filmMapper.toResponse(updatedFilm);
+        log.info("Phim Ä‘Æ°á»£c cáº­p nháº­t thÃ nh cÃ´ng: {}", id);
+        return ActionMessageResponse.builder()
+                .message("C\u1EADp nh\u1EADt phim th\u00E0nh c\u00F4ng")
+                .build();
     }
 
     @Override
     @Transactional(readOnly = true)
     @Cacheable(value = "films", key = "#id")
     public FilmResponse getFilmById(UUID id) {
-        log.info("Lấy thông tin phim với ID: {}", id);
+        log.info("Láº¥y thÃ´ng tin phim vá»›i ID: {}", id);
 
         Film film = filmRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.error("Không tìm thấy phim với ID: {}", id);
+                    log.error("KhÃ´ng tÃ¬m tháº¥y phim vá»›i ID: {}", id);
                     return new BusinessException(ErrorCode.FILM_NOT_FOUND);
                 });
 
@@ -108,7 +113,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     @Transactional(readOnly = true)
     public BatchFilmResponse getFilmsInBatch(BatchFilmRequest request) {
-        log.info("Lấy danh sách phim theo batch: {} ids", request.getIds().size());
+        log.info("Láº¥y danh sÃ¡ch phim theo batch: {} ids", request.getIds().size());
         List<Film> films = filmRepository.findAllById(request.getIds());
         List<FilmResponse> filmResponses = films.stream()
                 .filter(film -> !film.getIsDeleted())
@@ -120,7 +125,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     public CursorPageResponse<FilmResponse> searchFilms(
             CursorPageRequest<FilmField> request) {
-        log.info("Lấy danh sách phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
+        log.info("Láº¥y danh sÃ¡ch phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
                 request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
                 request.getFilterBy());
 
@@ -128,10 +133,10 @@ public class FilmServiceImpl implements FilmService {
         String keyword = request.getNormalizedKeyword();
         int size = request.getSizeOrDefault();
 
-        // Truyền thẳng các DTO filter/sort vào repository
+        // Truyá»n tháº³ng cÃ¡c DTO filter/sort vÃ o repository
         List<SortField<FilmField>> sortFields = request.getSortBy();
         sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        // Luôn thêm ID làm sort cuối để đảm bảo thứ tự ổn định
+        // LuÃ´n thÃªm ID lÃ m sort cuá»‘i Ä‘á»ƒ Ä‘áº£m báº£o thá»© tá»± á»•n Ä‘á»‹nh
         sortFields.add(new SortField<>(FilmField.ID, "ASC"));
         List<FilterField<FilmField>> filterFields = request.getFilterBy();
         List<Film> films = filmRepositoryImpl.searchWithCursorAndSortAndFilter(
@@ -169,20 +174,23 @@ public class FilmServiceImpl implements FilmService {
     }
 
     @Override
-    public void deleteFilm(UUID id, HttpServletRequest httpRequest) {
-        log.info("Xóa phim với ID: {}", id);
+    public ActionMessageResponse deleteFilm(UUID id, HttpServletRequest httpRequest) {
+        log.info("Deleting film with ID: {}", id);
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         Film film = filmRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.error("Không tìm thấy phim với ID: {}", id);
+                    log.error("Film not found with ID: {}", id);
                     return new BusinessException(ErrorCode.FILM_NOT_FOUND);
                 });
 
         film.setIsDeleted(true);
         filmRepository.save(film);
-        log.info("Phim được xóa thành công: {}", id);
+        log.info("Xóa phim thành công: {}", id);
+        return ActionMessageResponse.builder()
+                .message("X\u00F3a phim th\u00E0nh c\u00F4ng")
+                .build();
     }
 }
