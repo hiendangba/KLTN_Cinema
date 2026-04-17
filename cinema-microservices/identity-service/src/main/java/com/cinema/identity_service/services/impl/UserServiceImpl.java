@@ -76,7 +76,8 @@ public class UserServiceImpl implements UserService {
     static int MAX_VERIFY_ATTEMPTS = 3;
     static int MAX_SEND_COUNT = 4;
 
-    // Register customer account: create OTP payload, cache verification state, and queue OTP email.
+    // Register customer account: create OTP payload, cache verification state, and
+    // queue OTP email.
     @Override
     public ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
             HttpServletResponse response) {
@@ -132,7 +133,8 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    // Create manager account in identity-service, then provision manager profile in user-service.
+    // Create manager account in identity-service, then provision manager profile in
+    // user-service.
     @Override
     public ActionMessageResponse createManager(RegisterManagerRequest registerManagerRequest,
             HttpServletRequest request) {
@@ -193,7 +195,8 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    // Create staff account in identity-service, then provision staff profile in user-service.
+    // Create staff account in identity-service, then provision staff profile in
+    // user-service.
     @Override
     public ActionMessageResponse createStaff(RegisterStaffRequest registerStaffRequest,
             HttpServletRequest request) {
@@ -260,7 +263,8 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    // Resend OTP with anti-abuse checks (token ownership, expiry window, and resend limit).
+    // Resend OTP with anti-abuse checks (token ownership, expiry window, and resend
+    // limit).
     @Override
     public ActionMessageResponse resendOTP(HttpServletRequest request) {
         String cookieVerifyToken = null;
@@ -330,7 +334,8 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    // Start forgot-password flow by issuing OTP and storing request context in Redis.
+    // Start forgot-password flow by issuing OTP and storing request context in
+    // Redis.
     @Override
     public ActionMessageResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest,
             HttpServletResponse response) {
@@ -377,7 +382,8 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    // Change password for authenticated user after validating old/new password constraints.
+    // Change password for authenticated user after validating old/new password
+    // constraints.
     @Override
     public ActionMessageResponse changePassword(ChangePasswordRequest changePasswordRequest,
             HttpServletRequest request) {
@@ -547,7 +553,8 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    // Authenticate user, issue access/refresh tokens, and persist token state in Redis.
+    // Authenticate user, issue access/refresh tokens, and persist token state in
+    // Redis.
     @Override
     public LoginResponse login(LoginRequest loginRequest, HttpServletResponse response) {
         User user = userRepository.findByEmail(loginRequest.getEmail())
@@ -621,7 +628,8 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    // Rotate refresh token and issue a new access token while preserving refresh TTL.
+    // Rotate refresh token and issue a new access token while preserving refresh
+    // TTL.
     @Override
     public LoginResponse refreshToken(HttpServletRequest request, HttpServletResponse response) {
         String cookieRefreshToken = null;
