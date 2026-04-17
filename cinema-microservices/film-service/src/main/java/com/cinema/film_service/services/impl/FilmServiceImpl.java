@@ -44,7 +44,7 @@ public class FilmServiceImpl implements FilmService {
 
     @Override
     public ActionMessageResponse createFilm(CreateFilmRequest request, HttpServletRequest httpRequest) {
-        log.info("Táº¡o má»›i phim: {}", request.getTitle());
+        log.info("Tạo mới phim: {}", request.getTitle());
         log.info("httpRequest: " + httpRequest.getHeader(HeaderNames.X_USER_ROLE));
         log.info("httpRequest: " + httpRequest.getHeaderNames());
         log.info("httpRequestName: " + HeaderNames.X_USER_ROLE);
@@ -52,46 +52,46 @@ public class FilmServiceImpl implements FilmService {
         if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        // Kiá»ƒm tra tÃªn phim vÃ  nÄƒm phÃ¡t hÃ nh Ä‘Ã£ tá»“n táº¡i hay chÆ°a
+        // Kiểm tra tên phim và năm phát hành đã tồn tại hay chưa
         if (filmRepository.findByTitleAndReleaseDate(request.getTitle(), request.getReleaseDate()).isPresent()) {
-            log.error("Phim '{}' phÃ¡t hÃ nh nÄƒm {} Ä‘Ã£ tá»“n táº¡i", request.getTitle(), request.getReleaseDate().getYear());
+            log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
 
         Film film = filmMapper.toEntity(request);
         Film savedFilm = filmRepository.save(film);
-        log.info("Phim Ä‘Æ°á»£c táº¡o thÃ nh cÃ´ng vá»›i ID: {}", savedFilm.getId());
+        log.info("Phim được tạo thành công với ID: {}", savedFilm.getId());
         return ActionMessageResponse.builder()
-                .message("T\u1EA1o phim th\u00E0nh c\u00F4ng")
+                .message("Tạo phim thành công")
                 .build();
     }
 
     @Override
     public ActionMessageResponse updateFilm(UUID id, UpdateFilmRequest request, HttpServletRequest httpRequest) {
-        log.info("Cáº­p nháº­t phim vá»›i ID: {}", id);
+        log.info("Cập nhật phim với ID: {}", id);
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         Film film = filmRepository.findById(id)
                 .orElseThrow(() -> {
-                    log.error("KhÃ´ng tÃ¬m tháº¥y phim vá»›i ID: {}", id);
+                    log.error("Không tìm thấy phim với ID: {}", id);
                     return new BusinessException(ErrorCode.FILM_NOT_FOUND);
                 });
 
         filmMapper.updateEntityFromRequest(film, request);
 
-        // Kiá»ƒm tra tÃªn phim vÃ  nÄƒm phÃ¡t hÃ nh Ä‘Ã£ tá»“n táº¡i á»Ÿ phim khÃ¡c hay chÆ°a
+        // Kiểm tra tên phim và năm phát hành đã tồn tại ở phim khác hay chưa
         if (filmRepository.existsByTitleAndReleaseDateAndIdNot(request.getTitle(), request.getReleaseDate(), id)) {
-            log.error("Phim '{}' phÃ¡t hÃ nh nÄƒm {} Ä‘Ã£ tá»“n táº¡i", request.getTitle(), request.getReleaseDate().getYear());
+            log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
 
         filmRepository.save(film);
 
-        log.info("Phim Ä‘Æ°á»£c cáº­p nháº­t thÃ nh cÃ´ng: {}", id);
+        log.info("Phim được cập nhật thành công: {}", id);
         return ActionMessageResponse.builder()
-                .message("C\u1EADp nh\u1EADt phim th\u00E0nh c\u00F4ng")
+                .message("Cập nhật phim thành công")
                 .build();
     }
 
@@ -99,11 +99,11 @@ public class FilmServiceImpl implements FilmService {
     @Transactional(readOnly = true)
     @Cacheable(value = "films", key = "#id")
     public FilmResponse getFilmById(UUID id) {
-        log.info("Láº¥y thÃ´ng tin phim vá»›i ID: {}", id);
+        log.info("Lấy thông tin phim với ID: {}", id);
 
         Film film = filmRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.error("KhÃ´ng tÃ¬m tháº¥y phim vá»›i ID: {}", id);
+                    log.error("Không tìm thấy phim với ID: {}", id);
                     return new BusinessException(ErrorCode.FILM_NOT_FOUND);
                 });
 
@@ -113,7 +113,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     @Transactional(readOnly = true)
     public BatchFilmResponse getFilmsInBatch(BatchFilmRequest request) {
-        log.info("Láº¥y danh sÃ¡ch phim theo batch: {} ids", request.getIds().size());
+        log.info("Lấy danh sách phim theo batch: {} ids", request.getIds().size());
         List<Film> films = filmRepository.findAllById(request.getIds());
         List<FilmResponse> filmResponses = films.stream()
                 .filter(film -> !film.getIsDeleted())
@@ -125,7 +125,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     public CursorPageResponse<FilmResponse> searchFilms(
             CursorPageRequest<FilmField> request) {
-        log.info("Láº¥y danh sÃ¡ch phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
+        log.info("Lấy danh sách phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
                 request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
                 request.getFilterBy());
 
@@ -133,10 +133,10 @@ public class FilmServiceImpl implements FilmService {
         String keyword = request.getNormalizedKeyword();
         int size = request.getSizeOrDefault();
 
-        // Truyá»n tháº³ng cÃ¡c DTO filter/sort vÃ o repository
+        // Truyền thẳng các DTO filter/sort vào repository
         List<SortField<FilmField>> sortFields = request.getSortBy();
         sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        // LuÃ´n thÃªm ID lÃ m sort cuá»‘i Ä‘á»ƒ Ä‘áº£m báº£o thá»© tá»± á»•n Ä‘á»‹nh
+        // Luôn thêm ID làm sort cuối để đảm bảo thứ tự ổn định
         sortFields.add(new SortField<>(FilmField.ID, "ASC"));
         List<FilterField<FilmField>> filterFields = request.getFilterBy();
         List<Film> films = filmRepositoryImpl.searchWithCursorAndSortAndFilter(
@@ -190,7 +190,7 @@ public class FilmServiceImpl implements FilmService {
         filmRepository.save(film);
         log.info("Xóa phim thành công: {}", id);
         return ActionMessageResponse.builder()
-                .message("X\u00F3a phim th\u00E0nh c\u00F4ng")
+                .message("Xóa phim thành công")
                 .build();
     }
 }

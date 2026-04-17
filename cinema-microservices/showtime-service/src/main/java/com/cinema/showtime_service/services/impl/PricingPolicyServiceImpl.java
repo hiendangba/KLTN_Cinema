@@ -44,7 +44,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         pricingPolicy.setCinemaId(cinemaId);
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("T\u1EA1o ch\u00EDnh s\u00E1ch gi\u00E1 th\u00E0nh c\u00F4ng")
+                .message("Tạo chính sách giá thành công")
                 .build();
     }
 
@@ -64,7 +64,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
 
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("C\u1EADp nh\u1EADt ch\u00EDnh s\u00E1ch gi\u00E1 th\u00E0nh c\u00F4ng")
+                .message("Cập nhật chính sách giá thành công")
                 .build();
     }
 
@@ -78,7 +78,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         pricingPolicy.setIsDeleted(true);
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("X\u00F3a ch\u00EDnh s\u00E1ch gi\u00E1 th\u00E0nh c\u00F4ng")
+                .message("Xóa chính sách giá thành công")
                 .build();
     }
 

@@ -4,10 +4,10 @@ import com.cinema.Enum.UserEnum;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.http.HeaderNames;
 import com.cinema.user_service.dto.request.*;
-import com.cinema.user_service.dto.response.RegisterCustomerResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.entity.User;
@@ -35,7 +35,7 @@ public class UserServiceImpl implements UserService {
     UserMapper userMapper;
 
     @Override
-    public RegisterCustomerResponse createCustomerProfile(RegisterCustomerRequest request) {
+    public ActionMessageResponse createCustomerProfile(RegisterCustomerRequest request) {
         if (userRepository.existsById(request.getId())) {
             throw new BusinessException(ErrorCode.ID_EXISTED);
         }
@@ -46,13 +46,13 @@ public class UserServiceImpl implements UserService {
 
         User user = userMapper.toUser(request);
         userRepository.save(user);
-        return RegisterCustomerResponse.builder()
+        return ActionMessageResponse.builder()
                 .message("Tạo profile cho Customer thành công")
                 .build();
     }
 
     @Override
-    public RegisterCustomerResponse createManagerProfile(RegisterManagerRequest request) {
+    public ActionMessageResponse createManagerProfile(RegisterManagerRequest request) {
         if (userRepository.existsById(request.getId())) {
             throw new BusinessException(ErrorCode.ID_EXISTED);
         }
@@ -64,13 +64,13 @@ public class UserServiceImpl implements UserService {
         User manager = userMapper.toUserManager(request);
         userRepository.save(manager);
         log.info("Manager profile created: managerId={}, email={}", request.getId(), request.getEmail());
-        return RegisterCustomerResponse.builder()
+        return ActionMessageResponse.builder()
                 .message("Tạo profile cho Manager thành công")
                 .build();
     }
 
     @Override
-    public RegisterCustomerResponse createStaffProfile(RegisterStaffRequest request) {
+    public ActionMessageResponse createStaffProfile(RegisterStaffRequest request) {
         if (userRepository.existsById(request.getId())) {
             throw new BusinessException(ErrorCode.ID_EXISTED);
         }
@@ -82,13 +82,13 @@ public class UserServiceImpl implements UserService {
         User staff = userMapper.toUserStaff(request);
         userRepository.save(staff);
         log.info("Staff profile created: staffId={}, email={}", request.getId(), request.getEmail());
-        return RegisterCustomerResponse.builder()
+        return ActionMessageResponse.builder()
                 .message("Tạo profile cho Staff thành công")
                 .build();
     }
 
     @Override
-    public RegisterCustomerResponse updateCustomerProfile(UpdateCustomerRequest request,
+    public ActionMessageResponse updateCustomerProfile(UpdateCustomerRequest request,
             HttpServletRequest httpRequest) {
         String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
 
@@ -121,13 +121,13 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
 
         log.info("Customer profile updated: customerId={}, email={}", userId, request.getEmail());
-        return RegisterCustomerResponse.builder()
+        return ActionMessageResponse.builder()
                 .message("Cập nhật profile cho Customer thành công")
                 .build();
     }
 
     @Override
-    public RegisterCustomerResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest) {
         String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
         if (userId == null || userId.isBlank()) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
@@ -151,13 +151,13 @@ public class UserServiceImpl implements UserService {
         userMapper.updateUserManager(manager, request);
         userRepository.save(manager);
         log.info("Manager profile updated: managerId={}, email={}", userId, request.getEmail());
-        return RegisterCustomerResponse.builder()
+        return ActionMessageResponse.builder()
                 .message("Cập nhật profile cho Manager thành công")
                 .build();
     }
 
     @Override
-    public RegisterCustomerResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest) {
         String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
         if (userId == null || userId.isBlank()) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
@@ -186,7 +186,7 @@ public class UserServiceImpl implements UserService {
         userMapper.updateUserStaff(staff, request);
         userRepository.save(staff);
         log.info("Staff profile updated: staffId={}, email={}", userId, request.getEmail());
-        return RegisterCustomerResponse.builder()
+        return ActionMessageResponse.builder()
                 .message("Cập nhật profile cho Staff thành công")
                 .build();
     }

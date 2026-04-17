@@ -10,11 +10,7 @@ import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
 import com.cinema.identity_service.dto.request.RegisterStaffRequest;
 import com.cinema.identity_service.dto.request.VerifyRequest;
-import com.cinema.identity_service.dto.response.ChangePasswordResponse;
-import com.cinema.identity_service.dto.response.ForgotPasswordResponse;
 import com.cinema.identity_service.dto.response.LoginResponse;
-import com.cinema.identity_service.dto.response.RegisterCustomerResponse;
-import com.cinema.identity_service.dto.response.VerifyResponse;
 import com.cinema.identity_service.services.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -30,31 +26,31 @@ public class UserController extends BaseController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> register(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> register(
             @Valid @RequestBody RegisterCustomerRequest registerCustomerRequest, HttpServletResponse response) {
-        RegisterCustomerResponse registerCustomerResponse = userService.registerCustomer(registerCustomerRequest,
+        ActionMessageResponse registerCustomerResponse = userService.registerCustomer(registerCustomerRequest,
                 response);
         return created(registerCustomerResponse);
     }
 
     @PostMapping("/verify-otp")
-    public ResponseEntity<APIResponse<VerifyResponse>> verifyOTP(@Valid @RequestBody VerifyRequest verifyRequest,
+    public ResponseEntity<APIResponse<ActionMessageResponse>> verifyOTP(@Valid @RequestBody VerifyRequest verifyRequest,
             HttpServletRequest request) {
-        VerifyResponse verifyResponse = userService.verifyOTP(verifyRequest, request);
+        ActionMessageResponse verifyResponse = userService.verifyOTP(verifyRequest, request);
         return ok(verifyResponse);
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<APIResponse<ForgotPasswordResponse>> forgotPassword(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest, HttpServletResponse response) {
-        ForgotPasswordResponse forgotPasswordResponse = userService.forgotPassword(forgotPasswordRequest, response);
+        ActionMessageResponse forgotPasswordResponse = userService.forgotPassword(forgotPasswordRequest, response);
         return ok(forgotPasswordResponse);
     }
 
     @PostMapping("/change-password")
-    public ResponseEntity<APIResponse<ChangePasswordResponse>> changePassword(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> changePassword(
             @Valid @RequestBody ChangePasswordRequest changePasswordRequest, HttpServletRequest request) {
-        ChangePasswordResponse changePasswordResponse = userService.changePassword(changePasswordRequest, request);
+        ActionMessageResponse changePasswordResponse = userService.changePassword(changePasswordRequest, request);
         return ok(changePasswordResponse);
     }
 
@@ -85,16 +81,16 @@ public class UserController extends BaseController {
     }
 
     @PostMapping("/manager")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> createManager(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createManager(
             @Valid @RequestBody RegisterManagerRequest registerManagerRequest, HttpServletRequest request) {
-        RegisterCustomerResponse registerCustomerResponse = userService.createManager(registerManagerRequest, request);
+        ActionMessageResponse registerCustomerResponse = userService.createManager(registerManagerRequest, request);
         return created(registerCustomerResponse);
     }
 
     @PostMapping("/staff")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> createStaff(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createStaff(
             @Valid @RequestBody RegisterStaffRequest registerStaffRequest, HttpServletRequest request) {
-        RegisterCustomerResponse registerCustomerResponse = userService.createStaff(registerStaffRequest, request);
+        ActionMessageResponse registerCustomerResponse = userService.createStaff(registerStaffRequest, request);
         return created(registerCustomerResponse);
     }
 

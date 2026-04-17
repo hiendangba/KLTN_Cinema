@@ -75,7 +75,7 @@ public class HallServiceImpl implements HallService {
         hall.setLayoutJson(toJsonString(request.getLayoutJson()));
         hallRepository.save(hall);
         return ActionMessageResponse.builder()
-                .message("T\u1EA1o ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .message("Tạo phòng chiếu thành công")
                 .build();
     }
 
@@ -147,7 +147,7 @@ public class HallServiceImpl implements HallService {
         hallMapper.updateEntityFromRequest(hall, request);
         hallRepository.save(hall);
         return ActionMessageResponse.builder()
-                .message("C\u1EADp nh\u1EADt ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .message("Cập nhật phòng chiếu thành công")
                 .build();
     }
 
@@ -161,7 +161,7 @@ public class HallServiceImpl implements HallService {
         hall.setStatus(request.getStatus());
         hallRepository.save(hall);
         return ActionMessageResponse.builder()
-                .message("C\u1EADp nh\u1EADt tr\u1EA1ng th\u00E1i ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .message("Cập nhật trạng thái phòng chiếu thành công")
                 .build();
     }
 
@@ -180,7 +180,7 @@ public class HallServiceImpl implements HallService {
         hall.setLayoutJson(toJsonString(request.getLayoutJson()));
         hallRepository.save(hall);
         return ActionMessageResponse.builder()
-                .message("C\u1EADp nh\u1EADt s\u01A1 \u0111\u1ED3 ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .message("Cập nhật sơ đồ phòng chiếu thành công")
                 .build();
     }
 
@@ -193,7 +193,7 @@ public class HallServiceImpl implements HallService {
         hall.setIsDeleted(true);
         hallRepository.save(hall);
         return ActionMessageResponse.builder()
-                .message("X\u00F3a ph\u00F2ng chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .message("Xóa phòng chiếu thành công")
                 .build();
     }
 

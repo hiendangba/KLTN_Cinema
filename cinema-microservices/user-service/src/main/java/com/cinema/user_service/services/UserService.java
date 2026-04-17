@@ -1,9 +1,9 @@
 package com.cinema.user_service.services;
 
 import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.user_service.dto.request.*;
-import com.cinema.user_service.dto.response.RegisterCustomerResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,17 +11,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 
 public interface UserService {
-    RegisterCustomerResponse createCustomerProfile(RegisterCustomerRequest request);
+    ActionMessageResponse createCustomerProfile(RegisterCustomerRequest request);
 
-    RegisterCustomerResponse createManagerProfile(RegisterManagerRequest request);
+    ActionMessageResponse createManagerProfile(RegisterManagerRequest request);
 
-    RegisterCustomerResponse createStaffProfile(RegisterStaffRequest request);
+    ActionMessageResponse createStaffProfile(RegisterStaffRequest request);
 
-    RegisterCustomerResponse updateCustomerProfile(UpdateCustomerRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse updateCustomerProfile(UpdateCustomerRequest request, HttpServletRequest httpRequest);
 
-    RegisterCustomerResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest);
 
-    RegisterCustomerResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest);
 
     UserExistenceResponse checkUserExists(UUID userId);
 
