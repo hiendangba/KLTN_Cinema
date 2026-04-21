@@ -23,6 +23,8 @@ public interface UserService {
 
     ActionMessageResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest);
 
+    UserResponse getMyProfile(HttpServletRequest request);
+
     UserExistenceResponse checkUserExists(UUID userId);
 
     PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request);

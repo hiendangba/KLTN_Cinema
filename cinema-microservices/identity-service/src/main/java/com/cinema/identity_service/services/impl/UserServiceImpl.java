@@ -483,8 +483,6 @@ public class UserServiceImpl implements UserService {
         switch (otpData.getPurpose()) {
             case REGISTER:
                 RegisterCustomerRequest registerCustomerRequest = otpData.getRegisterCustomerRequest();
-                System.out.println("Role of request: " + registerCustomerRequest.getRole());
-
                 // Save user to identity-service database
                 User user_register = userMapper.toUser(registerCustomerRequest);
                 User user = userRepository.save(user_register);

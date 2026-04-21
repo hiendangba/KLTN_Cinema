@@ -88,20 +88,20 @@ CinemaStar tập trung giải quyết các điểm này bằng một nền tản
 - Đây là backend microservices cho hệ thống CinemaStar.
 - Frontend không nằm trong repository này.
 - Trạng thái hiện tại: phù hợp cho môi trường dev/test/UAT.
-- Thời điểm cập nhật README: 10/04/2026.
+- Thời điểm cập nhật README: 21/04/2026.
 
 ## Dùng Thử Nhanh (QA/Tester)
 
 ### Cách 1: Chạy toàn bộ bằng Docker
 
 ```bash
-docker compose up -d
+docker compose -f compose.prod.yaml up -d
 ```
 
 ### Cách 2: Chế độ dev (service chạy local, gateway chạy Docker)
 
 ```bash
-docker compose -f compose.yaml -f compose.dev.yaml up -d
+docker compose -f compose.prod.yaml -f compose.local.yaml up -d
 ```
 
 Sau khi hệ thống chạy, API Gateway mặc định qua cổng `80`.
@@ -109,15 +109,15 @@ Sau khi hệ thống chạy, API Gateway mặc định qua cổng `80`.
 ### Lệnh thường dùng khi test
 
 ```bash
-docker compose ps
+docker compose -f compose.prod.yaml ps
 ```
 
 ```bash
-docker compose logs -f showtime-service
+docker compose -f compose.prod.yaml logs -f showtime-service
 ```
 
 ```bash
-docker compose down -v
+docker compose -f compose.prod.yaml down -v
 ```
 
 ## Các Nhóm API Chính
@@ -181,7 +181,7 @@ Có. Backend cung cấp API theo domain và có thể dùng cho web/mobile tùy 
 - Sau khi sửa, luôn chạy compile để xác nhận:
 
 ```bash
-./mvnw -pl identity-service -am -DskipTests test-compile
+mvn -pl identity-service -am -DskipTests test-compile
 ```
 
 ## Hỗ Trợ
@@ -216,6 +216,11 @@ Nếu bạn là developer hoặc AI agent cần tài liệu kỹ thuật chi ti�
 - 17/04/2026:
   - Skills: `backend-dev-guidelines`
   - Phạm vi áp dụng: sửa lỗi UTF-8/mojibake và chuẩn hóa comment theo từng khối xử lý tại `identity-service/services/impl/UserServiceImpl.java`, bổ sung hướng dẫn xử lý encoding trong `README.md`
+- 21/04/2026:
+  - Skills: `architect-review`, `backend-dev-guidelines`, `api-documentation`
+  - Phạm vi áp dụng: rà soát toàn bộ repo, đồng bộ lại lệnh chạy/build trong `README.md` và `TECHNICAL_AGENT_GUIDE.md` theo `compose.prod.yaml`/`compose.local.yaml`, cập nhật mapping cấu trúc Envoy/Compose/DB, dọn log debug `System.out.println` trong `identity-service/services/impl/UserServiceImpl.java`
+  - Skills: `backend-dev-guidelines`, `api-documentation`, `architect-review`
+  - Phạm vi áp dụng: bổ sung API `GET /api/users/me` tại `user-service` theo đúng cấu trúc `controller -> service -> repository`, cập nhật docs endpoint trong `TECHNICAL_AGENT_GUIDE.md`
 
 ---
 

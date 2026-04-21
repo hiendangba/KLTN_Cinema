@@ -192,6 +192,27 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserResponse getMyProfile(HttpServletRequest request) {
+        String userId = request.getHeader(HeaderNames.X_USER_ID);
+        if (userId == null || userId.isBlank()) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        UUID userUUID;
+        try {
+            userUUID = UUID.fromString(userId);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        User user = userRepository.findById(userUUID)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        log.info("User profile loaded: userId={}", userUUID);
+        return userMapper.toUserResponse(user);
+    }
+
+    @Override
     public UserExistenceResponse checkUserExists(UUID userId) {
         boolean exists = userRepository.existsById(userId);
         return UserExistenceResponse.builder()

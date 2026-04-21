@@ -70,6 +70,12 @@ public class UserController extends BaseController {
         return ok(updateStaffResponse);
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<APIResponse<UserResponse>> getMyProfile(HttpServletRequest request) {
+        UserResponse userResponse = userService.getMyProfile(request);
+        return ok(userResponse);
+    }
+
     @PostMapping("/staffs/search")
     public ResponseEntity<APIResponse<PageResponse<UserResponse>>> getAllStaff(
             @Valid @RequestBody PageRequest<?> pageRequest,
