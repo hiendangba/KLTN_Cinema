@@ -252,7 +252,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         showTime.setStatus(updateShowTimeRequest.getStatus());
         showTimeRepository.save(showTime);
         return ActionMessageResponse.builder()
-                .message("C\u1EADp nh\u1EADt su\u1EA5t chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .message("Cập nhật suất chiếu thành công")
                 .build();
     }
 
@@ -268,7 +268,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         showTime.setStatus(updateShowTimeStatusRequest.getStatus());
         showTimeRepository.save(showTime);
         return ActionMessageResponse.builder()
-                .message("C\u1EADp nh\u1EADt tr\u1EA1ng th\u00E1i su\u1EA5t chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .message("Cập nhật trạng thái suất chiếu thành công")
                 .build();
     }
 
@@ -291,7 +291,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         showTime.setIsDeleted(true);
         showTimeRepository.save(showTime);
         return ActionMessageResponse.builder()
-                .message("X\u00F3a su\u1EA5t chi\u1EBFu th\u00E0nh c\u00F4ng")
+                .message("Xóa suất chiếu thành công")
                 .build();
     }
 

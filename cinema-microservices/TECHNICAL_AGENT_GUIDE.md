@@ -18,7 +18,8 @@
 
 ## Legacy Technical Baseline (chi tiết 500+ dòng)
 
-Phần bên dưới là bản kỹ thuật chi tiết đã được dùng trong dự án trước đó, giữ lại để tham chiếu đầy đủ:
+Phần bên dưới là bản kỹ thuật chi tiết đã được dùng trong dự án trước đó, giữ lại để tham chiếu đầy đủ.
+Lưu ý: một số tên file compose/envoy trong phần lịch sử có thể khác với cấu trúc hiện tại, hãy ưu tiên các phần "Chạy nhanh", "Cấu trúc dự án" và "Hướng dẫn chạy" bên dưới.
 # 🎬 CinemaStar — Hệ Thống Đặt Vé Rạp Phim (Microservices)
 
 > **Khóa luận tốt nghiệp** — Hệ thống đặt vé xem phim trực tuyến hiện đại, xây dựng trên kiến trúc Microservices tinh gọn, bảo mật và hiệu suất cao.
@@ -29,11 +30,11 @@ Phần bên dưới là bản kỹ thuật chi tiết đã được dùng trong 
 
 - **Dev (service chạy local VS Code, Envoy chạy Docker):**
 ```bash
-docker compose -f compose.yaml -f compose.dev.yaml up -d
+docker compose -f compose.prod.yaml -f compose.local.yaml up -d
 ```
 - **Prod (tất cả chạy trong Docker):**
 ```bash
-docker compose up -d
+docker compose -f compose.prod.yaml up -d
 ```
 
 ## 📋 Mục Lục
@@ -87,7 +88,7 @@ graph TD
     end
 
     subgraph "Data & Messaging Layer"
-        PG[(PostgreSQL :5433\n4 Databases)]
+        PG[(PostgreSQL :5433\n5 Databases)]
         Redis[(Redis :6379\nToken/OTP/Cache)]
         Rabbit[RabbitMQ :5672\nMessage Broker]
     end
@@ -142,7 +143,7 @@ Contract gRPC được đặt tập trung trong `common-lib/src/main/proto` đ�
 | Công nghệ | Version | Vai trò / Lý do lựa chọn |
 |---|---|---|
 | **Java** | 17 | Ngôn ngữ lập trình chính, ổn định, mạnh mẽ. |
-| **Spring Boot** | 4.0.1 | Framework chính tạo Microservices nhanh chóng. |
+| **Spring Boot** | 4.0.1 (core modules) | Framework chính tạo Microservices nhanh chóng. |
 | **Spring Security** | Tích hợp | Xử lý JWT Authentication + Authorization. |
 | **Spring Data JPA** | Tích hợp | ORM (Hibernate) truy vấn cơ sở dữ liệu chuyên sâu. |
 | **Spring Data Redis** | Tích hợp | Giao tiếp với Redis qua Lettuce client. |
@@ -213,15 +214,18 @@ cinema-microservices/
 │   └── src/main/java/.../
 │       └── services/              # Xử lý gửi email bất đồng bộ qua Gmail SMTP (@EnableAsync)
 │
+├── booking-service/               # 🧪 Skeleton service (chưa nối parent multi-module)
+├── payment-service/               # 🧪 Skeleton service (chưa nối parent multi-module)
+│
 ├── envoy/
-│   ├── envoy.dev.yaml             # 🔀 Envoy dev (route tới host.docker.internal)
-│   ├── envoy.prod.yaml            # 🔀 Envoy prod (route tới service trong Docker)
-│   └── envoy.yaml                 # 🔀 Envoy mặc định (prod)
+│   ├── envoy.local.yaml           # 🔀 Envoy local (route tới host.docker.internal)
+│   └── envoy.prod.yaml            # 🔀 Envoy prod (route tới service trong Docker)
 │
 ├── postgres-init/
-│   └── create-databases.sql       # 🐘 Script tự khởi động 4 DB độc lập cho microservices
+│   └── create-databases.sql       # 🐘 Script tự khởi động 5 DB độc lập cho microservices
 │
-├── compose.yaml                   # 🐳 Toàn bộ kiến trúc Docker
+├── compose.prod.yaml              # 🐳 Compose production/default (all services in Docker)
+├── compose.local.yaml             # 🐳 Override local (Envoy route to local services)
 └── pom.xml                        # 📦 Parent POM quản lý versions tập trung
 ```
 
@@ -291,6 +295,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
 | `POST` | `/api/users/customers` | Internal | Khởi tạo Profile KH sau khi Verify Identity. |
+| `GET` | `/api/users/me` | ✅ Authenticated | Lấy thông tin profile của user hiện tại theo `X-User-ID`. |
 | `PUT` | `/api/users/customers` | ✅ CUST | Cập nhật hồ sơ cá nhân. |
 | `GET` | `/api/users/exists/{userId}` | Internal | Kiểm tra nhanh chéo Service xem User tồn tại không. |
 | `GET/PUT/POST` | `/api/users/staffs|managers`| ✅ ADMIN | Các nghiệp vụ CRUD quản lý nhân sự chuyên quản. |
@@ -398,23 +403,23 @@ mvn clean install -DskipTests
 
 Dựng toàn bộ kiến trúc chỉ trong một dòng lệnh Terminal, tất cả hạ tầng (DB, Message Queue) và API Service đều đồng khởi chạy và tạo mạng nội bộ với nhau.
 ```bash
-docker compose up -d
+docker compose -f compose.prod.yaml up -d
 
 # Check tình trạng cỗ máy
-docker compose ps
+docker compose -f compose.prod.yaml ps
 # Quản lý xem log ngẫu nhiên một Service
-docker compose logs -f identity-service
+docker compose -f compose.prod.yaml logs -f identity-service
 ```
 
 ### Chạy Gateway Envoy theo chế độ Dev/Prod
 
 - **Prod (default):** Envoy route tới service trong Docker network.
 ```bash
-docker compose up -d
+docker compose -f compose.prod.yaml up -d
 ```
 - **Dev (service chạy local VS Code):** Envoy route về `host.docker.internal`.
 ```bash
-docker compose -f compose.yaml -f compose.dev.yaml up -d
+docker compose -f compose.prod.yaml -f compose.local.yaml up -d
 ```
 
 ### Tương quan Port Mạng Trở Về:
@@ -422,15 +427,15 @@ docker compose -f compose.yaml -f compose.dev.yaml up -d
 | Dịch vụ / Hệ Tầng | Liên kết thực thi trên máy cá nhân |
 |---|---|
 | Envoy (Trung Tâm Gateway) | http://localhost:80 |
-| Identity Service Web API | http://localhost:9000 (dev) |
-| User Profile Web API | http://localhost:9001 (dev) |
+| Identity Service Web API | http://localhost:8090 (service local default) |
+| User Profile Web API | http://localhost:8091 (service local default) |
 | PostgreSQL Relational | `localhost:5433` (User: postgres / 123456) |
 | Redis In-Memory KV | `localhost:6379` |
 | RabbitMQ Management UI | http://localhost:15672 (admin / admin) |
 
 *Muốn Tắt Toàn Bộ Dữ Liệu?*
 ```bash
-docker compose down -v
+docker compose -f compose.prod.yaml down -v
 ```
 
 ---
@@ -526,7 +531,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 ```
 
 > Khi chạy local không qua Docker network, có thể đổi các giá trị `*_GRPC_HOST` về `localhost`.
-> `compose.yaml` đã đồng bộ các host/port gRPC chính cho các service nội bộ; khi thêm service mới chỉ cần nối theo cùng convention này.
+> `compose.prod.yaml` đã đồng bộ các host/port gRPC chính cho các service nội bộ; khi thêm service mới chỉ cần nối theo cùng convention này.
 > Bên trong từng service, các biến môi trường này được map vào cấu hình `spring.grpc.client.channels.*.address` hoặc `spring.grpc.server.port`.
 
 ---
@@ -589,7 +594,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Thêm gRPC client config cho `identity-service`, `showtime-service`.
 - Dọn bỏ `RestTemplate` nội bộ ở các luồng trên để tách hẳn REST public và RPC nội bộ.
 - Dọn luồng gửi mail trong `identity-service`: bỏ `new Thread(...)` thủ công, giữ `@Async` + gRPC để giảm thread thừa và dễ kiểm soát hơn.
-- Đồng bộ `compose.yaml` cho cặp service đã có Dockerfile (`identity-service`, `user-service`) để container gọi nhau qua host nội bộ thay vì rơi về `localhost`.
+- Đồng bộ `compose.prod.yaml` cho cặp service đã có Dockerfile (`identity-service`, `user-service`) để container gọi nhau qua host nội bộ thay vì rơi về `localhost`.
 - Sửa lại một số điểm cấu hình đi kèm:
   - `user-service` trả về mặc định đúng cổng HTTP `8091`.
   - `email-service` chuẩn hóa cổng HTTP `8093` để phục vụ nội bộ.
@@ -616,7 +621,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Thay Nginx gateway bằng **Envoy Proxy** để phù hợp hơn với kiến trúc microservices/gRPC.
 - Cấu hình `ext_authz` gọi `identity-service/internal/auth/check` để xác thực tập trung và tự động forward `X-User-ID`, `X-User-Role`.
 - Thiết lập routing cho các service backend qua Envoy.
-- Tách 2 cấu hình Envoy cho **dev/prod** qua `envoy.dev.yaml` và `envoy.prod.yaml` + `compose.dev.yaml`.
+- Tách 2 cấu hình Envoy cho **local/prod** qua `envoy.local.yaml` và `envoy.prod.yaml` + `compose.local.yaml`.
 
 ### 09/04/2026 - Showtime pricing policy
 **Nội dung cập nhật:**
@@ -642,9 +647,9 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - API hall cho FE gồm: `POST /api/halls`, `GET /api/halls/{id}`, `POST /api/halls/search`, `PATCH /api/halls/{id}/layout`.
 - Bổ sung seat type `AISLE` để biểu diễn ô đường đi trong sơ đồ ghế.
 - Bổ sung gRPC server `HallInternalService/GetHallById` và cấu hình `GRPC_SERVER_PORT=9197`.
-- Cập nhật `compose.yaml`, `compose.dev.yaml`, `envoy.dev.yaml`, `envoy.prod.yaml`, `postgres-init/create-databases.sql` để deploy đồng bộ.
+- Cập nhật `compose.prod.yaml`, `compose.local.yaml`, `envoy.local.yaml`, `envoy.prod.yaml`, `postgres-init/create-databases.sql` để deploy đồng bộ.
 - Điều chỉnh `showtime-service` dùng `HALL_GRPC_PORT` mặc định `9197`.
-- Build compile đã pass với Maven wrapper: `hall-services` + `common-lib`.
+- Build compile đã pass với Maven local (`mvn`) cho `hall-service` + `common-lib`.
 - Chuẩn hóa lại nội dung tổng kết README theo mốc cập nhật mới nhất ngày `10/04/2026`.
 ---
 > Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **10/04/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
@@ -673,32 +678,32 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ### 2026-04-10 20:15 (UTC+07:00) - Extend hall response with cinema payload
 - Request: Add `cinemaResponse` in `HallResponse` and keep README action logging updated.
-- Actions: Added `CinemaResponse` DTO in `hall-services`, extended `HallResponse` with `cinemaResponse`, mapped response population from `HallServiceImpl`, and updated mapper ignore rules for new field.
-- Files: `hall-services/src/main/java/com/cinema/hall_services/dto/response/CinemaResponse.java`, `hall-services/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `hall-services/src/main/java/com/cinema/hall_services/mapper/HallMapper.java`, `README.md`
+- Actions: Added `CinemaResponse` DTO in `hall-service`, extended `HallResponse` with `cinemaResponse`, mapped response population from `HallServiceImpl`, and updated mapper ignore rules for new field.
+- Files: `hall-service/src/main/java/com/cinema/hall_services/dto/response/CinemaResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `hall-service/src/main/java/com/cinema/hall_services/mapper/HallMapper.java`, `README.md`
 - Result: Hall API response now includes a `cinemaResponse` object with cinema id (and optional name field for future expansion).
 
 ### 2026-04-10 20:20 (UTC+07:00) - Fix Envoy route for POST /api/halls
 - Request: Investigate `404 NR` when calling `POST /api/halls` from Postman.
-- Actions: Updated Envoy routes to match both `/api/halls` and `/api/halls/` in `envoy.dev.yaml` and `envoy.prod.yaml`.
-- Files: `envoy/envoy.dev.yaml`, `envoy/envoy.prod.yaml`, `README.md`
+- Actions: Updated Envoy routes to match both `/api/halls` and `/api/halls/` in `envoy.local.yaml` and `envoy.prod.yaml`.
+- Files: `envoy/envoy.local.yaml`, `envoy/envoy.prod.yaml`, `README.md`
 - Result: Gateway route matching now handles hall APIs with or without trailing slash.
 
 ### 2026-04-10 20:25 (UTC+07:00) - Fix Jackson package mismatch for layoutJson
 - Request: Resolve `HttpMessageConversionException` for `HallCreateRequest.layoutJson`.
 - Actions: Migrated hall-service JSON imports from `com.fasterxml.jackson.*` to `tools.jackson.*` (Spring 7/Jackson 3), covering request DTOs, response DTO, and service JSON processing.
-- Files: `hall-services/src/main/java/com/cinema/hall_services/dto/request/HallCreateRequest.java`, `hall-services/src/main/java/com/cinema/hall_services/dto/request/UpdateHallLayoutRequest.java`, `hall-services/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Files: `hall-service/src/main/java/com/cinema/hall_services/dto/request/HallCreateRequest.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/request/UpdateHallLayoutRequest.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
 - Result: `layoutJson` can be deserialized correctly by Spring message converters using Jackson 3 types.
 
 ### 2026-04-10 20:30 (UTC+07:00) - Remove deprecated JSON handling in hall service
 - Request: Fix deprecated method usage and stabilize hall service JSON parsing.
 - Actions: Reworked `HallServiceImpl` with `JsonMapper.builder().build()`, replaced integer checks with non-deprecated `isIntegralNumber()` flow, restored `cinemaId` resolution from `X-User-ID` (removed hardcoded value), and fixed malformed `parseSeatType` logic.
-- Files: `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Files: `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
 - Result: Hall service avoids deprecated JSON APIs and is back to manager-scoped cinema resolution.
 
 ### 2026-04-10 20:33 (UTC+07:00) - Remove deprecated textual JsonNode methods
 - Request: Replace deprecated `isTextual()` and `asText()` calls in hall layout validation.
 - Actions: Updated `HallServiceImpl` to use Jackson 3 `TextNode.textValue()` pattern in `readRequiredText` and `parseSeatType`, removing deprecated textual API usage.
-- Files: `hall-services/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Files: `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
 - Result: Hall layout text parsing no longer depends on deprecated JsonNode textual methods.
 
 
@@ -743,4 +748,4 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ---
 
-Cập nhật kỹ thuật gần nhất: 10/04/2026.
+Cập nhật kỹ thuật gần nhất: 21/04/2026.

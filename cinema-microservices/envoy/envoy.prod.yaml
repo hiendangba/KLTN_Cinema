@@ -134,6 +134,18 @@ static_resources:
                             timeout: 30s
 
                         - match:
+                            path: /api/cinemas
+                          route:
+                            cluster: cinema-service
+                            timeout: 30s
+
+                        - match:
+                            prefix: /api/cinemas/
+                          route:
+                            cluster: cinema-service
+                            timeout: 30s
+
+                        - match:
                             path: /api/halls
                           route:
                             cluster: hall-services
@@ -230,6 +242,19 @@ static_resources:
                     socket_address:
                       address: hall-services
                       port_value: 8097
+    - name: cinema-service
+      connect_timeout: 1s
+      type: LOGICAL_DNS
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: cinema-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: cinema-service
+                      port_value: 8096
 
 admin:
   access_log_path: /tmp/admin_access.log

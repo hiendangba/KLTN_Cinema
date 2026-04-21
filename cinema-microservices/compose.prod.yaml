@@ -144,6 +144,7 @@ services:
       - rabbitmq
       - film-service
       - hall-services
+      - cinema-service
     mem_limit: 224m
 
   hall-services:
@@ -167,7 +168,31 @@ services:
       - "8097"
     depends_on:
       - postgres
+      - cinema-service
     mem_limit: 208m
+
+  cinema-service:
+    image: ${IMAGE_REPO}/cinema-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/cinema_db
+      DB_USERNAME: cinema_user
+      DB_PASSWORD: cinema_pass
+      GRPC_SERVER_PORT: 9196
+      SERVER_PORT: 8096
+    expose:
+      - "9196"
+      - "8096"
+    depends_on:
+      - postgres
+    mem_limit: 224m
 
   email-service:
     image: ${IMAGE_REPO}/email-service:${IMAGE_TAG:-dev}
@@ -211,10 +236,32 @@ services:
   redis:
     image: redis:7
     container_name: redis-container
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "900 1"
+      - --save
+      - "300 10"
+      - --save
+      - "60 10000"
+      - --maxmemory
+      - "80mb"
+      - --maxmemory-policy
+      - allkeys-lru
+      - --tcp-keepalive
+      - "60"
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     mem_limit: 96m
 
   rabbitmq:

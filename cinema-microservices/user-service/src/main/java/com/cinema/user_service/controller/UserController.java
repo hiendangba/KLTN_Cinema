@@ -3,9 +3,9 @@ package com.cinema.user_service.controller;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.user_service.dto.request.*;
-import com.cinema.user_service.dto.response.RegisterCustomerResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.services.UserService;
@@ -24,50 +24,56 @@ public class UserController extends BaseController {
     private final UserService userService;
 
     @PostMapping("/customers")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> createCustomerProfile(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createCustomerProfile(
             @Valid @RequestBody RegisterCustomerRequest registerCustomerRequest) {
-        RegisterCustomerResponse registerCustomerResponse = userService.createCustomerProfile(registerCustomerRequest);
+        ActionMessageResponse registerCustomerResponse = userService.createCustomerProfile(registerCustomerRequest);
         return created(registerCustomerResponse);
     }
 
     @PostMapping("/managers")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> createManagerProfile(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createManagerProfile(
             @Valid @RequestBody RegisterManagerRequest registerManagerRequest) {
-        RegisterCustomerResponse registerManagerResponse = userService.createManagerProfile(registerManagerRequest);
+        ActionMessageResponse registerManagerResponse = userService.createManagerProfile(registerManagerRequest);
         return created(registerManagerResponse);
     }
 
     @PostMapping("/staffs")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> createStaffProfile(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createStaffProfile(
             @Valid @RequestBody RegisterStaffRequest registerStaffRequest) {
-        RegisterCustomerResponse registerStaffResponse = userService.createStaffProfile(registerStaffRequest);
+        ActionMessageResponse registerStaffResponse = userService.createStaffProfile(registerStaffRequest);
         return created(registerStaffResponse);
     }
 
     @PutMapping("/customers")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> updateCustomerProfile(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateCustomerProfile(
             @Valid @RequestBody UpdateCustomerRequest updateCustomerRequest,
             HttpServletRequest request) {
-        RegisterCustomerResponse updateCustomerResponse = userService.updateCustomerProfile(updateCustomerRequest,
+        ActionMessageResponse updateCustomerResponse = userService.updateCustomerProfile(updateCustomerRequest,
                 request);
         return ok(updateCustomerResponse);
     }
 
     @PutMapping("/managers")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> updateManagerProfile(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateManagerProfile(
             @Valid @RequestBody UpdateManagerRequest updateManagerRequest,
             HttpServletRequest request) {
-        RegisterCustomerResponse updateManagerResponse = userService.updateManagerProfile(updateManagerRequest,
+        ActionMessageResponse updateManagerResponse = userService.updateManagerProfile(updateManagerRequest,
                 request);
         return ok(updateManagerResponse);
     }
 
     @PutMapping("/staffs")
-    public ResponseEntity<APIResponse<RegisterCustomerResponse>> updateStaffProfile(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateStaffProfile(
             @Valid @RequestBody UpdateStaffRequest updateStaffRequest,
             HttpServletRequest request) {
-        RegisterCustomerResponse updateStaffResponse = userService.updateStaffProfile(updateStaffRequest, request);
+        ActionMessageResponse updateStaffResponse = userService.updateStaffProfile(updateStaffRequest, request);
         return ok(updateStaffResponse);
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<APIResponse<UserResponse>> getMyProfile(HttpServletRequest request) {
+        UserResponse userResponse = userService.getMyProfile(request);
+        return ok(userResponse);
     }
 
     @PostMapping("/staffs/search")

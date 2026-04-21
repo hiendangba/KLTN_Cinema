@@ -223,3 +223,33 @@ Tóm lại:
 ---
 
 Nếu cần, có thể tạo thêm một tài liệu riêng dạng “SOP tối ưu RAM cho dự án” (ngắn hơn, theo checklist thao tác nhanh) để team dùng mỗi lần rollout.
+
+
+## 8) Quick Executive Summary (Added 2026-04-21)
+
+### Overall status
+- The RAM optimization pass achieved the main goal: keep the microservice architecture and significantly lower memory usage.
+- On a 1.9 GiB VPS, post-optimization numbers indicate enough headroom to run additional services more safely.
+- The chosen approach is valid: optimize runtime budgets per service instead of changing architecture.
+
+### Key outcomes
+- Rebalanced JVM budgets per service (`Xms`, `Xmx`, metaspace, code cache).
+- Reduced DB and Redis pool sizes to match real traffic.
+- Disabled heavy SQL logging and non-essential production runtime components.
+- Removed unnecessary dependencies to reduce classpath and runtime footprint.
+- Added Docker memory watch script for continuous visibility.
+
+### What to monitor next
+- Track memory behavior during peak windows for at least 7 days.
+- Re-tune services that frequently exceed 80% of `mem_limit`.
+- Keep `DEBUG/TRACE` off by default outside active investigations.
+
+### Short operations guidance
+1. Keep current settings for dev/UAT unless clear bottlenecks appear.
+2. Scale `Xmx` and pool sizes only after measuring real load.
+3. Before every deploy, run the memory checklist and observe 15-30 minutes after rollout.
+
+### Done criteria for this optimization cycle
+- No OOM-triggered service restarts during observation.
+- Total RAM usage stays within the agreed safety threshold.
+- Team can quickly identify top memory consumers using the monitoring script.

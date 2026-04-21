@@ -1,0 +1,22 @@
+package com.cinema.cinema_service.repository;
+
+import com.cinema.cinema_service.entity.Cinema;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+public interface CinemaRepository extends JpaRepository<Cinema, UUID> {
+
+    Optional<Cinema> findByIdAndIsDeletedFalse(UUID id);
+
+    Optional<Cinema> findByManagerIdAndIsDeletedFalse(UUID managerId);
+
+    boolean existsByCodeIgnoreCaseAndIsDeletedFalse(String code);
+
+    boolean existsByCodeIgnoreCaseAndIdNotAndIsDeletedFalse(String code, UUID id);
+
+    boolean existsByManagerIdAndIsDeletedFalse(UUID managerId);
+
+    boolean existsByManagerIdAndIdNotAndIsDeletedFalse(UUID managerId, UUID id);
+}
