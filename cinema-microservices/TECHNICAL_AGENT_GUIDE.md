@@ -340,6 +340,25 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `POST` | `/api/halls/search` | ❌ Public | Tìm hall bằng cursor pagination. |
 | `PATCH` | `/api/halls/{id}/layout` | ✅ MGMT | Cập nhật toàn bộ `layoutJson` của hall. |
 
+### 6. Cinema Service (`/api/cinemas`)
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| `POST` | `/api/cinemas` | ✅ ADMIN | Tạo cinema mới. |
+| `GET` | `/api/cinemas/{id}` | ❌ Public | Lấy chi tiết một cinema theo id. |
+| `POST` | `/api/cinemas/search` | ❌ Public | Tìm kiếm cinema bằng cursor pagination. |
+| `PUT` | `/api/cinemas/{id}` | ✅ ADMIN | Cập nhật thông tin cinema (địa chỉ, tọa độ, giờ hoạt động, manager). |
+| `PATCH` | `/api/cinemas/{id}` | ✅ ADMIN | Cập nhật nhanh trạng thái cinema. |
+| `DELETE` | `/api/cinemas/{id}` | ✅ ADMIN | Xóa mềm cinema và ngắt active staff mapping liên quan. |
+| `POST` | `/api/cinemas/{id}/staffs` | ✅ ADMIN | Gán staff vào cinema. |
+| `PUT` | `/api/cinemas/{id}/staffs` | ✅ ADMIN | Upsert/re-assign staff vào cinema theo `staffId`. |
+| `DELETE` | `/api/cinemas/{id}/staffs/{staffId}` | ✅ ADMIN | Gỡ staff khỏi cinema (đánh dấu inactive). |
+| `GET` | `/api/cinemas/{id}/staffs` | ❌ Public | Lấy danh sách staff mapping của cinema. |
+| `GET` | `/api/cinemas/me` | ✅ MANAGER | Lấy cinema hiện tại do manager đang quản lý. |
+
+Ghi chú gateway:
+- Envoy đã route theo prefix `/api/cinemas/`, nên các method mới (bao gồm `PUT /api/cinemas/{id}/staffs`) không cần thêm route mới.
+
 ---
 
 ## 🐘 Cơ Sở Dữ Liệu & Caching
@@ -706,6 +725,18 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Files: `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
 - Result: Hall layout text parsing no longer depends on deprecated JsonNode textual methods.
 
+### 2026-04-22 00:10 (UTC+07:00) - Add cinema staff PUT endpoint and migrate cinema mapper to MapStruct
+- Request: Add missing `PUT` endpoint for cinema staff assignment and align mapper implementation style with other services.
+- Actions: Added `PUT /api/cinemas/{id}/staffs` through controller/service/serviceImpl, migrated `cinema-service` mapper from manual class to MapStruct interface, and updated `cinema-service/pom.xml` with MapStruct processor config.
+- Files: `cinema-service/src/main/java/com/cinema/cinema_service/controller/CinemaController.java`, `cinema-service/src/main/java/com/cinema/cinema_service/services/CinemaService.java`, `cinema-service/src/main/java/com/cinema/cinema_service/services/impl/CinemaServiceImpl.java`, `cinema-service/src/main/java/com/cinema/cinema_service/mapper/CinemaMapper.java`, `cinema-service/pom.xml`, `README.md`, `TECHNICAL_AGENT_GUIDE.md`
+- Result: Cinema staff APIs now support idempotent `PUT` update flow and mapper style is consistent with MapStruct-based services.
+
+### 2026-04-22 00:40 (UTC+07:00) - Fix RedisConfig generic pool typing and serializer deprecation
+- Request: Investigate compile errors related to `GenericObjectPoolConfig<?>` and `GenericJackson2JsonRedisSerializer`.
+- Actions: Updated Redis pool generic type to `GenericObjectPoolConfig<StatefulConnection<?, ?>>` and replaced deprecated `GenericJackson2JsonRedisSerializer` with `GenericJacksonJsonRedisSerializer` in Redis configs.
+- Files: `identity-service/src/main/java/com/cinema/identity_service/config/RedisConfig.java`, `user-service/src/main/java/com/cinema/user_service/config/RedisConfig.java`, `film-service/src/main/java/com/cinema/film_service/config/RedisConfig.java`, `showtime-service/src/main/java/com/cinema/showtime_service/config/RedisConfig.java`, `README.md`, `TECHNICAL_AGENT_GUIDE.md`
+- Result: Removed incompatible generic type errors in Lettuce pooling config and eliminated deprecated Redis serializer usage in the affected services.
+
 
 ---
 
@@ -748,4 +779,4 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ---
 
-Cập nhật kỹ thuật gần nhất: 21/04/2026.
+Cập nhật kỹ thuật gần nhất: 22/04/2026.

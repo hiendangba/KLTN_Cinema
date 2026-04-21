@@ -46,13 +46,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     public ActionMessageResponse createFilm(CreateFilmRequest request, HttpServletRequest httpRequest) {
         log.info("Tạo mới phim: {}", request.getTitle());
-        log.info("httpRequest: " + httpRequest.getHeader(HeaderNames.X_USER_ROLE));
-        log.info("httpRequest: " + httpRequest.getHeaderNames());
-        log.info("httpRequestName: " + HeaderNames.X_USER_ROLE);
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        validateAdminRole(httpRequest, "createFilm");
         // Kiểm tra tên phim và năm phát hành đã tồn tại hay chưa
         if (filmRepository.findByTitleAndReleaseDate(request.getTitle(), request.getReleaseDate()).isPresent()) {
             log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
@@ -71,10 +65,7 @@ public class FilmServiceImpl implements FilmService {
     @CacheEvict(value = "films", key = "#id")
     public ActionMessageResponse updateFilm(UUID id, UpdateFilmRequest request, HttpServletRequest httpRequest) {
         log.info("Cập nhật phim với ID: {}", id);
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        validateAdminRole(httpRequest, "updateFilm");
         Film film = filmRepository.findById(id)
                 .orElseThrow(() -> {
                     log.error("Không tìm thấy phim với ID: {}", id);
@@ -179,10 +170,7 @@ public class FilmServiceImpl implements FilmService {
     @CacheEvict(value = "films", key = "#id")
     public ActionMessageResponse deleteFilm(UUID id, HttpServletRequest httpRequest) {
         log.info("Deleting film with ID: {}", id);
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        validateAdminRole(httpRequest, "deleteFilm");
         Film film = filmRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> {
                     log.error("Film not found with ID: {}", id);
@@ -195,5 +183,19 @@ public class FilmServiceImpl implements FilmService {
         return ActionMessageResponse.builder()
                 .message("Xóa phim thành công")
                 .build();
+    }
+
+    private void validateAdminRole(HttpServletRequest httpRequest, String action) {
+        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
+        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
+            log.warn("Forbidden action={} requiredRole={} actualRole={} userId={} method={} path={}",
+                    action,
+                    HeaderNames.ROLE_ADMIN,
+                    role,
+                    httpRequest.getHeader(HeaderNames.X_USER_ID),
+                    httpRequest.getMethod(),
+                    httpRequest.getRequestURI());
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 }

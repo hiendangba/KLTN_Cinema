@@ -1,4 +1,4 @@
-package com.cinema.hall_services.services.impl;
+package com.cinema.hall_service.services.impl;
 
 import com.cinema.Enum.HallEnum;
 import com.cinema.dto.request.CursorPageRequest;
@@ -8,19 +8,19 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
-import com.cinema.hall_services.dto.request.HallCreateRequest;
-import com.cinema.hall_services.dto.request.HallField;
-import com.cinema.hall_services.dto.request.UpdateHallLayoutRequest;
-import com.cinema.hall_services.dto.request.UpdateHallRequest;
-import com.cinema.hall_services.dto.request.UpdateHallStatusRequest;
-import com.cinema.hall_services.dto.response.CinemaResponse;
-import com.cinema.hall_services.dto.response.HallResponse;
-import com.cinema.hall_services.entity.Hall;
-import com.cinema.hall_services.grpc.CinemaGrpcClient;
-import com.cinema.hall_services.mapper.HallMapper;
-import com.cinema.hall_services.repository.HallRepository;
-import com.cinema.hall_services.repository.HallRepositoryImpl;
-import com.cinema.hall_services.services.HallService;
+import com.cinema.hall_service.dto.request.HallCreateRequest;
+import com.cinema.hall_service.dto.request.HallField;
+import com.cinema.hall_service.dto.request.UpdateHallLayoutRequest;
+import com.cinema.hall_service.dto.request.UpdateHallRequest;
+import com.cinema.hall_service.dto.request.UpdateHallStatusRequest;
+import com.cinema.hall_service.dto.response.CinemaResponse;
+import com.cinema.hall_service.dto.response.HallResponse;
+import com.cinema.hall_service.entity.Hall;
+import com.cinema.hall_service.grpc.CinemaGrpcClient;
+import com.cinema.hall_service.mapper.HallMapper;
+import com.cinema.hall_service.repository.HallRepository;
+import com.cinema.hall_service.repository.HallRepositoryImpl;
+import com.cinema.hall_service.services.HallService;
 import com.cinema.http.HeaderNames;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
@@ -115,7 +115,7 @@ public class HallServiceImpl implements HallService {
             if (!prevHalls.isEmpty() && prevHalls.size() == size) {
                 prevCursor = CursorPageRequest.encodeCompositeCursor(
                         HallField.getFieldValues(prevHalls.get(size - 1), sortFields));
-                }
+            }
         }
 
         Map<UUID, CinemaResponse> cinemaResponseCache = new HashMap<>();

@@ -1,11 +1,11 @@
-package com.cinema.hall_services.repository;
+package com.cinema.hall_service.repository;
 
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
-import com.cinema.hall_services.dto.request.HallField;
-import com.cinema.hall_services.entity.Hall;
+import com.cinema.hall_service.dto.request.HallField;
+import com.cinema.hall_service.entity.Hall;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;

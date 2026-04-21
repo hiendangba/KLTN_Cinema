@@ -1,4 +1,4 @@
-package com.cinema.hall_services.grpc;
+package com.cinema.hall_service.grpc;
 
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
@@ -6,8 +6,8 @@ import com.cinema.grpc.hall.GetHallByIdReply;
 import com.cinema.grpc.hall.GetHallByIdRequest;
 import com.cinema.grpc.hall.HallInternalServiceGrpc;
 import com.cinema.grpc.hall.HallPayload;
-import com.cinema.hall_services.dto.response.HallResponse;
-import com.cinema.hall_services.services.HallService;
+import com.cinema.hall_service.dto.response.HallResponse;
+import com.cinema.hall_service.services.HallService;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

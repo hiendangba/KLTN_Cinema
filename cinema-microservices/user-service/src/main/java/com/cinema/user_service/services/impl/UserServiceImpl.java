@@ -106,6 +106,13 @@ public class UserServiceImpl implements UserService {
 
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
+            log.warn("Forbidden action={} requiredRole={} actualRole={} userId={} method={} path={}",
+                    "updateCustomerProfile",
+                    HeaderNames.ROLE_ADMIN,
+                    role,
+                    httpRequest.getHeader(HeaderNames.X_USER_ID),
+                    httpRequest.getMethod(),
+                    httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
@@ -172,6 +179,13 @@ public class UserServiceImpl implements UserService {
 
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!(HeaderNames.ROLE_MANAGER.equals(role))) {
+            log.warn("Forbidden action={} requiredRole={} actualRole={} userId={} method={} path={}",
+                    "updateStaffProfile",
+                    HeaderNames.ROLE_MANAGER,
+                    role,
+                    httpRequest.getHeader(HeaderNames.X_USER_ID),
+                    httpRequest.getMethod(),
+                    httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
@@ -225,6 +239,14 @@ public class UserServiceImpl implements UserService {
     public PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request) {
         String role = request.getHeader(HeaderNames.X_USER_ROLE);
         if (!(HeaderNames.ROLE_ADMIN.equals(role) || HeaderNames.ROLE_MANAGER.equals(role))) {
+            log.warn("Forbidden action={} requiredRoles=[{},{}] actualRole={} userId={} method={} path={}",
+                    "getAllStaff",
+                    HeaderNames.ROLE_ADMIN,
+                    HeaderNames.ROLE_MANAGER,
+                    role,
+                    request.getHeader(HeaderNames.X_USER_ID),
+                    request.getMethod(),
+                    request.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
@@ -246,6 +268,13 @@ public class UserServiceImpl implements UserService {
     public PageResponse<UserResponse> getAllManager(PageRequest<?> pageRequest, HttpServletRequest request) {
         String role = request.getHeader(HeaderNames.X_USER_ROLE);
         if (!HeaderNames.ROLE_ADMIN.equals(role)) {
+            log.warn("Forbidden action={} requiredRole={} actualRole={} userId={} method={} path={}",
+                    "getAllManager",
+                    HeaderNames.ROLE_ADMIN,
+                    role,
+                    request.getHeader(HeaderNames.X_USER_ID),
+                    request.getMethod(),
+                    request.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 

@@ -1,9 +1,9 @@
-package com.cinema.hall_services.mapper;
+package com.cinema.hall_service.mapper;
 
-import com.cinema.hall_services.dto.request.HallCreateRequest;
-import com.cinema.hall_services.dto.request.UpdateHallRequest;
-import com.cinema.hall_services.dto.response.HallResponse;
-import com.cinema.hall_services.entity.Hall;
+import com.cinema.hall_service.dto.request.HallCreateRequest;
+import com.cinema.hall_service.dto.request.UpdateHallRequest;
+import com.cinema.hall_service.dto.response.HallResponse;
+import com.cinema.hall_service.entity.Hall;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;

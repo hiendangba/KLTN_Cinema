@@ -88,7 +88,7 @@ CinemaStar tập trung giải quyết các điểm này bằng một nền tản
 - Đây là backend microservices cho hệ thống CinemaStar.
 - Frontend không nằm trong repository này.
 - Trạng thái hiện tại: phù hợp cho môi trường dev/test/UAT.
-- Thời điểm cập nhật README: 21/04/2026.
+- Thời điểm cập nhật README: 22/04/2026.
 
 ## Dùng Thử Nhanh (QA/Tester)
 
@@ -224,6 +224,11 @@ Nếu bạn là developer hoặc AI agent cần tài liệu kỹ thuật chi ti�
   - Phạm vi áp dụng: bổ sung API `GET /api/users/me` tại `user-service` theo đúng cấu trúc `controller -> service -> repository`, cập nhật docs endpoint trong `TECHNICAL_AGENT_GUIDE.md`
   - Skills: `architect-review`, `backend-dev-guidelines`
   - Phạm vi áp dụng: rà soát toàn bộ phần phụ thuộc `cinema-service` (gRPC contract/config), chuẩn hóa `cinema-service/pom.xml` theo parent multi-module và thêm module `cinema-service` vào `pom.xml` gốc để sẵn sàng cho bước thêm entity
+- 22/04/2026:
+  - Skills: `backend-dev-guidelines`, `api-endpoint-builder`, `api-documentation`
+  - Phạm vi áp dụng: bổ sung endpoint `PUT /api/cinemas/{id}/staffs` theo luồng `controller -> service -> serviceImpl`, cập nhật tài liệu API cho nhóm `Cinema`.
+  - Skills: `backend-dev-guidelines`, `java-pro`, `api-documentation`
+  - Phạm vi áp dụng: chuẩn hóa `cinema-service` sang MapStruct (`CinemaMapper` interface + cấu hình `mapstruct-processor`), đồng bộ fix Redis config tại `identity-service`, `user-service`, `film-service`, `showtime-service` (generic pool type + thay `GenericJackson2JsonRedisSerializer` bằng `GenericJacksonJsonRedisSerializer`).
 
 ---
 

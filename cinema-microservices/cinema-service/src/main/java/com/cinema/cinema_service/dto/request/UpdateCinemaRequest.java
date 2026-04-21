@@ -40,7 +40,7 @@ public class UpdateCinemaRequest {
     BigDecimal longitude;
 
     @NotBlank(message = "Phone is required")
-    @Pattern(regexp = "^[0-9+\\-()\\s]{8,20}$", message = "Phone number format is invalid")
+    @Pattern(regexp = "^0(3|5|7|8|9)\\d{8}$", message = "Phone must be a valid Vietnamese 10-digit mobile number")
     String phone;
 
     @NotNull(message = "Open time is required")

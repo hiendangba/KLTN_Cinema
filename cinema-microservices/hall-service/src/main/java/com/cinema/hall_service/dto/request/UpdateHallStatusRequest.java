@@ -1,4 +1,4 @@
-package com.cinema.hall_services.dto.request;
+package com.cinema.hall_service.dto.request;
 
 import com.cinema.Enum.HallEnum;
 import jakarta.validation.constraints.NotNull;

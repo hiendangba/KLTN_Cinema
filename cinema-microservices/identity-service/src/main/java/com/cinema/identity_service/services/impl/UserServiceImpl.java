@@ -38,9 +38,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -82,7 +84,7 @@ public class UserServiceImpl implements UserService {
     // queue OTP email.
     @Override
     public ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
-            HttpServletResponse response) {
+                                                  HttpServletResponse response) {
         if (userRepository.existsByEmail(registerCustomerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
         }
@@ -139,7 +141,7 @@ public class UserServiceImpl implements UserService {
     // user-service.
     @Override
     public ActionMessageResponse createManager(RegisterManagerRequest registerManagerRequest,
-            HttpServletRequest request) {
+                                               HttpServletRequest request) {
         // Kiem tra email da ton tai
         if (userRepository.existsByEmail(registerManagerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
@@ -201,9 +203,16 @@ public class UserServiceImpl implements UserService {
     // user-service.
     @Override
     public ActionMessageResponse createStaff(RegisterStaffRequest registerStaffRequest,
-            HttpServletRequest request) {
+                                             HttpServletRequest request) {
         String role = request.getHeader(HeaderNames.X_USER_ROLE);
         if (!(HeaderNames.ROLE_ADMIN.equals(role) || HeaderNames.ROLE_MANAGER.equals(role))) {
+            log.warn("Forbidden createStaff request: requiredRoles=[{},{}] actualRole={} userId={} method={} path={}",
+                    HeaderNames.ROLE_ADMIN,
+                    HeaderNames.ROLE_MANAGER,
+                    role,
+                    request.getHeader(HeaderNames.X_USER_ID),
+                    request.getMethod(),
+                    request.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
@@ -284,7 +293,7 @@ public class UserServiceImpl implements UserService {
         }
 
         String otpKey = OTP_PREFIX + cookieVerifyToken;
-        OtpData otpData = (OtpData) redisTemplate.opsForValue().get(otpKey);
+        OtpData otpData = getOtpData(otpKey);
         if (otpData == null) {
             throw new BusinessException(OTP_INVALID);
         }
@@ -340,7 +349,7 @@ public class UserServiceImpl implements UserService {
     // Redis.
     @Override
     public ActionMessageResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest,
-            HttpServletResponse response) {
+                                                HttpServletResponse response) {
         if (!userRepository.existsByEmail(forgotPasswordRequest.getEmail())) {
             throw new BusinessException(USER_NOT_FOUND);
         }
@@ -388,7 +397,7 @@ public class UserServiceImpl implements UserService {
     // constraints.
     @Override
     public ActionMessageResponse changePassword(ChangePasswordRequest changePasswordRequest,
-            HttpServletRequest request) {
+                                                HttpServletRequest request) {
 
         // Kiem tra mat khau cu va mat khau moi co giong nhau hay khong
         if (changePasswordRequest.getOldPassword().equals(changePasswordRequest.getNewPassword())) {
@@ -445,7 +454,7 @@ public class UserServiceImpl implements UserService {
         }
 
         String otpKey = OTP_PREFIX + cookieVerifyToken;
-        OtpData otpData = (OtpData) redisTemplate.opsForValue().get(otpKey);
+        OtpData otpData = getOtpData(otpKey);
         if (otpData == null) {
             throw new BusinessException(OTP_INVALID);
         }
@@ -618,9 +627,7 @@ public class UserServiceImpl implements UserService {
                     keysToDelete.add(accessTokenKey);
                     keysToDelete.add(refreshTokenKey);
                 }
-                if (!keysToDelete.isEmpty()) {
-                    redisTemplate.delete(keysToDelete);
-                }
+                redisTemplate.delete(keysToDelete);
             }
             redisTemplate.delete(userTokensKey);
         } catch (Exception e) {
@@ -719,5 +726,165 @@ public class UserServiceImpl implements UserService {
             log.warn("Refresh token error", e);
             throw new BusinessException(REFRESH_TOKEN_MISSING);
         }
+    }
+
+    private OtpData getOtpData(String otpKey) {
+        Object rawValue = redisTemplate.opsForValue().get(otpKey);
+        if (rawValue == null) {
+            return null;
+        }
+
+        if (rawValue instanceof OtpData otpData) {
+            return otpData;
+        }
+
+        if (rawValue instanceof Map<?, ?> map) {
+            OtpData otpData = mapToOtpData(map);
+            if (otpData == null) {
+                log.error("Invalid OTP payload in Redis key={} type={}", otpKey, rawValue.getClass().getName());
+                throw new BusinessException(OTP_INVALID);
+            }
+
+            Long ttlMillis = redisTemplate.getExpire(otpKey, TimeUnit.MILLISECONDS);
+            if (ttlMillis != null && ttlMillis > 0) {
+                redisTemplate.opsForValue().set(otpKey, otpData, ttlMillis, TimeUnit.MILLISECONDS);
+            } else {
+                redisTemplate.opsForValue().set(otpKey, otpData);
+            }
+            log.warn("Converted legacy OTP payload key={} from type={} to OtpData",
+                    otpKey, rawValue.getClass().getSimpleName());
+            return otpData;
+        }
+
+        log.error("Unsupported OTP payload type in Redis key={} type={}", otpKey, rawValue.getClass().getName());
+        throw new BusinessException(OTP_INVALID);
+    }
+
+    private OtpData mapToOtpData(Map<?, ?> source) {
+        try {
+            OtpData.OtpPurpose purpose = parseOtpPurpose(source.get("purpose"));
+            RegisterCustomerRequest registerCustomerRequest = toRegisterCustomerRequest(source.get("registerCustomerRequest"));
+            ForgotPasswordRequest forgotPasswordRequest = toForgotPasswordRequest(source.get("forgotPasswordRequest"));
+
+            return OtpData.builder()
+                    .verifyToken(asString(source.get("verifyToken")))
+                    .subject(asString(source.get("subject")))
+                    .otpHash(asString(source.get("otpHash")))
+                    .purpose(purpose)
+                    .expiredAt(parseLocalDateTime(source.get("expiredAt")))
+                    .lastSentAt(parseLocalDateTime(source.get("lastSentAt")))
+                    .registerCustomerRequest(registerCustomerRequest)
+                    .forgotPasswordRequest(forgotPasswordRequest)
+                    .sendCount(asInt(source.get("sendCount"), 1))
+                    .verifyAttempts(asInt(source.get("verifyAttempts"), 0))
+                    .build();
+        } catch (Exception ex) {
+            log.error("Failed to convert legacy OTP payload from Redis", ex);
+            return null;
+        }
+    }
+
+    private RegisterCustomerRequest toRegisterCustomerRequest(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof RegisterCustomerRequest request) {
+            return request;
+        }
+        if (!(value instanceof Map<?, ?> map)) {
+            return null;
+        }
+
+        RegisterCustomerRequest.RegisterCustomerRequestBuilder builder = RegisterCustomerRequest.builder();
+        builder.name(asString(map.get("name")));
+        builder.email(asString(map.get("email")));
+        builder.password(asString(map.get("password")));
+        builder.phone(asString(map.get("phone")));
+        builder.dob(parseLocalDate(map.get("dob")));
+        builder.gender(parseGender(map.get("gender")));
+        builder.role(parseUserRole(map.get("role")));
+        builder.id(parseUuid(map.get("id")));
+        return builder.build();
+    }
+
+    private ForgotPasswordRequest toForgotPasswordRequest(Object value) {
+        // Current flows rely on subject for forgot-password OTP, so this field is optional.
+        return null;
+    }
+
+    private OtpData.OtpPurpose parseOtpPurpose(Object value) {
+        String raw = asString(value);
+        return raw == null ? null : OtpData.OtpPurpose.valueOf(raw);
+    }
+
+    private UserEnum.Gender parseGender(Object value) {
+        String raw = asString(value);
+        return raw == null ? null : UserEnum.Gender.valueOf(raw);
+    }
+
+    private UserEnum.UserRole parseUserRole(Object value) {
+        String raw = asString(value);
+        return raw == null ? null : UserEnum.UserRole.valueOf(raw);
+    }
+
+    private UUID parseUuid(Object value) {
+        String raw = asString(value);
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return UUID.fromString(raw);
+    }
+
+    private int asInt(Object value, int defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException ex) {
+            return defaultValue;
+        }
+    }
+
+    private String asString(Object value) {
+        return value == null ? null : value.toString();
+    }
+
+    private LocalDate parseLocalDate(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        if (value instanceof List<?> list && list.size() >= 3) {
+            return LocalDate.of(asInt(list.get(0), 1970), asInt(list.get(1), 1), asInt(list.get(2), 1));
+        }
+        return LocalDate.parse(value.toString());
+    }
+
+    private LocalDateTime parseLocalDateTime(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDateTime dateTime) {
+            return dateTime;
+        }
+        if (value instanceof List<?> list && list.size() >= 6) {
+            int nano = list.size() >= 7 ? asInt(list.get(6), 0) : 0;
+            return LocalDateTime.of(
+                    asInt(list.get(0), 1970),
+                    asInt(list.get(1), 1),
+                    asInt(list.get(2), 1),
+                    asInt(list.get(3), 0),
+                    asInt(list.get(4), 0),
+                    asInt(list.get(5), 0),
+                    nano
+            );
+        }
+        return LocalDateTime.parse(value.toString());
     }
 }

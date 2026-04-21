@@ -17,6 +17,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +26,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PricingPolicyServiceImpl implements PricingPolicyService {
 
@@ -108,6 +110,12 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
     private void validateManagerRole(HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!HeaderNames.ROLE_MANAGER.equals(role)) {
+            log.warn("Forbidden request: requiredRole={} actualRole={} userId={} method={} path={}",
+                    HeaderNames.ROLE_MANAGER,
+                    role,
+                    httpRequest.getHeader(HeaderNames.X_USER_ID),
+                    httpRequest.getMethod(),
+                    httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
@@ -127,12 +135,16 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
     private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
         String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
         if (userIdRaw == null || userIdRaw.isBlank()) {
+            log.warn("Unauthorized request: missing userId header method={} path={}",
+                    httpRequest.getMethod(), httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
         try {
             return cinemaGrpcClient.getCinemaIdByUserId(UUID.fromString(userIdRaw));
         } catch (IllegalArgumentException ex) {
+            log.warn("Invalid userId header: userId={} method={} path={}",
+                    userIdRaw, httpRequest.getMethod(), httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.INVALID_FORMAT);
         }
     }

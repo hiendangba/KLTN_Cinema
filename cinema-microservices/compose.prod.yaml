@@ -2,6 +2,8 @@ services:
   identity-service:
     image: ${IMAGE_REPO}/identity-service:${IMAGE_TAG:-dev}
     pull_policy: always
+    env_file:
+      - ./identity-service/src/main/resources/.env
     environment:
       JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
@@ -21,7 +23,6 @@ services:
       USER_GRPC_PORT: 9191
       USER_SERVICE_URL: http://user-service:8091/api/users
       EMAIL_SERVICE_URL: http://email-service:8093/api/email
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-12000000}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-259200000}
       SPRING_RABBITMQ_HOST: rabbitmq
@@ -197,15 +198,12 @@ services:
   email-service:
     image: ${IMAGE_REPO}/email-service:${IMAGE_TAG:-dev}
     pull_policy: always
+    env_file:
+      - ./email-service/src/main/resources/.env
     environment:
       JAVA_OPTS: "-Xms48m -Xmx128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"
-      MAIL_HOST: ${MAIL_HOST:?MAIL_HOST is required}
-      MAIL_PORT: ${MAIL_PORT:?MAIL_PORT is required}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME:?MAIL_FROM_NAME is required}
-      MAIL_USERNAME: ${MAIL_USERNAME:?MAIL_USERNAME is required}
-      MAIL_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required}
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: admin

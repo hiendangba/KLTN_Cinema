@@ -19,6 +19,7 @@ import java.util.UUID;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+
 import java.io.IOException;
 import java.util.stream.Collectors;
 
@@ -30,24 +31,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtServiceImpl jwtService;
     private final RedisTemplate<String, Object> redisTemplate;
     private static final String ACCESS_TOKEN_PREFIX = "identity:token:access:";
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-    throws ServletException, IOException {
+            throws ServletException, IOException {
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
+        log.warn("Skip auth: invalid token type");
+
 
         String token = authHeader.substring(7);
         try {
             String tokenType = jwtService.extractTokenType(token);
             if (!"access".equals(tokenType)) {
+                log.warn("Skip auth: invalid token type tokenType={} method={} path={}",
+                        tokenType, request.getMethod(), request.getRequestURI());
                 filterChain.doFilter(request, response);
                 return;
             }
 
             if (!jwtService.validateToken(token) || jwtService.isTokenExpired(token)) {
+                log.warn("Skip auth: token invalid or expired method={} path={}",
+                        request.getMethod(), request.getRequestURI());
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -58,6 +66,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String accessTokenKey = ACCESS_TOKEN_PREFIX + tokenId;
             Boolean hasAccessToken = redisTemplate.hasKey(accessTokenKey);
             if (!Boolean.TRUE.equals(hasAccessToken)) {
+                log.warn("Skip auth: access token not found in Redis tokenId={} method={} path={}",
+                        tokenId, request.getMethod(), request.getRequestURI());
                 filterChain.doFilter(request, response);
                 return;
             }
@@ -85,6 +95,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
         } catch (Exception ex) {
+            log.warn("Skip auth: exception while parsing token method={} path={} reason={}",
+                    request.getMethod(), request.getRequestURI(), ex.getMessage());
             SecurityContextHolder.clearContext();
         }
 

@@ -1,10 +1,10 @@
-package com.cinema.hall_services.dto.request;
+package com.cinema.hall_service.dto.request;
 
 import com.cinema.Enum.HallEnum;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
-import com.cinema.hall_services.entity.Hall;
+import com.cinema.hall_service.entity.Hall;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 

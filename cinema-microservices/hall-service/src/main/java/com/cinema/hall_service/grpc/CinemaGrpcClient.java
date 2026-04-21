@@ -1,4 +1,4 @@
-package com.cinema.hall_services.grpc;
+package com.cinema.hall_service.grpc;
 
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;

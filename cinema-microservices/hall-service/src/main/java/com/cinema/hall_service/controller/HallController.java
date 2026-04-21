@@ -1,17 +1,17 @@
-package com.cinema.hall_services.controller;
+package com.cinema.hall_service.controller;
 
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
-import com.cinema.hall_services.dto.request.HallCreateRequest;
-import com.cinema.hall_services.dto.request.HallField;
-import com.cinema.hall_services.dto.request.UpdateHallRequest;
-import com.cinema.hall_services.dto.request.UpdateHallLayoutRequest;
-import com.cinema.hall_services.dto.request.UpdateHallStatusRequest;
-import com.cinema.hall_services.dto.response.HallResponse;
-import com.cinema.hall_services.services.HallService;
+import com.cinema.hall_service.dto.request.HallCreateRequest;
+import com.cinema.hall_service.dto.request.HallField;
+import com.cinema.hall_service.dto.request.UpdateHallRequest;
+import com.cinema.hall_service.dto.request.UpdateHallLayoutRequest;
+import com.cinema.hall_service.dto.request.UpdateHallStatusRequest;
+import com.cinema.hall_service.dto.response.HallResponse;
+import com.cinema.hall_service.services.HallService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

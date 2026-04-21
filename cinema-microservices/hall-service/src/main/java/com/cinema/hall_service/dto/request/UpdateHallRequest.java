@@ -1,4 +1,4 @@
-package com.cinema.hall_services.dto.request;
+package com.cinema.hall_service.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;

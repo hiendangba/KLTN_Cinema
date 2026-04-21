@@ -1,20 +1,21 @@
-package com.cinema.hall_services.dto.request;
+package com.cinema.hall_service.dto.response;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import tools.jackson.databind.JsonNode;
+
+import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class UpdateHallLayoutRequest {
-    @NotNull(message = "Layout json is required")
-    JsonNode layoutJson;
+public class CinemaResponse {
+    UUID id;
+    String name;
 }
+

@@ -27,7 +27,7 @@ static_resources:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
                       http_service:
                         server_uri:
-                          uri: http://identity-service:8090
+                          uri: http://host.docker.internal:8090
                           cluster: identity-service
                           timeout: 1s
                         path_prefix: /internal/auth/check
@@ -118,6 +118,7 @@ static_resources:
     - name: identity-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: identity-service
@@ -126,11 +127,12 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: identity-service
+                      address: host.docker.internal
                       port_value: 8090
     - name: user-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: user-service
@@ -139,11 +141,12 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: user-service
+                      address: host.docker.internal
                       port_value: 8091
     - name: film-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: film-service
@@ -152,11 +155,12 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: film-service
+                      address: host.docker.internal
                       port_value: 8092
     - name: showtime-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: showtime-service
@@ -165,11 +169,12 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: showtime-service
+                      address: host.docker.internal
                       port_value: 8094
     - name: email-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: email-service
@@ -178,11 +183,12 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: email-service
+                      address: host.docker.internal
                       port_value: 8093
     - name: hall-services
       connect_timeout: 1s
       type: LOGICAL_DNS
+      dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: hall-services
@@ -191,11 +197,12 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: hall-services
+                      address: host.docker.internal
                       port_value: 8097
     - name: cinema-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: cinema-service
@@ -204,7 +211,7 @@ static_resources:
               - endpoint:
                   address:
                     socket_address:
-                      address: cinema-service
+                      address: host.docker.internal
                       port_value: 8096
 
 admin:

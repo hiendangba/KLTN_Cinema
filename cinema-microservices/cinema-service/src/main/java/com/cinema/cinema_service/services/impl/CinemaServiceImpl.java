@@ -62,7 +62,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaRepository.save(cinema);
 
         return ActionMessageResponse.builder()
-                .message("Tạo rạp thành công")
+                .message("Tạo rạp phim thành công")
                 .build();
     }
 
@@ -334,11 +334,15 @@ public class CinemaServiceImpl implements CinemaService {
     private UUID extractUserId(HttpServletRequest httpRequest) {
         String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
         if (userIdRaw == null || userIdRaw.isBlank()) {
+            log.warn("Unauthorized request: missing userId header method={} path={}",
+                    httpRequest.getMethod(), httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
         try {
             return UUID.fromString(userIdRaw);
         } catch (IllegalArgumentException ex) {
+            log.warn("Invalid userId header: userId={} method={} path={}",
+                    userIdRaw, httpRequest.getMethod(), httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.INVALID_FORMAT);
         }
     }
@@ -353,6 +357,12 @@ public class CinemaServiceImpl implements CinemaService {
     private void validateAdminRole(HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!HeaderNames.ROLE_ADMIN.equals(role)) {
+            log.warn("Forbidden request: requiredRole={} actualRole={} userId={} method={} path={}",
+                    HeaderNames.ROLE_ADMIN,
+                    role,
+                    httpRequest.getHeader(HeaderNames.X_USER_ID),
+                    httpRequest.getMethod(),
+                    httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
@@ -360,6 +370,12 @@ public class CinemaServiceImpl implements CinemaService {
     private void validateManagerRole(HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!HeaderNames.ROLE_MANAGER.equals(role)) {
+            log.warn("Forbidden request: requiredRole={} actualRole={} userId={} method={} path={}",
+                    HeaderNames.ROLE_MANAGER,
+                    role,
+                    httpRequest.getHeader(HeaderNames.X_USER_ID),
+                    httpRequest.getMethod(),
+                    httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }

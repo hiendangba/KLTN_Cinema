@@ -1,6 +1,6 @@
-package com.cinema.hall_services.repository;
+package com.cinema.hall_service.repository;
 
-import com.cinema.hall_services.entity.Hall;
+import com.cinema.hall_service.entity.Hall;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

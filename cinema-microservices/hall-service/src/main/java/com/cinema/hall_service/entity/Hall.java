@@ -1,4 +1,4 @@
-package com.cinema.hall_services.entity;
+package com.cinema.hall_service.entity;
 
 import com.cinema.Enum.HallEnum;
 import com.github.f4b6a3.uuid.UuidCreator;

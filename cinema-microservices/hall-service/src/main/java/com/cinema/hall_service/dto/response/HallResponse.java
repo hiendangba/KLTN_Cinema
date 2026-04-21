@@ -1,8 +1,6 @@
-package com.cinema.hall_services.dto.request;
+package com.cinema.hall_service.dto.response;
 
 import com.cinema.Enum.HallEnum;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -10,17 +8,23 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import tools.jackson.databind.JsonNode;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class HallCreateRequest {
-    @NotBlank(message = "Hall name is required")
+public class HallResponse {
+    UUID id;
+    UUID cinemaId;
+    CinemaResponse cinemaResponse;
     String name;
-
-    @NotNull(message = "Layout json is required")
     JsonNode layoutJson;
-
     HallEnum.HallStatus status;
+    boolean isDeleted;
+    LocalDateTime timeCreated;
+    LocalDateTime timeUpdated;
 }

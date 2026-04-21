@@ -325,6 +325,12 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     private void validateManagerRole(HttpServletRequest httpRequest) {
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
         if (!HeaderNames.ROLE_MANAGER.equals(role)) {
+            log.warn("Forbidden request: requiredRole={} actualRole={} userId={} method={} path={}",
+                    HeaderNames.ROLE_MANAGER,
+                    role,
+                    httpRequest.getHeader(HeaderNames.X_USER_ID),
+                    httpRequest.getMethod(),
+                    httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
@@ -374,12 +380,16 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
         String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
         if (userIdRaw == null || userIdRaw.isBlank()) {
+            log.warn("Unauthorized request: missing userId header method={} path={}",
+                    httpRequest.getMethod(), httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
         try {
             return cinemaGrpcClient.getCinemaIdByUserId(UUID.fromString(userIdRaw));
         } catch (IllegalArgumentException ex) {
+            log.warn("Invalid userId header: userId={} method={} path={}",
+                    userIdRaw, httpRequest.getMethod(), httpRequest.getRequestURI());
             throw new BusinessException(ErrorCode.INVALID_FORMAT);
         }
     }
