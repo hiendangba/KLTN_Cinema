@@ -1,8 +1,12 @@
 package com.cinema.film_service.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
@@ -17,7 +21,9 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
@@ -31,174 +37,170 @@ import java.util.Map;
 @EnableCaching
 public class RedisConfig implements CachingConfigurer {
 
-        // Cache names constants
-        public static final String CACHE_BLACKLIST_TOKEN = "blacklist:token";
-        public static final String CACHE_USER_SESSION = "user:session";
-        public static final String CACHE_OTP = "otp";
+    public static final String CACHE_FILMS = "films";
 
-        @Value("${spring.data.redis.host}")
-        private String redisHost;
+    @Value("${spring.application.name:film-service}")
+    private String appName;
 
-        @Value("${spring.data.redis.port}")
-        private int redisPort;
+    @Value("${spring.data.redis.host}")
+    private String redisHost;
 
-        @Value("${spring.data.redis.password:}")
-        private String redisPassword;
+    @Value("${spring.data.redis.port}")
+    private int redisPort;
 
-        @Value("${spring.data.redis.username:default}")
-        private String redisUsername;
+    @Value("${spring.data.redis.password:}")
+    private String redisPassword;
 
-        @Value("${spring.data.redis.timeout:10000}")
-        private long timeout;
+    @Value("${spring.data.redis.username:}")
+    private String redisUsername;
 
-        @Bean
-        public LettuceConnectionFactory redisConnectionFactory() {
-                log.info("Configuring Redis connection to {}:{}", redisHost, redisPort);
+    @Value("${spring.data.redis.timeout:5000ms}")
+    private Duration commandTimeout;
 
-                // Redis standalone configuration
-                RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration();
-                redisConfig.setHostName(redisHost);
-                redisConfig.setPort(redisPort);
-                redisConfig.setUsername(redisUsername);
+    @Value("${spring.data.redis.connect-timeout:2000ms}")
+    private Duration connectTimeout;
 
-                if (redisPassword != null && !redisPassword.isEmpty()) {
-                        redisConfig.setPassword(redisPassword);
-                }
+    @Value("${spring.data.redis.client-name:}")
+    private String redisClientName;
 
-                SocketOptions socketOptions = SocketOptions.builder()
-                                .connectTimeout(Duration.ofMillis(timeout))
-                                .keepAlive(true)
-                                .build();
+    @Value("${spring.data.redis.lettuce.pool.max-active:8}")
+    private int poolMaxActive;
 
-                ClientOptions clientOptions = ClientOptions.builder()
-                                .socketOptions(socketOptions)
-                                .autoReconnect(true)
-                                .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
-                                .timeoutOptions(TimeoutOptions.enabled(Duration.ofMillis(timeout)))
-                                .build();
+    @Value("${spring.data.redis.lettuce.pool.max-idle:4}")
+    private int poolMaxIdle;
 
-                // Lettuce client configuration
-                LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
-                                .clientOptions(clientOptions)
-                                .commandTimeout(Duration.ofMillis(timeout))
-                                .build();
+    @Value("${spring.data.redis.lettuce.pool.min-idle:1}")
+    private int poolMinIdle;
 
-                LettuceConnectionFactory factory = new LettuceConnectionFactory(redisConfig, clientConfig);
-                factory.setValidateConnection(true);
-                factory.setShareNativeConnection(true);
+    @Value("${spring.data.redis.lettuce.pool.max-wait:2000ms}")
+    private Duration poolMaxWait;
 
-                return factory;
+    @Value("${spring.data.redis.lettuce.shutdown-timeout:100ms}")
+    private Duration shutdownTimeout;
+
+    @Bean
+    public LettuceConnectionFactory redisConnectionFactory() {
+        log.info("Configuring Redis connection to {}:{}", redisHost, redisPort);
+
+        RedisStandaloneConfiguration redisConfig = new RedisStandaloneConfiguration();
+        redisConfig.setHostName(redisHost);
+        redisConfig.setPort(redisPort);
+        if (redisUsername != null && !redisUsername.isBlank()) {
+            redisConfig.setUsername(redisUsername);
+        }
+        if (redisPassword != null && !redisPassword.isEmpty()) {
+            redisConfig.setPassword(redisPassword);
         }
 
-        @Bean
-        public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
-                log.info("Configuring RedisTemplate");
-                RedisTemplate<String, Object> template = new RedisTemplate<>();
-                template.setConnectionFactory(connectionFactory);
+        SocketOptions socketOptions = SocketOptions.builder()
+                .connectTimeout(connectTimeout)
+                .keepAlive(true)
+                .build();
 
-                StringRedisSerializer stringSerializer = new StringRedisSerializer();
-                template.setKeySerializer(stringSerializer);
-                template.setHashKeySerializer(stringSerializer);
+        ClientOptions clientOptions = ClientOptions.builder()
+                .socketOptions(socketOptions)
+                .autoReconnect(true)
+                .pingBeforeActivateConnection(true)
+                .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
+                .timeoutOptions(TimeoutOptions.enabled(commandTimeout))
+                .build();
 
-                RedisSerializer<Object> jsonSerializer = RedisSerializer.json();
-                template.setValueSerializer(jsonSerializer);
-                template.setHashValueSerializer(jsonSerializer);
+        GenericObjectPoolConfig<?> poolConfig = new GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(poolMaxActive);
+        poolConfig.setMaxIdle(poolMaxIdle);
+        poolConfig.setMinIdle(poolMinIdle);
+        poolConfig.setMaxWait(poolMaxWait);
 
-                template.afterPropertiesSet();
-                return template;
+        LettuceClientConfiguration.LettuceClientConfigurationBuilder clientConfigBuilder = LettucePoolingClientConfiguration
+                .builder()
+                .poolConfig(poolConfig)
+                .clientOptions(clientOptions)
+                .commandTimeout(commandTimeout)
+                .shutdownTimeout(shutdownTimeout);
+
+        if (redisClientName != null && !redisClientName.isBlank()) {
+            clientConfigBuilder.clientName(redisClientName);
         }
 
-        @Bean
-        @Override
-        public CacheManager cacheManager() {
-                log.info("Configuring CacheManager");
+        LettuceConnectionFactory factory = new LettuceConnectionFactory(redisConfig, clientConfigBuilder.build());
+        factory.setValidateConnection(true);
+        factory.setShareNativeConnection(true);
+        return factory;
+    }
 
-                RedisSerializer<Object> jsonSerializer = RedisSerializer.json();
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+        RedisTemplate<String, Object> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
 
-                RedisCacheConfiguration defaultConfig = createCacheConfig(
-                                Duration.ofHours(1),
-                                jsonSerializer);
+        StringRedisSerializer stringSerializer = new StringRedisSerializer();
+        RedisSerializer<Object> jsonSerializer = jsonSerializer();
 
-                Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
+        template.setKeySerializer(stringSerializer);
+        template.setHashKeySerializer(stringSerializer);
+        template.setValueSerializer(jsonSerializer);
+        template.setHashValueSerializer(jsonSerializer);
+        template.afterPropertiesSet();
+        return template;
+    }
 
-                cacheConfigurations.put(
-                                CACHE_BLACKLIST_TOKEN,
-                                createCacheConfig(Duration.ofMinutes(30), jsonSerializer));
-                cacheConfigurations.put(
-                                CACHE_USER_SESSION,
-                                createCacheConfig(Duration.ofMinutes(30), jsonSerializer));
-                cacheConfigurations.put(
-                                CACHE_OTP,
-                                createCacheConfig(Duration.ofMinutes(5), jsonSerializer));
+    @Bean
+    @Override
+    public CacheManager cacheManager() {
+        RedisSerializer<Object> jsonSerializer = jsonSerializer();
+        RedisCacheConfiguration defaultConfig = createCacheConfig(Duration.ofMinutes(30), jsonSerializer);
 
-                return RedisCacheManager.builder(redisConnectionFactory())
-                                .cacheDefaults(defaultConfig)
-                                .withInitialCacheConfigurations(cacheConfigurations)
-                                .transactionAware()
-                                .build();
-        }
+        Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
+        cacheConfigurations.put(CACHE_FILMS, createCacheConfig(Duration.ofMinutes(30), jsonSerializer));
 
-        /**
-         * Helper method - GIỮ NGUYÊN CODE CŨ
-         */
-        private RedisCacheConfiguration createCacheConfig(
-                        Duration ttl,
-                        RedisSerializer<Object> jsonSerializer) {
+        return RedisCacheManager.builder(redisConnectionFactory())
+                .cacheDefaults(defaultConfig)
+                .withInitialCacheConfigurations(cacheConfigurations)
+                .build();
+    }
 
-                return RedisCacheConfiguration.defaultCacheConfig()
-                                .entryTtl(ttl)
-                                .serializeKeysWith(
-                                                RedisSerializationContext.SerializationPair
-                                                                .fromSerializer(new StringRedisSerializer()))
-                                .serializeValuesWith(
-                                                RedisSerializationContext.SerializationPair
-                                                                .fromSerializer(jsonSerializer))
-                                .disableCachingNullValues();
-        }
+    private RedisCacheConfiguration createCacheConfig(Duration ttl, RedisSerializer<Object> jsonSerializer) {
+        return RedisCacheConfiguration.defaultCacheConfig()
+                .entryTtl(ttl)
+                .computePrefixWith(cacheName -> appName + "::" + cacheName + "::")
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
+                .disableCachingNullValues();
+    }
 
-        /**
-         * BỔ SUNG: Error handler cho cache
-         * Khi Redis down, app vẫn chạy được thay vì crash
-         */
-        @Bean
-        @Override
-        public CacheErrorHandler errorHandler() {
-                return new CacheErrorHandler() {
-                        @Override
-                        public void handleCacheGetError(RuntimeException exception,
-                                        org.springframework.cache.Cache cache,
-                                        Object key) {
-                                log.error("Failed to get cache [{}] with key [{}]: {}",
-                                                cache.getName(), key, exception.getMessage());
-                                // Không throw exception - let the method execute normally
-                        }
+    private RedisSerializer<Object> jsonSerializer() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
+        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        return new GenericJackson2JsonRedisSerializer(objectMapper);
+    }
 
-                        @Override
-                        public void handleCachePutError(RuntimeException exception,
-                                        org.springframework.cache.Cache cache,
-                                        Object key,
-                                        Object value) {
-                                log.error("Failed to put cache [{}] with key [{}]: {}",
-                                                cache.getName(), key, exception.getMessage());
-                                // Không throw exception - method continues
-                        }
+    @Bean
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new CacheErrorHandler() {
+            @Override
+            public void handleCacheGetError(RuntimeException exception, org.springframework.cache.Cache cache,
+                    Object key) {
+                log.error("Failed to get cache [{}] with key [{}]: {}", cache.getName(), key, exception.getMessage());
+            }
 
-                        @Override
-                        public void handleCacheEvictError(RuntimeException exception,
-                                        org.springframework.cache.Cache cache,
-                                        Object key) {
-                                log.error("Failed to evict cache [{}] with key [{}]: {}",
-                                                cache.getName(), key, exception.getMessage());
-                                // Không throw exception
-                        }
+            @Override
+            public void handleCachePutError(RuntimeException exception, org.springframework.cache.Cache cache, Object key,
+                    Object value) {
+                log.error("Failed to put cache [{}] with key [{}]: {}", cache.getName(), key, exception.getMessage());
+            }
 
-                        @Override
-                        public void handleCacheClearError(RuntimeException exception,
-                                        org.springframework.cache.Cache cache) {
-                                log.error("Failed to clear cache [{}]: {}",
-                                                cache.getName(), exception.getMessage());
-                                // Không throw exception
-                        }
-                };
-        }
+            @Override
+            public void handleCacheEvictError(RuntimeException exception, org.springframework.cache.Cache cache,
+                    Object key) {
+                log.error("Failed to evict cache [{}] with key [{}]: {}", cache.getName(), key, exception.getMessage());
+            }
+
+            @Override
+            public void handleCacheClearError(RuntimeException exception, org.springframework.cache.Cache cache) {
+                log.error("Failed to clear cache [{}]: {}", cache.getName(), exception.getMessage());
+            }
+        };
+    }
 }

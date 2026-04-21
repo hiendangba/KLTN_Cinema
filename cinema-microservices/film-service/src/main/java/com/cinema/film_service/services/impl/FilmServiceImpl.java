@@ -21,6 +21,7 @@ import com.cinema.http.HeaderNames;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -67,6 +68,7 @@ public class FilmServiceImpl implements FilmService {
     }
 
     @Override
+    @CacheEvict(value = "films", key = "#id")
     public ActionMessageResponse updateFilm(UUID id, UpdateFilmRequest request, HttpServletRequest httpRequest) {
         log.info("Cập nhật phim với ID: {}", id);
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
@@ -174,6 +176,7 @@ public class FilmServiceImpl implements FilmService {
     }
 
     @Override
+    @CacheEvict(value = "films", key = "#id")
     public ActionMessageResponse deleteFilm(UUID id, HttpServletRequest httpRequest) {
         log.info("Deleting film with ID: {}", id);
         String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);

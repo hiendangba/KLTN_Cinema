@@ -221,6 +221,8 @@ Nếu bạn là developer hoặc AI agent cần tài liệu kỹ thuật chi ti�
   - Phạm vi áp dụng: rà soát toàn bộ repo, đồng bộ lại lệnh chạy/build trong `README.md` và `TECHNICAL_AGENT_GUIDE.md` theo `compose.prod.yaml`/`compose.local.yaml`, cập nhật mapping cấu trúc Envoy/Compose/DB, dọn log debug `System.out.println` trong `identity-service/services/impl/UserServiceImpl.java`
   - Skills: `backend-dev-guidelines`, `api-documentation`, `architect-review`
   - Phạm vi áp dụng: bổ sung API `GET /api/users/me` tại `user-service` theo đúng cấu trúc `controller -> service -> repository`, cập nhật docs endpoint trong `TECHNICAL_AGENT_GUIDE.md`
+  - Skills: `architect-review`, `backend-dev-guidelines`
+  - Phạm vi áp dụng: rà soát toàn bộ phần phụ thuộc `cinema-service` (gRPC contract/config), chuẩn hóa `cinema-service/pom.xml` theo parent multi-module và thêm module `cinema-service` vào `pom.xml` gốc để sẵn sàng cho bước thêm entity
 
 ---
 

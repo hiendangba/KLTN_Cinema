@@ -38,6 +38,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
@@ -65,11 +67,11 @@ public class UserServiceImpl implements UserService {
     static String VerifyToken = "verifyToken";
     static String RefreshToken = "refreshToken";
 
-    static String OTP_PREFIX = "otp:";
-    static String OTP_SUBJECT_PREFIX = "otp:subject:";
-    static String ACCESS_TOKEN_PREFIX = "token:access:";
-    static String REFRESH_TOKEN_PREFIX = "token:refresh:";
-    static String USER_TOKENS_PREFIX = "user_tokens:";
+    static String OTP_PREFIX = "identity:otp:";
+    static String OTP_SUBJECT_PREFIX = "identity:otp:subject:";
+    static String ACCESS_TOKEN_PREFIX = "identity:token:access:";
+    static String REFRESH_TOKEN_PREFIX = "identity:token:refresh:";
+    static String USER_TOKENS_PREFIX = "identity:user_tokens:";
 
     static Pattern STRONG_PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,32}$");
@@ -574,9 +576,9 @@ public class UserServiceImpl implements UserService {
         String accessTokenKey = ACCESS_TOKEN_PREFIX + tokenId;
         String refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenId;
 
-        redisTemplate.opsForValue().set(accessTokenKey, user.getId(), jwtServiceImpl.getAccessTokenExpiration(),
+        redisTemplate.opsForValue().set(accessTokenKey, user.getId().toString(), jwtServiceImpl.getAccessTokenExpiration(),
                 TimeUnit.MILLISECONDS);
-        redisTemplate.opsForValue().set(refreshTokenKey, user.getId(), jwtServiceImpl.getRefreshTokenExpiration(),
+        redisTemplate.opsForValue().set(refreshTokenKey, user.getId().toString(), jwtServiceImpl.getRefreshTokenExpiration(),
                 TimeUnit.MILLISECONDS);
 
         String userTokensKey = USER_TOKENS_PREFIX + user.getId();
@@ -608,13 +610,16 @@ public class UserServiceImpl implements UserService {
             String userTokensKey = USER_TOKENS_PREFIX + userId;
             Set<Object> tokenIds = redisTemplate.opsForSet().members(userTokensKey);
             if (tokenIds != null && !tokenIds.isEmpty()) {
+                List<String> keysToDelete = new ArrayList<>();
                 for (Object tokenId : tokenIds) {
                     String tokenIdStr = (String) tokenId;
                     String accessTokenKey = ACCESS_TOKEN_PREFIX + tokenIdStr;
                     String refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenIdStr;
-                    redisTemplate.delete(accessTokenKey);
-                    redisTemplate.delete(refreshTokenKey);
-
+                    keysToDelete.add(accessTokenKey);
+                    keysToDelete.add(refreshTokenKey);
+                }
+                if (!keysToDelete.isEmpty()) {
+                    redisTemplate.delete(keysToDelete);
                 }
             }
             redisTemplate.delete(userTokensKey);
@@ -690,9 +695,9 @@ public class UserServiceImpl implements UserService {
             refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenId;
 
             // Tao rotate token va luu vao redis
-            redisTemplate.opsForValue().set(accessTokenKey, userId, jwtServiceImpl.getAccessTokenExpiration(),
+            redisTemplate.opsForValue().set(accessTokenKey, userId.toString(), jwtServiceImpl.getAccessTokenExpiration(),
                     TimeUnit.MILLISECONDS);
-            redisTemplate.opsForValue().set(refreshTokenKey, userId, ttlMillis, TimeUnit.MILLISECONDS);
+            redisTemplate.opsForValue().set(refreshTokenKey, userId.toString(), ttlMillis, TimeUnit.MILLISECONDS);
             redisTemplate.opsForSet().add(userTokensKey, tokenId);
             redisTemplate.expire(userTokensKey, jwtServiceImpl.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
 

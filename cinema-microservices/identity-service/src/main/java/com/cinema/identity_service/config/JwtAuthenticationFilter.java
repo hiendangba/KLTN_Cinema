@@ -29,7 +29,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtServiceImpl jwtService;
     private final RedisTemplate<String, Object> redisTemplate;
-    private static final String ACCESS_TOKEN_PREFIX = "token:access:";
+    private static final String ACCESS_TOKEN_PREFIX = "identity:token:access:";
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
     throws ServletException, IOException {
