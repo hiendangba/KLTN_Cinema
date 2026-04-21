@@ -32,6 +32,9 @@ public interface CinemaService {
 
     ActionMessageResponse assignStaff(UUID cinemaId, AssignCinemaStaffRequest request, HttpServletRequest httpRequest);
 
+    ActionMessageResponse updateStaffAssignment(UUID cinemaId, AssignCinemaStaffRequest request,
+                                                HttpServletRequest httpRequest);
+
     ActionMessageResponse unassignStaff(UUID cinemaId, UUID staffId, HttpServletRequest httpRequest);
 
     List<CinemaStaffResponse> getCinemaStaffs(UUID cinemaId);

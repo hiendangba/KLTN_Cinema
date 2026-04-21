@@ -195,6 +195,25 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     @Transactional
+    public ActionMessageResponse updateStaffAssignment(UUID cinemaId, AssignCinemaStaffRequest request,
+                                                       HttpServletRequest httpRequest) {
+        validateAdminRole(httpRequest);
+        getActiveCinemaOrThrow(cinemaId);
+
+        CinemaStaff cinemaStaff = cinemaStaffRepository.findByStaffId(request.getStaffId())
+                .orElseGet(CinemaStaff::new);
+        cinemaStaff.setCinemaId(cinemaId);
+        cinemaStaff.setStaffId(request.getStaffId());
+        cinemaStaff.setActive(true);
+        cinemaStaffRepository.save(cinemaStaff);
+
+        return ActionMessageResponse.builder()
+                .message("Cap nhat nhan vien vao rap thanh cong")
+                .build();
+    }
+
+    @Override
+    @Transactional
     public ActionMessageResponse unassignStaff(UUID cinemaId, UUID staffId, HttpServletRequest httpRequest) {
         validateAdminRole(httpRequest);
         getActiveCinemaOrThrow(cinemaId);

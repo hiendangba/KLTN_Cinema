@@ -94,6 +94,15 @@ public class CinemaController extends BaseController {
         return ok(response);
     }
 
+    @PutMapping("/{id}/staffs")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateStaffAssignment(
+            @PathVariable UUID id,
+            @Valid @RequestBody AssignCinemaStaffRequest request,
+            HttpServletRequest httpRequest) {
+        ActionMessageResponse response = cinemaService.updateStaffAssignment(id, request, httpRequest);
+        return ok(response);
+    }
+
     @DeleteMapping("/{id}/staffs/{staffId}")
     public ResponseEntity<APIResponse<ActionMessageResponse>> unassignStaff(
             @PathVariable UUID id,

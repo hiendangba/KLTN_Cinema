@@ -9,8 +9,8 @@
         <version>1.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>hall-services</artifactId>
-    <name>hall-services</name>
+    <artifactId>hall-service</artifactId>
+    <name>hall-service</name>
 
     <dependencies>
         <dependency>
