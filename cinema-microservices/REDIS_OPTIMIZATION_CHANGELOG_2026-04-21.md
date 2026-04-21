@@ -1,244 +1,354 @@
-﻿# Nhật ký tối ưu Redis và lý do kỹ thuật
+﻿# Redis trong project này: Giải thích chi tiết cho người mới + Nhật ký thay đổi
 
-Ngày: 2026-04-21  
-Phạm vi: Các thay đổi liên quan Redis trong toàn bộ project  
-Người thực hiện: Codex assistant
+Ngày cập nhật: 2026-04-21  
+Phạm vi: Toàn bộ thay đổi liên quan Redis trong project `cinema-microservices`  
+Mục tiêu: Giúp bạn hiểu Redis từ gốc, hiểu Redis đang chạy thế nào trong project, và hiểu lý do từng thay đổi đã làm.
 
-## 1) Mục tiêu của tài liệu này
+---
 
-Bạn yêu cầu không chỉ ghi lại các thay đổi mà còn giải thích thật kỹ "vì sao" phải đổi như vậy.  
-Tài liệu này trả lời 5 câu hỏi cho từng nhóm thay đổi:
-1. Đã đổi cái gì
-2. Vì sao cần đổi
-3. Rủi ro nào được giảm
-4. Trade-off (đánh đổi) là gì
-5. Sau khi đổi cần theo dõi gì
+## 0) Redis là gì? (Giải thích thật dễ hiểu)
 
-## 2) Những vấn đề ban đầu trước khi tối ưu
+### 0.1 Redis là database kiểu gì?
 
-Qua review Redis toàn bộ project, các điểm chính trước khi chỉnh:
-1. Trong `application.yaml` đã có cấu hình pool, nhưng cấu hình Java custom chưa theo hướng pooling rõ ràng như các hệ thống production lớn.
-2. Timeout đang thiên về kiểu số thô, kém linh hoạt khi deploy nhiều môi trường.
-3. Có chỗ chờ tài nguyên theo kiểu có thể kéo dài không mong muốn khi Redis nghẽn.
-4. Namespace key Redis của identity (OTP/token) chưa đồng bộ triệt để.
-5. Cache phim có nguy cơ stale data sau update/delete.
-6. Redis trong `compose.prod.yaml` chưa có bộ cấu hình runtime đầy đủ theo hướng production (healthcheck, policy bộ nhớ, persistence rõ ràng).
-7. Local dev có thể kém ổn định khi thiếu biến môi trường Redis.
+Redis là một **in-memory data store** (lưu dữ liệu trên RAM), mô hình chủ yếu là **key-value**.
+- Key: giống tên biến
+- Value: dữ liệu tương ứng với key đó
 
-## 3) Các quyết định kỹ thuật và lý do chi tiết
+Ví dụ:
+- key: `identity:otp:user123`
+- value: `849231`
 
-### Quyết định A: Dùng cấu hình Lettuce Pooling tường minh
+Vì lưu trên RAM nên Redis rất nhanh, thường dùng để:
+1. Cache dữ liệu đọc nhiều
+2. Lưu session/token tạm thời
+3. Rate limit
+4. Queue nhẹ/counter/distributed lock (tùy use-case)
 
-File đã đổi:
+### 0.2 Tại sao Redis nhanh?
+
+Vì:
+1. Đọc/ghi RAM thay vì disk
+2. Cấu trúc dữ liệu tối ưu
+3. Protocol rất nhẹ
+
+Đổi lại:
+- RAM đắt hơn disk
+- Nếu không cấu hình persistence/replication tốt thì có rủi ro mất dữ liệu khi sự cố
+
+### 0.3 TTL là gì?
+
+TTL = Time To Live (thời gian sống của key).
+- Sau TTL, key tự hết hạn.
+
+Ví dụ OTP TTL 5 phút:
+- 10:00 tạo OTP
+- 10:05 key bị Redis xóa tự động
+
+Đây là lý do Redis rất hợp OTP/token tạm thời.
+
+### 0.4 Cache hit / cache miss là gì?
+
+Giả sử endpoint lấy thông tin phim:
+1. App đọc key cache `film-service::films::<id>`
+2. Nếu có dữ liệu: **cache hit** (trả ngay, rất nhanh)
+3. Nếu không có: **cache miss**
+   - App query DB
+   - Ghi lại Redis
+   - Trả response
+
+Mục tiêu của caching là tăng hit ratio để giảm tải DB.
+
+### 0.5 Vì sao phải có connection pool?
+
+App không nên tạo kết nối Redis mới cho mọi request (rất tốn).
+Nên dùng pool:
+- Có sẵn N kết nối
+- Request mượn connection, dùng xong trả lại
+
+Pool tốt giúp:
+- Ổn định latency
+- Tránh mở quá nhiều connection
+- Kiểm soát hành vi khi tải cao
+
+### 0.6 Serialization là gì?
+
+Java object không thể lưu thẳng vào Redis theo nghĩa text thuần.
+Phải serialize object thành dạng có thể lưu (JSON/binary...).
+Trong project này dùng JSON serializer để dễ tương thích và dễ debug.
+
+---
+
+## 1) Redis trong project này đang làm những việc gì?
+
+### 1.1 `identity-service`
+
+Redis dùng cho:
+1. OTP
+2. Access token / refresh token state
+3. Danh sách token theo user (hỗ trợ logout/cleanup)
+
+Tức là Redis đóng vai trò **state tạm thời cho auth flow**.
+
+### 1.2 `film-service`
+
+Redis dùng cho cache dữ liệu phim qua `@Cacheable`.
+Mục tiêu: giảm read load vào PostgreSQL, tăng tốc API đọc.
+
+### 1.3 `user-service`, `showtime-service`
+
+Có sẵn hạ tầng cấu hình Redis đồng bộ (để cache/state nếu mở rộng logic).
+
+### 1.4 Redis container trong `compose.prod.yaml`
+
+Đây là runtime Redis khi deploy compose production.
+
+---
+
+## 2) Trước khi tối ưu có vấn đề gì?
+
+1. Pooling chưa được cấu hình theo kiểu tường minh, dễ lệch với kỳ vọng production.
+2. Timeout cấu hình chưa tối ưu cho đa môi trường.
+3. Có rủi ro chờ tài nguyên quá lâu khi Redis nghẽn.
+4. Key namespace identity chưa đồng bộ hết.
+5. Cache phim có nguy cơ stale sau update/delete.
+6. Redis runtime prod chưa hardening đủ rõ (healthcheck/memory policy/persistence).
+7. Local thiếu default Redis env nên dễ fail khi dev.
+
+---
+
+## 3) Những thay đổi đã làm và lý do cực kỳ cụ thể
+
+## 3.1 Chuyển sang Lettuce Pooling tường minh
+
+File:
 - `identity-service/src/main/java/com/cinema/identity_service/config/RedisConfig.java`
 - `user-service/src/main/java/com/cinema/user_service/config/RedisConfig.java`
 - `film-service/src/main/java/com/cinema/film_service/config/RedisConfig.java`
 - `showtime-service/src/main/java/com/cinema/showtime_service/config/RedisConfig.java`
 
-Đã thay đổi:
-- Chuyển sang `LettucePoolingClientConfiguration` + `GenericObjectPoolConfig`.
-- Ánh xạ pool từ config (`max-active`, `max-idle`, `min-idle`, `max-wait`).
-- Giữ các option phục hồi kết nối (`autoReconnect`, `pingBeforeActivateConnection`, `REJECT_COMMANDS` khi mất kết nối).
+Đã làm:
+- Dùng `LettucePoolingClientConfiguration` + `GenericObjectPoolConfig`.
+- Đọc các tham số pool từ `application.yaml`.
 
-Vì sao phải đổi:
-- Ở tải cao, quản lý vòng đời connection quyết định trực tiếp p95/p99 latency.
-- Hệ thống production lớn thường cần hành vi pool “deterministic” thay vì phụ thuộc mặc định.
-- Tránh connection churn khi có burst traffic.
+Vì sao:
+- Hệ thống lớn cần kiểm soát rõ số lượng kết nối hoạt động.
+- Tránh mở connection tràn lan khi có burst traffic.
 
-Rủi ro giảm được:
-- Tắc nghẽn thread khi kết nối Redis không ổn định.
-- Dao động latency lớn do tạo/hủy kết nối liên tục.
+Hiệu ứng thực tế:
+- Ổn định hơn ở giờ cao điểm
+- Dễ tuning theo traffic thật
 
-Đánh đổi:
-- Cần theo dõi metric pool để tuning định kỳ.
-- Cấu hình pool sai vẫn có thể tạo bottleneck.
+Trade-off:
+- Cần monitor pool metrics để chỉnh `max-active/max-idle`.
 
 
-### Quyết định B: Bổ sung `commons-pool2`
+## 3.2 Bổ sung dependency `commons-pool2`
 
-File đã đổi:
+File:
 - `identity-service/pom.xml`
 - `user-service/pom.xml`
 - `film-service/pom.xml`
 - `showtime-service/pom.xml`
 
-Đã thay đổi:
-- Thêm dependency `org.apache.commons:commons-pool2`.
+Đã làm:
+- Thêm `org.apache.commons:commons-pool2`.
 
-Vì sao phải đổi:
-- Pooling của Lettuce cần backend pool implementation.
-- Đây là dependency chuẩn cho cấu hình pool kiểu này.
+Vì sao:
+- Lettuce pooling cần implementation của object pool.
 
-Rủi ro giảm được:
-- Tránh lỗi runtime hoặc pool không hoạt động đúng kỳ vọng.
-
-Đánh đổi:
-- Tăng thêm 1 dependency (nhẹ và phổ biến).
+Nếu không làm:
+- Có thể cấu hình pool nhưng runtime không đúng kỳ vọng.
 
 
-### Quyết định C: Chuẩn hóa timeout sang `Duration`
+## 3.3 Chuẩn hóa timeout bằng `Duration`
 
-File đã đổi:
+File:
 - 4 file `RedisConfig.java` ở trên.
 
-Đã thay đổi:
-- Các timeout dùng `Duration` với default rõ đơn vị: `5000ms`, `2000ms`, `100ms`.
-- Áp dụng cho connect-timeout, command-timeout, pool max-wait, shutdown-timeout.
+Đã làm:
+- Dùng `Duration` cho:
+  - connect-timeout
+  - command-timeout
+  - pool max-wait
+  - shutdown-timeout
 
-Vì sao phải đổi:
-- Môi trường production thường set env theo dạng `2s`, `500ms`, `1m`.
-- `Duration` giảm sai sót do nhầm đơn vị ms/s.
+Vì sao:
+- Tránh nhầm đơn vị ms/s.
+- Hỗ trợ config linh hoạt `500ms`, `2s`, `1m`.
 
-Rủi ro giảm được:
-- Timeout quá ngắn hoặc quá dài do parse sai ý nghĩa giá trị.
-
-Đánh đổi:
-- Cần giữ format env nhất quán theo chuẩn Duration.
+Lợi ích:
+- Ít lỗi cấu hình khi deploy qua nhiều môi trường.
 
 
-### Quyết định D: Ổn định serializer Redis theo hướng an toàn liên service
+## 3.4 Chuẩn hóa serializer JSON cho Redis
 
-File đã đổi:
+File:
 - 4 file `RedisConfig.java`.
 
-Đã thay đổi:
-- Dùng `GenericJackson2JsonRedisSerializer` với `JavaTimeModule`.
-- Tắt format timestamp cho date/time.
+Đã làm:
+- Dùng `GenericJackson2JsonRedisSerializer` + `JavaTimeModule`.
 
-Vì sao phải đổi:
-- Dữ liệu cache/value cần serializable ổn định khi model thay đổi theo thời gian.
-- Xử lý tốt kiểu thời gian của Java.
+Vì sao:
+- Tránh lỗi serialize/deserialize khi object chứa time type.
+- Dễ debug dữ liệu cache hơn.
 
-Rủi ro giảm được:
-- Lỗi deserialize khó debug khi object/kiểu thời gian thay đổi.
-
-Đánh đổi:
-- JSON có thể lớn hơn một số binary serializer.
+Trade-off:
+- JSON có thể tốn RAM hơn binary một chút.
 
 
-### Quyết định E: Namespace cache key theo tên service
+## 3.5 Namespace cache key theo service
 
-File đã đổi:
+File:
 - 4 file `RedisConfig.java`.
 
-Đã thay đổi:
-- Prefix cache theo mẫu: `appName::cacheName::...`
+Đã làm:
+- Prefix key cache theo `appName::cacheName::`.
 
-Vì sao phải đổi:
-- Multi-service dùng chung Redis rất dễ đụng key nếu không namespace.
-- Đây là thực hành phổ biến ở production lớn.
+Vì sao:
+- Nhiều service dùng chung Redis thì phải chống đụng key.
 
-Rủi ro giảm được:
-- Ghi đè cache giữa các service.
-- Bug stale data khó truy vết.
+Ví dụ:
+- `film-service::films::123`
+- `identity-service::otp::abc`
 
-Đánh đổi:
-- Key dài hơn một chút (tăng nhẹ memory).
+Lợi ích:
+- Tránh overwrite key cross-service.
 
 
-### Quyết định F: Sửa stale cache ở film-service
+## 3.6 Sửa stale cache của phim
 
-File đã đổi:
+File:
 - `film-service/src/main/java/com/cinema/film_service/services/impl/FilmServiceImpl.java`
 
-Đã thay đổi:
-- Bổ sung `@CacheEvict(value = "films", key = "#id")` cho `updateFilm` và `deleteFilm`.
+Đã làm:
+- Thêm `@CacheEvict` cho `updateFilm` và `deleteFilm`.
 
-Vì sao phải đổi:
-- Có `@Cacheable` ở luồng đọc thì luồng ghi bắt buộc phải evict/invalidate.
-- Nếu không, API có thể trả dữ liệu cũ sau khi DB đã đổi.
+Vì sao:
+- Đọc có cache thì ghi phải invalidate cache.
 
-Rủi ro giảm được:
-- Sai lệch dữ liệu giữa DB và response API.
-
-Đánh đổi:
-- Sau thao tác ghi sẽ có một vài cache miss tự nhiên.
+Nếu không làm:
+- User update phim xong nhưng API đọc vẫn trả dữ liệu cũ.
 
 
-### Quyết định G: Chuẩn hóa keyspace token/OTP của identity
+## 3.7 Chuẩn hóa keyspace OTP/token ở identity
 
-File đã đổi:
+File:
 - `identity-service/src/main/java/com/cinema/identity_service/config/JwtAuthenticationFilter.java`
 - `identity-service/src/main/java/com/cinema/identity_service/services/impl/UserServiceImpl.java`
 
-Đã thay đổi:
-- Đồng bộ prefix:
+Đã làm:
+- Đồng bộ prefix key:
   - `identity:otp:`
   - `identity:otp:subject:`
   - `identity:token:access:`
   - `identity:token:refresh:`
   - `identity:user_tokens:`
-- Giá trị user id trong token key lưu thống nhất kiểu string.
-- Xóa token key theo batch trong luồng logout.
+- Lưu userId dưới dạng string thống nhất.
+- Xóa key theo batch khi logout.
 
-Vì sao phải đổi:
-- Dễ vận hành, dễ quan sát key, dễ cô lập theo domain identity.
-- Batch delete giảm số round-trip đến Redis.
-
-Rủi ro giảm được:
-- Va chạm key với module khác.
-- Cleanup chậm khi người dùng có nhiều token.
-
-Đánh đổi:
-- Code cleanup phức tạp hơn một chút.
+Vì sao:
+- Dễ vận hành, dễ query key trong Redis CLI.
+- Batch delete giảm số lần round-trip.
 
 
-### Quyết định H: Cấu hình local an toàn hơn, production rõ ràng hơn
+## 3.8 Cấu hình YAML an toàn hơn cho local + rõ hơn cho prod
 
-File đã đổi:
+File:
 - `identity-service/src/main/resources/application.yaml`
 - `user-service/src/main/resources/application.yaml`
 - `film-service/src/main/resources/application.yaml`
 - `showtime-service/src/main/resources/application.yaml`
 
-Đã thay đổi:
-- Thêm/chuẩn hóa:
-  - `spring.data.redis.connect-timeout`
-  - `spring.data.redis.client-name`
-- Bổ sung default local:
-  - host: `localhost`
-  - port: `6379`
-  - username/password: rỗng
-- Đổi `max-wait` fallback sang hữu hạn (`2000`) thay vì vô hạn.
+Đã làm:
+- Bổ sung `connect-timeout`, `client-name`.
+- Fallback local:
+  - `REDIS_HOST:localhost`
+  - `REDIS_PORT:6379`
+  - user/pass rỗng
+- `max-wait` mặc định hữu hạn (2000ms) thay vì vô hạn.
 
-Vì sao phải đổi:
-- Local cần chạy được ngay cả khi thiếu một số env.
-- Production cần fail-fast có kiểm soát khi Redis bão hòa.
-
-Rủi ro giảm được:
-- Dev local lỗi khởi động do thiếu env Redis.
-- Thread chờ vô hạn gây nghẽn chuỗi request.
-
-Đánh đổi:
-- Khi Redis rất tải nặng, request có thể fail sớm thay vì chờ lâu.
+Vì sao:
+- Dev local chạy dễ hơn khi chưa set đầy đủ env.
+- Khi Redis quá tải, fail-fast tốt hơn chờ vô hạn.
 
 
-### Quyết định I: Hardening Redis trong `compose.prod.yaml`
+## 3.9 Hardening Redis runtime trong `compose.prod.yaml`
 
-File đã đổi:
+File:
 - `compose.prod.yaml`
 
-Đã thay đổi:
-- Bổ sung command runtime cho Redis:
-  - AOF bật
-  - save snapshot rules
-  - `maxmemory` + `maxmemory-policy allkeys-lru`
-  - `tcp-keepalive`
-- Bổ sung `healthcheck` (`redis-cli ping`).
+Đã làm:
+- Bật AOF
+- Thiết lập save snapshot rules
+- Set `maxmemory` + `maxmemory-policy allkeys-lru`
+- Set tcp keepalive
+- Thêm healthcheck `redis-cli ping`
 
-Vì sao phải đổi:
-- Production cần chính sách persistence/eviction rõ ràng.
-- Healthcheck giúp orchestration giám sát readiness tốt hơn.
+Vì sao:
+- Production cần hành vi rõ ràng khi đầy RAM và khi restart.
+- Healthcheck giúp hệ thống phụ thuộc biết Redis đã sẵn sàng.
 
-Rủi ro giảm được:
-- Hành vi eviction khó đoán khi memory đầy.
-- Trạng thái service mập mờ khi phụ thuộc Redis.
+Trade-off:
+- Persistence có overhead ghi.
+- Policy `allkeys-lru` cần sizing RAM đủ tốt.
 
-Đánh đổi:
-- Persistence tăng overhead ghi.
-- Nếu memory sizing không đủ, `allkeys-lru` có thể đẩy cả key quan trọng.
+---
 
-## 4) Danh sách file đã thay đổi (liên quan Redis)
+## 4) Redis hoạt động thế nào trong luồng thật của project?
+
+## 4.1 Luồng đọc phim có cache
+
+1. Client gọi API lấy phim theo ID.
+2. `@Cacheable("films")` kiểm tra Redis trước.
+3. Nếu có key -> trả luôn (hit).
+4. Nếu không có -> query DB -> trả dữ liệu + ghi cache.
+
+## 4.2 Luồng update/delete phim
+
+1. API update/delete chạy vào DB.
+2. `@CacheEvict` xóa key cache phim tương ứng.
+3. Lần đọc sau sẽ lấy dữ liệu mới từ DB và cache lại.
+
+## 4.3 Luồng auth/token của identity
+
+1. Khi login/refresh, service sinh token id.
+2. Lưu key access/refresh vào Redis kèm TTL.
+3. Lưu mapping `identity:user_tokens:<userId>` để quản lý token của user.
+4. Khi logout, lấy danh sách token của user rồi xóa batch key liên quan.
+
+---
+
+## 5) Các thông số bạn cần hiểu để tự tuning sau này
+
+### 5.1 Pool
+
+- `max-active`: số connection tối đa có thể mượn cùng lúc.
+- `max-idle`: số connection nhàn rỗi tối đa giữ lại.
+- `min-idle`: số connection nhàn rỗi tối thiểu.
+- `max-wait`: request chờ tối đa bao lâu để mượn connection.
+
+Gợi ý tư duy:
+- Nếu thường xuyên timeout vì "cannot get resource from pool" -> xem tăng `max-active` hoặc tối ưu truy cập Redis.
+- Nếu idle quá nhiều -> giảm `max-idle` để tiết kiệm tài nguyên.
+
+### 5.2 Timeout
+
+- `connect-timeout`: timeout khi tạo kết nối ban đầu.
+- `command-timeout`: timeout khi gửi lệnh Redis.
+
+Tư duy:
+- Quá thấp -> fail nhiều dù hệ thống chỉ hơi chậm.
+- Quá cao -> request treo lâu, dồn thread.
+
+### 5.3 TTL
+
+- OTP TTL ngắn (5 phút) là hợp lý.
+- Access/refresh token TTL phải theo security policy.
+- Cache phim TTL nên cân bằng giữa tốc độ và độ mới dữ liệu.
+
+---
+
+## 6) Danh sách file đã thay đổi
 
 - `identity-service/src/main/java/com/cinema/identity_service/config/RedisConfig.java`
 - `user-service/src/main/java/com/cinema/user_service/config/RedisConfig.java`
@@ -257,33 +367,53 @@ Rủi ro giảm được:
 - `showtime-service/pom.xml`
 - `compose.prod.yaml`
 
-## 5) Checklist vận hành sau khi triển khai
+---
 
-Nên theo dõi:
-1. Pool metrics: active/idle/wait time.
-2. Redis latency p95/p99.
-3. Cache hit ratio (đặc biệt nhóm `films` và token-related).
-4. Memory used + eviction count.
-5. Số lượng key OTP/token theo thời gian.
+## 7) Cách tự kiểm tra Redis đang chạy tốt hay chưa
 
-Nếu p99 tăng:
-1. Tăng `max-active` có kiểm soát.
-2. Kiểm tra lại `command-timeout` và `max-wait`.
-3. Kiểm tra sizing Redis + network latency giữa service và Redis.
+Checklist nhanh:
+1. Kiểm tra service có kết nối Redis ổn định (log startup không lỗi auth/timeout).
+2. Quan sát cache hit ratio của endpoint phim.
+3. Test update phim -> đọc lại ngay -> dữ liệu phải mới (không stale).
+4. Test login/logout -> key token xuất hiện rồi bị xóa đúng.
+5. Theo dõi Redis memory + eviction count.
+6. Theo dõi p95/p99 latency Redis command.
 
-## 6) Trạng thái kiểm chứng
+---
 
-- Đã review tĩnh toàn bộ thay đổi và tính nhất quán cấu hình Redis.
-- Chưa chạy compile/test trực tiếp trong môi trường hiện tại vì thiếu Maven (`mvn` not found).
+## 8) Những hiểu lầm phổ biến (để tránh)
 
-## 7) Kết luận ngắn
+1. "Đã dùng Redis thì lúc nào cũng nhanh hơn DB".
+- Sai nếu cache miss nhiều hoặc serialize quá nặng.
 
-Sau các thay đổi này, Redis setup của project đã gần hơn với cách làm ở các hệ thống production lớn:
-- Pooling tường minh và có giới hạn chờ
-- Timeout typed bằng `Duration`
-- Namespace key rõ ràng theo service/domain
-- Invalidate cache đúng luồng ghi
-- Runtime Redis có healthcheck + memory/persistence policy
-- Local có default an toàn để giảm lỗi môi trường
+2. "Pool càng lớn càng tốt".
+- Sai. Pool quá lớn có thể làm Redis quá tải và tăng contention.
 
-Điểm quan trọng nhất: hệ thống giờ có hành vi ổn định và dự đoán được hơn khi tải tăng hoặc khi Redis gặp dao động.
+3. "TTL càng dài càng tốt".
+- Sai. TTL dài dễ gây stale data.
+
+4. "Eviction policy nào cũng được".
+- Sai. Policy phải phù hợp loại key (cache vs token/session).
+
+---
+
+## 9) Trạng thái xác minh hiện tại
+
+- Đã review tĩnh toàn bộ thay đổi liên quan Redis.
+- Chưa chạy compile/test tự động trong máy hiện tại vì thiếu Maven (`mvn` not found).
+
+---
+
+## 10) Kết luận dễ nhớ
+
+Nếu tóm gọn bằng 1 câu:
+
+Các thay đổi này biến Redis từ mức "dùng được" sang mức "vận hành được kiểu production":
+- có kiểm soát connection
+- có timeout rõ ràng
+- có namespace key
+- có invalidate cache đúng
+- có runtime policy rõ ràng
+- có local fallback an toàn
+
+Điều này giúp hệ thống ổn định hơn khi traffic tăng, và giúp team debug/vận hành dễ hơn rất nhiều.

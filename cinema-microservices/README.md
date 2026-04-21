@@ -126,6 +126,7 @@ docker compose -f compose.prod.yaml down -v
 - `User`: thông tin hồ sơ người dùng.
 - `Film`: quản lý phim và tìm kiếm phim.
 - `Showtime`: quản lý suất chiếu và chính sách giá.
+- `Cinema`: quản lý rạp, tọa độ, giờ mở/đóng cửa và staff mapping theo rạp.
 - `Hall`: quản lý phòng chiếu và sơ đồ ghế.
 - `Email`: gửi thông báo bất đồng bộ.
 
