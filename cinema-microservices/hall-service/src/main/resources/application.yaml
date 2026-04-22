@@ -24,6 +24,24 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:5000}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2000}
+      client-name: ${REDIS_CLIENT_NAME:${APP_NAME:hall-services}}
+      ssl:
+        enabled: false
+      lettuce:
+        pool:
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:4}
+          min-idle: ${REDIS_POOL_MIN_IDLE:1}
+          max-wait: ${REDIS_POOL_MAX_WAIT:2000}
+        shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:100}
   grpc:
     server:
       port: ${GRPC_SERVER_PORT:9197}

@@ -4,8 +4,8 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication(scanBasePackages = "com.cinema")
-public class HallServicesApplication {
+public class HallServiceApplication {
     public static void main(String[] args) {
-        SpringApplication.run(HallServicesApplication.class, args);
+        SpringApplication.run(HallServiceApplication.class, args);
     }
 }

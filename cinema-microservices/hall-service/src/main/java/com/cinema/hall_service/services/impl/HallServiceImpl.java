@@ -8,6 +8,7 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.hall_service.config.RedisConfig;
 import com.cinema.hall_service.dto.request.HallCreateRequest;
 import com.cinema.hall_service.dto.request.HallField;
 import com.cinema.hall_service.dto.request.UpdateHallLayoutRequest;
@@ -27,6 +28,8 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -81,6 +84,7 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = RedisConfig.CACHE_HALLS, key = "#id")
     public HallResponse getHallById(UUID id) {
         return toHallResponse(getActiveHallOrThrow(id));
     }
@@ -134,6 +138,7 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
@@ -153,6 +158,7 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse updateHallStatus(UUID hallId, UpdateHallStatusRequest request,
                                                   HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
@@ -167,6 +173,7 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse updateHallLayout(UUID hallId, UpdateHallLayoutRequest request,
                                                   HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
@@ -186,6 +193,7 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional
+    @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse deleteHall(UUID hallId, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);

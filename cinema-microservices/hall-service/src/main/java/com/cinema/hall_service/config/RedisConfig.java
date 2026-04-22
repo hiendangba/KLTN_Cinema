@@ -1,11 +1,11 @@
-package com.cinema.showtime_service.config;
+package com.cinema.hall_service.config;
 
 import io.lettuce.core.ClientOptions;
 import io.lettuce.core.SocketOptions;
 import io.lettuce.core.TimeoutOptions;
 import io.lettuce.core.api.StatefulConnection;
-import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CachingConfigurer;
@@ -35,11 +35,9 @@ import java.util.Map;
 @EnableCaching
 public class RedisConfig implements CachingConfigurer {
 
-    public static final String CACHE_BLACKLIST_TOKEN = "blacklist:token";
-    public static final String CACHE_USER_SESSION = "user:session";
-    public static final String CACHE_OTP = "otp";
+    public static final String CACHE_HALLS = "halls";
 
-    @Value("${spring.application.name:showtime-service}")
+    @Value("${spring.application.name:hall-services}")
     private String appName;
 
     @Value("${spring.data.redis.host}")
@@ -148,12 +146,10 @@ public class RedisConfig implements CachingConfigurer {
     @Override
     public CacheManager cacheManager() {
         RedisSerializer<Object> jsonSerializer = jsonSerializer();
-        RedisCacheConfiguration defaultConfig = createCacheConfig(Duration.ofHours(1), jsonSerializer);
+        RedisCacheConfiguration defaultConfig = createCacheConfig(Duration.ofMinutes(30), jsonSerializer);
 
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
-        cacheConfigurations.put(CACHE_BLACKLIST_TOKEN, createCacheConfig(Duration.ofMinutes(30), jsonSerializer));
-        cacheConfigurations.put(CACHE_USER_SESSION, createCacheConfig(Duration.ofMinutes(30), jsonSerializer));
-        cacheConfigurations.put(CACHE_OTP, createCacheConfig(Duration.ofMinutes(5), jsonSerializer));
+        cacheConfigurations.put(CACHE_HALLS, createCacheConfig(Duration.ofMinutes(30), jsonSerializer));
 
         return RedisCacheManager.builder(redisConnectionFactory())
                 .cacheDefaults(defaultConfig)
@@ -181,20 +177,18 @@ public class RedisConfig implements CachingConfigurer {
     public CacheErrorHandler errorHandler() {
         return new CacheErrorHandler() {
             @Override
-            public void handleCacheGetError(RuntimeException exception, org.springframework.cache.Cache cache,
-                    Object key) {
+            public void handleCacheGetError(RuntimeException exception, org.springframework.cache.Cache cache, Object key) {
                 log.error("Failed to get cache [{}] with key [{}]: {}", cache.getName(), key, exception.getMessage());
             }
 
             @Override
             public void handleCachePutError(RuntimeException exception, org.springframework.cache.Cache cache, Object key,
-                    Object value) {
+                                            Object value) {
                 log.error("Failed to put cache [{}] with key [{}]: {}", cache.getName(), key, exception.getMessage());
             }
 
             @Override
-            public void handleCacheEvictError(RuntimeException exception, org.springframework.cache.Cache cache,
-                    Object key) {
+            public void handleCacheEvictError(RuntimeException exception, org.springframework.cache.Cache cache, Object key) {
                 log.error("Failed to evict cache [{}] with key [{}]: {}", cache.getName(), key, exception.getMessage());
             }
 
