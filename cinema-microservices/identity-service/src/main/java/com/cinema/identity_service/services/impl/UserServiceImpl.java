@@ -66,9 +66,9 @@ public class UserServiceImpl implements UserService {
     final RedisTemplate<String, Object> redisTemplate;
     final UserGrpcClient userGrpcClient;
     final InternalEmailDispatchService internalEmailDispatchService;
-    @Value("${app.auth.cookie.secure:false}")
+    @Value("${app.auth.cookie.secure:true}")
     boolean authCookieSecure;
-    @Value("${app.auth.cookie.same-site:Strict}")
+    @Value("${app.auth.cookie.same-site:None}")
     String authCookieSameSite;
 
     static String VerifyToken = "verifyToken";
