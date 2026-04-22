@@ -1,274 +1,303 @@
-# Hướng Dẫn Sử Dụng Envoy Chi Tiết (Cho Dự Án Cinema Microservices)
+﻿# Hướng Dẫn Sử Dụng Envoy Chi Tiết (Cho Dự Án Cinema Microservices)
 
-## 1. Envoy là gì và vai trò trong dự án này
+## 1. Envoy là gì
 
-Trong hệ thống của bạn, Envoy đang đóng vai trò **API Gateway**:
+Envoy trong dự án của bạn là API Gateway đứng trước toàn bộ microservice.
 
-- Nhận toàn bộ request từ client.
-- Route request vào đúng service nội bộ (`identity`, `film`, `showtime`, `hall`, `cinema`, `email`, ...).
-- Áp dụng CORS tập trung.
-- Kiểm tra xác thực tập trung bằng `ext_authz` thông qua `identity-service`.
-- Thêm header gateway (`x-gateway: envoy`) để truy vết.
+Envoy làm 5 việc chính:
+- Nhận request từ frontend/client.
+- Chọn service đích theo path (`/api/films`, `/api/halls`, ...).
+- Kiểm tra auth tập trung qua `ext_authz` (gọi sang `identity-service`).
+- Thêm/điều phối header phục vụ phân quyền nội bộ.
+- Ghi log và cung cấp admin endpoint để debug.
 
-Nói ngắn gọn: client chỉ nói chuyện với Envoy, Envoy mới nói chuyện với từng microservice.
+## 2. File liên quan trong repo
 
-## 2. File cấu hình quan trọng trong repo
+- Local: `envoy/envoy.local.yaml`
+- Production: `envoy/envoy.prod.yaml`
+- Chạy prod bằng Docker Compose: `compose.prod.yaml` (service `envoy`)
+- Overlay local: `compose.local.yaml`
 
-- Cấu hình Envoy local: `envoy/envoy.local.yaml`
-- Cấu hình Envoy production: `envoy/envoy.prod.yaml`
-- Cấu hình chạy container production: `compose.prod.yaml` (service `envoy`)
-- Cấu hình overlay local: `compose.local.yaml` (map local config cho Envoy)
+## 3. Kiến trúc luồng request
 
-## 3. Cách Envoy đang chạy ở local và production
+1. Client gọi vào domain gateway.
+2. Envoy match route theo path.
+3. Nếu route không phải `/api/auth/**`, Envoy chạy `ext_authz`.
+4. `identity-service` trả allow/deny.
+5. Allow: Envoy forward request vào service đích.
+6. Deny: trả về `401` (thường thấy mã log `UAEX`).
 
-## 3.1 Local
+## 4. Cấu trúc chính trong file Envoy
 
-- Envoy chạy HTTP cổng `80`.
-- Upstream trỏ tới `host.docker.internal:<port>` (service chạy từ máy host/IDE).
-- Không có TLS termination.
+- `listeners`: cổng Envoy lắng nghe (`80`, `443`).
+- `http_connection_manager`: phần xử lý HTTP chính.
+- `http_filters`: bộ lọc theo thứ tự (`cors` -> `ext_authz` -> `router`).
+- `route_config`: map path -> cluster.
+- `clusters`: định nghĩa backend nội bộ.
+- `admin`: cổng quản trị/debug (`9901`).
 
-## 3.2 Production
+## 5. Ý nghĩa các command quan trọng (kèm cách dùng)
 
-- Envoy mở cả `80` và `443`.
-- Listener `80` chỉ dùng để redirect HTTPS.
-- Listener `443` xử lý route thực tế và auth.
-- TLS cert load từ:
-  - `/etc/envoy/certs/fullchain.pem`
-  - `/etc/envoy/certs/privkey.pem`
-
-## 4. Giải phẫu một file Envoy config
-
-## 4.1 `listeners`
-
-Listener là cổng Envoy lắng nghe:
-
-- `listener_http`:
-  - local: xử lý request trực tiếp.
-  - prod: chỉ redirect sang HTTPS.
-- `listener_https` (prod):
-  - nhận HTTPS thật, xử lý auth + routing.
-
-## 4.2 `http_connection_manager`
-
-Đây là phần điều khiển HTTP chính:
-
-- `normalize_path: true`: chuẩn hóa path.
-- `use_remote_address: true`: dùng IP client thật.
-- `xff_num_trusted_hops: 1`: tin cậy 1 proxy hop phía trước.
-- `access_log`: log ra stdout để đọc qua `docker logs`.
-
-## 4.3 `http_filters`
-
-Thứ tự filter rất quan trọng:
-
-1. `cors`
-2. `ext_authz`
-3. `router`
-
-Ý nghĩa:
-- request đi qua CORS trước,
-- rồi kiểm tra auth,
-- cuối cùng mới route sang upstream.
-
-## 4.4 `route_config`
-
-`virtual_hosts -> routes` là luật map path -> cluster.
-
-Ví dụ dự án của bạn:
-
-- `/api/auth/**` -> `identity-service` (tắt `ext_authz` cho route này).
-- `/api/films/**` -> `film-service`
-- `/api/showtimes/**` -> `showtime-service`
-- `/api/halls/**` -> `hall-services`
-- `/api/cinemas/**` -> `cinema-service`
-
-## 4.5 `clusters`
-
-Mỗi cluster là một upstream service:
-
-- `name`: tên dùng trong route.
-- `connect_timeout`: timeout kết nối.
-- `type: LOGICAL_DNS`: resolve theo DNS nội bộ Docker.
-- `load_assignment`: địa chỉ/port thực tế.
-
-## 4.6 `admin`
-
-Admin interface đang ở cổng `9901` để debug:
-
-- xem stats
-- xem config dump
-- xem runtime info
-
-## 5. Cơ chế xác thực tập trung (`ext_authz`)
-
-Envoy gọi:
-
-- `identity-service/internal/auth/check`
-
-với timeout `1s`.
-
-Envoy chỉ forward một số header sang auth service:
-
-- `authorization`
-- `cookie`
-
-Nếu auth thành công, Envoy cho phép thêm header lên upstream:
-
-- `x-user-id`
-- `x-user-role`
-
-Nếu auth fail, client nhận `401` (log thường thấy `UAEX`).
-
-## 6. Vì sao route `/api/auth/**` được miễn auth
-
-Trong config có `typed_per_filter_config` cho route `/api/auth/`:
-
-- `envoy.filters.http.ext_authz.disabled: true`
-
-Mục đích:
-- cho phép login/refresh/logout hoạt động,
-- tránh vòng lặp “chưa có token nhưng bị chặn trước khi login”.
-
-## 7. CORS và cookie trong hệ thống của bạn
-
-Envoy đang bật:
-
-- `allow_credentials: true`
-- `allow_origin_string_match: .*`
-
-Khi dùng cookie cross-site cho auth, cần đồng bộ:
-
-1. FE gọi API với credentials (`withCredentials` hoặc `credentials: include`).
-2. Cookie auth phải có `SameSite=None; Secure` trong production HTTPS.
-3. Envoy đã cho phép header `cookie` qua `ext_authz`.
-
-## 8. Các lệnh vận hành Envoy hữu ích
-
-## 8.1 Xem log Envoy
+## 5.1 Xem log Envoy realtime
 
 ```bash
 docker logs -f api-gateway
 ```
 
-## 8.2 Reload/restart Envoy khi sửa config
+Ý nghĩa:
+- `docker logs`: xem stdout/stderr của container.
+- `-f` (`--follow`): bám theo log realtime.
+- `api-gateway`: tên container Envoy trong `compose.prod.yaml`.
+
+Dùng khi nào:
+- Vừa deploy xong Envoy và muốn kiểm tra có lỗi parse config không.
+- Debug nhanh lỗi 401/404/503.
+
+Kỳ vọng:
+- Thấy access log từng request và thông tin upstream.
+
+## 5.2 Xem nhanh 200 dòng log gần nhất
+
+```bash
+docker logs --tail 200 api-gateway
+```
+
+Ý nghĩa:
+- `--tail 200`: chỉ lấy 200 dòng cuối, đỡ ngập log.
+
+Dùng khi nào:
+- Cần check nhanh sự cố vừa xảy ra.
+
+## 5.3 Restart Envoy sau khi sửa config
 
 ```bash
 docker compose -f compose.prod.yaml up -d envoy
 ```
 
-## 8.3 Xem stats từ admin port
+Ý nghĩa tham số:
+- `docker compose`: chạy stack compose.
+- `-f compose.prod.yaml`: dùng file compose production.
+- `up`: tạo/chạy container theo config mới.
+- `-d`: chạy nền.
+- `envoy`: chỉ restart service Envoy, không động vào service khác.
+
+Dùng khi nào:
+- Bạn vừa sửa `envoy/envoy.prod.yaml` hoặc volume cert.
+
+## 5.4 Kéo image Envoy mới trước khi up
+
+```bash
+docker compose -f compose.prod.yaml pull envoy
+```
+
+Ý nghĩa:
+- `pull envoy`: kéo image mới nhất của service Envoy theo tag đang dùng.
+
+Dùng khi nào:
+- Bạn đổi version image hoặc muốn chắc chắn dùng bản mới.
+
+## 5.5 Kiểm tra Envoy đang chạy hay chưa
+
+```bash
+docker ps --filter "name=api-gateway"
+```
+
+Ý nghĩa:
+- Lọc danh sách container theo tên chứa `api-gateway`.
+
+Kỳ vọng:
+- Có container trạng thái `Up`.
+
+## 5.6 Vào shell của container Envoy
+
+```bash
+docker exec -it api-gateway /bin/sh
+```
+
+Ý nghĩa:
+- `exec`: chạy lệnh trong container đang sống.
+- `-it`: interactive terminal.
+- `/bin/sh`: mở shell.
+
+Dùng khi nào:
+- Cần xem file config đã mount vào container chưa.
+
+Ví dụ sau khi vào container:
+```bash
+cat /etc/envoy/envoy.yaml
+```
+
+## 5.7 Xem stats của Envoy từ admin port
 
 ```bash
 curl http://localhost:9901/stats
 ```
 
-## 8.4 Xem config dump Envoy đang nạp
+Ý nghĩa:
+- Query admin API của Envoy để xem counters/metrics.
+
+Dùng khi nào:
+- Muốn biết filter nào đang fail nhiều (ext_authz, upstream reset, ...).
+
+## 5.8 Xem toàn bộ config Envoy đang nạp thực tế
 
 ```bash
 curl http://localhost:9901/config_dump
 ```
 
-## 8.5 Kiểm tra cluster/upstream state
+Ý nghĩa:
+- Trả về cấu hình runtime hiện tại mà Envoy đang dùng.
+
+Dùng khi nào:
+- Nghi ngờ Envoy chưa ăn config mới.
+
+## 5.9 Kiểm tra tình trạng cluster/upstream
 
 ```bash
 curl http://localhost:9901/clusters
 ```
 
-## 9. Hướng dẫn thêm route service mới
+Ý nghĩa:
+- Xem health/connection info của từng cluster (`film-service`, `hall-services`, ...).
 
-Ví dụ bạn thêm `booking-service` HTTP:
+Dùng khi nào:
+- Lỗi `503 UF` hoặc nghi backend không reachable.
 
-1. Thêm route trong `virtual_hosts.routes`:
+## 5.10 Test route qua gateway bằng curl
 
-```yaml
-- match:
-    prefix: /api/bookings/
-  route:
-    cluster: booking-service
-    timeout: 30s
+```bash
+curl -i https://cinema-api.duckdns.org/api/films/search \
+  -H "Content-Type: application/json" \
+  --data '{"size":10}'
 ```
 
-2. Thêm cluster:
+Ý nghĩa:
+- `-i`: in cả response headers.
+- `-H`: thêm HTTP header.
+- `--data`: body cho POST.
 
-```yaml
-- name: booking-service
-  connect_timeout: 1s
-  type: LOGICAL_DNS
-  lb_policy: ROUND_ROBIN
-  load_assignment:
-    cluster_name: booking-service
-    endpoints:
-      - lb_endpoints:
-          - endpoint:
-              address:
-                socket_address:
-                  address: booking-service
-                  port_value: 809x
+Dùng khi nào:
+- Test nhanh route và status code từ gateway.
+
+## 5.11 Test route có cookie auth
+
+```bash
+curl -i https://cinema-api.duckdns.org/api/halls/<HALL_ID> \
+  -H "Cookie: accessToken=<JWT>"
 ```
 
-3. Đảm bảo service đó có trong `compose.prod.yaml`.
-4. Restart Envoy.
-5. Test route mới bằng `curl`.
+Ý nghĩa:
+- Giả lập request browser có gửi cookie auth.
 
-## 10. Hướng dẫn debug lỗi thường gặp
+Dùng khi nào:
+- Debug `401 UAEX` liên quan cookie/token.
 
-## 10.1 `401 UAEX`
+## 5.12 Lọc log theo mã lỗi (Linux VPS)
 
-Ý nghĩa: Envoy deny ở `ext_authz`.
+```bash
+docker logs api-gateway 2>&1 | grep " 401 "
+```
 
-Checklist:
+Ý nghĩa:
+- `2>&1`: gộp stderr vào stdout.
+- `grep " 401 "`: lọc dòng chứa status 401.
 
-1. Cookie/access token có gửi lên chưa.
-2. `identity-service` có đọc được token từ cookie/header chưa.
-3. Redis token key còn sống không.
-4. Cookie attributes đúng chưa (`SameSite=None`, `Secure=true` trên HTTPS).
+Dùng khi nào:
+- Muốn thống kê nhanh lỗi auth.
 
-## 10.2 `404 NR` (No Route)
+## 5.13 Lọc log theo mã lỗi (PowerShell Windows)
 
-Envoy không match route.
+```powershell
+docker logs api-gateway 2>&1 | Select-String " 401 "
+```
 
-Checklist:
+Ý nghĩa:
+- `Select-String` là bản tương đương `grep` trên PowerShell.
 
-1. Prefix/path match đúng chưa.
-2. Có nhầm `/api/halls` và `/api/halls/` không.
-3. Đã deploy đúng file config (`local` vs `prod`) chưa.
+## 6. Cách đọc access log Envoy nhanh cho người mới
 
-## 10.3 `503 UF` hoặc upstream connection error
+Ví dụ log:
+```text
+"POST /api/films/search HTTP/1.1" 401 UAEX ...
+```
 
-Envoy route được nhưng không kết nối được backend.
+Đọc như sau:
+- `POST /api/films/search`: request path.
+- `401`: status trả về client.
+- `UAEX`: request bị từ chối bởi external auth (`ext_authz`).
 
-Checklist:
+## 7. Lỗi thường gặp và câu lệnh xử lý
 
-1. Tên cluster có đúng với route không.
-2. Address/port có đúng service thực tế không.
-3. Service backend có đang chạy không.
-4. DNS nội bộ Docker resolve đúng không.
+## 7.1 Lỗi 401 UAEX
 
-## 11. Quy trình an toàn khi sửa Envoy (khuyến nghị)
+Nguyên nhân hay gặp:
+- Không gửi cookie/token.
+- Token hết hạn hoặc bị revoke trong Redis.
+- Cookie policy sai (`SameSite`, `Secure`, `credentials`).
 
-1. Sửa config trong branch.
-2. Validate YAML.
-3. Chạy local trước (`envoy.local.yaml`).
-4. Test các luồng trọng yếu:
-   - login
-   - gọi API protected
-   - CORS từ frontend
-5. Deploy production.
-6. Theo dõi `docker logs api-gateway` + `/stats` ít nhất 10-15 phút.
+Câu lệnh nên chạy:
+```bash
+docker logs --tail 200 api-gateway
+docker logs --tail 200 cinema-deploy-identity-service-1
+curl http://localhost:9901/stats | grep ext_authz
+```
 
-## 12. Kinh nghiệm thực chiến cho hệ thống của bạn
+## 7.2 Lỗi 404 NR (No Route)
 
-- Giữ timeout `ext_authz` thấp (1s) là hợp lý để fail-fast, nhưng cần đảm bảo `identity-service` ổn định.
-- Chỉ nên miễn auth cho đúng route bắt buộc (`/api/auth/**`).
-- Khi đổi cookie policy, luôn test lại qua Envoy vì đây là điểm quyết định có forward `cookie` sang auth check hay không.
-- Đồng bộ naming giữa config (`hall-services`) và compose để tránh lỗi route/cluster mismatch.
+Nguyên nhân hay gặp:
+- Path không match route config.
+- Thiếu route trong `envoy.prod.yaml`.
 
----
+Câu lệnh nên chạy:
+```bash
+curl http://localhost:9901/config_dump
+```
 
-Nếu bạn muốn, mình có thể viết tiếp bản “playbook theo từng sự cố” kiểu:
-- “401 sau login”
-- “route mới không ăn”
-- “service timeout”
-- “TLS lỗi chứng chỉ”
+## 7.3 Lỗi 503 UF (upstream failure)
 
-để bạn tra nhanh khi vận hành VPS.
+Nguyên nhân hay gặp:
+- Backend service down.
+- Sai host/port cluster.
+
+Câu lệnh nên chạy:
+```bash
+curl http://localhost:9901/clusters
+docker ps
+```
+
+## 8. Quy trình chuẩn khi bạn sửa Envoy
+
+1. Sửa file `envoy/envoy.prod.yaml`.
+2. Restart Envoy:
+```bash
+docker compose -f compose.prod.yaml up -d envoy
+```
+3. Check container:
+```bash
+docker ps --filter "name=api-gateway"
+```
+4. Check log:
+```bash
+docker logs --tail 100 api-gateway
+```
+5. Test endpoint thật bằng `curl`.
+6. Nếu ổn, theo dõi log thêm 10-15 phút.
+
+## 9. Ghi nhớ quan trọng cho dự án của bạn
+
+- Route `/api/auth/**` đang tắt `ext_authz` để login/refresh hoạt động.
+- Các route còn lại đi qua `ext_authz`, nên lỗi auth thường nằm ở cookie/token hoặc identity-service.
+- Tên service nội bộ phải đồng bộ giữa `routes`, `clusters`, `compose` (ví dụ `hall-services`).
+- Khi đổi cookie policy, luôn test lại qua Envoy, không test riêng service.
+
+## 10. Bản tóm tắt 5 lệnh bạn sẽ dùng nhiều nhất
+
+```bash
+docker compose -f compose.prod.yaml up -d envoy
+docker logs -f api-gateway
+curl http://localhost:9901/stats
+curl http://localhost:9901/config_dump
+curl http://localhost:9901/clusters
+```
+
+Chỉ cần nắm chắc 5 lệnh này, bạn đã debug được phần lớn sự cố Envoy trong hệ thống hiện tại.
