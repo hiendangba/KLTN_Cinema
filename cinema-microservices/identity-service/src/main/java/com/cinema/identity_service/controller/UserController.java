@@ -10,7 +10,6 @@ import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
 import com.cinema.identity_service.dto.request.RegisterStaffRequest;
 import com.cinema.identity_service.dto.request.VerifyRequest;
-import com.cinema.identity_service.dto.response.LoginResponse;
 import com.cinema.identity_service.services.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -61,23 +60,24 @@ public class UserController extends BaseController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<APIResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest loginRequest,
-                                                            HttpServletResponse response) {
-        LoginResponse loginResponse = userService.login(loginRequest, response);
-        return ok(loginResponse);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> login(@Valid @RequestBody LoginRequest loginRequest,
+                                                                    HttpServletResponse response) {
+        ActionMessageResponse actionMessageResponse = userService.login(loginRequest, response);
+        return ok(actionMessageResponse);
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> logout(HttpServletRequest request) {
-        ActionMessageResponse response = userService.logout(request);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> logout(HttpServletRequest request,
+                                                                     HttpServletResponse httpServletResponse) {
+        ActionMessageResponse response = userService.logout(request, httpServletResponse);
         return ok(response);
     }
 
     @PostMapping("/refresh_token")
-    public ResponseEntity<APIResponse<LoginResponse>> refreshToken(HttpServletRequest request,
-                                                                   HttpServletResponse response) {
-        LoginResponse loginResponse = userService.refreshToken(request, response);
-        return ok(loginResponse);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> refreshToken(HttpServletRequest request,
+                                                                           HttpServletResponse response) {
+        ActionMessageResponse actionMessageResponse = userService.refreshToken(request, response);
+        return ok(actionMessageResponse);
     }
 
     @PostMapping("/manager")

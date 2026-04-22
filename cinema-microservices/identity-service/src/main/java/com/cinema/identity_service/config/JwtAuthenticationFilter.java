@@ -4,6 +4,7 @@ import com.cinema.http.HeaderNames;
 import com.cinema.identity_service.services.impl.JwtServiceImpl;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -30,20 +31,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtServiceImpl jwtService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private static final String ACCESS_TOKEN_COOKIE_NAME = "accessToken";
     private static final String ACCESS_TOKEN_PREFIX = "identity:token:access:";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        String token = extractAccessToken(request);
+        if (token == null || token.isBlank()) {
             filterChain.doFilter(request, response);
             return;
         }
-        log.warn("Skip auth: invalid token type");
-
-
-        String token = authHeader.substring(7);
         try {
             String tokenType = jwtService.extractTokenType(token);
             if (!"access".equals(tokenType)) {
@@ -101,5 +99,31 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String extractAccessToken(HttpServletRequest request) {
+        String tokenFromCookie = extractCookieValue(request, ACCESS_TOKEN_COOKIE_NAME);
+        if (tokenFromCookie != null && !tokenFromCookie.isBlank()) {
+            return tokenFromCookie;
+        }
+
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return null;
+        }
+        return authHeader.substring(7);
+    }
+
+    private String extractCookieValue(HttpServletRequest request, String cookieName) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (cookieName.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
     }
 }

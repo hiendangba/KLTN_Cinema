@@ -13,7 +13,6 @@ import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
 import com.cinema.identity_service.dto.request.RegisterStaffRequest;
 import com.cinema.identity_service.dto.request.VerifyRequest;
-import com.cinema.identity_service.dto.response.LoginResponse;
 import com.cinema.identity_service.entity.OtpData;
 import com.cinema.identity_service.entity.User;
 import com.cinema.identity_service.grpc.UserGrpcClient;
@@ -31,8 +30,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,8 +66,13 @@ public class UserServiceImpl implements UserService {
     final RedisTemplate<String, Object> redisTemplate;
     final UserGrpcClient userGrpcClient;
     final InternalEmailDispatchService internalEmailDispatchService;
+    @Value("${app.auth.cookie.secure:false}")
+    boolean authCookieSecure;
+    @Value("${app.auth.cookie.same-site:Strict}")
+    String authCookieSameSite;
 
     static String VerifyToken = "verifyToken";
+    static String AccessToken = "accessToken";
     static String RefreshToken = "refreshToken";
 
     static String OTP_PREFIX = "identity:otp:";
@@ -565,7 +571,7 @@ public class UserServiceImpl implements UserService {
     // Authenticate user, issue access/refresh tokens, and persist token state in
     // Redis.
     @Override
-    public LoginResponse login(LoginRequest loginRequest, HttpServletResponse response) {
+    public ActionMessageResponse login(LoginRequest loginRequest, HttpServletResponse response) {
         User user = userRepository.findByEmail(loginRequest.getEmail())
                 .orElseThrow(() -> new BusinessException(LOGIN_FAILED));
         if (user.getStatus().equals(UserEnum.UserStatus.LOCKED)) {
@@ -594,44 +600,40 @@ public class UserServiceImpl implements UserService {
         redisTemplate.opsForSet().add(userTokensKey, tokenId);
         redisTemplate.expire(userTokensKey, jwtServiceImpl.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
 
-        Cookie refreshTokenCookie = new Cookie(RefreshToken, refreshToken);
-        refreshTokenCookie.setHttpOnly(true);
-        refreshTokenCookie.setSecure(false);
-        refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge((int) (jwtServiceImpl.getRefreshTokenExpiration() / 1000));
-        response.addCookie(refreshTokenCookie);
+        setTokenCookie(response, AccessToken, accessToken, jwtServiceImpl.getAccessTokenExpiration());
+        setTokenCookie(response, RefreshToken, refreshToken, jwtServiceImpl.getRefreshTokenExpiration());
 
-        return LoginResponse.builder().accessToken(accessToken).build();
+        return ActionMessageResponse.builder()
+                .message("Đăng nhập thành công")
+                .build();
     }
 
     // Revoke all active tokens for current user session scope.
     @Override
-    public ActionMessageResponse logout(HttpServletRequest request) {
-        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return ActionMessageResponse.builder()
-                    .message("Đăng xuất thành công")
-                    .build();
-        }
-        String accessToken = authHeader.substring(7);
+    public ActionMessageResponse logout(HttpServletRequest request, HttpServletResponse response) {
+        String accessToken = extractAccessTokenFromRequest(request);
         try {
-            UUID userId = jwtServiceImpl.extractUserId(accessToken);
-            String userTokensKey = USER_TOKENS_PREFIX + userId;
-            Set<Object> tokenIds = redisTemplate.opsForSet().members(userTokensKey);
-            if (tokenIds != null && !tokenIds.isEmpty()) {
-                List<String> keysToDelete = new ArrayList<>();
-                for (Object tokenId : tokenIds) {
-                    String tokenIdStr = (String) tokenId;
-                    String accessTokenKey = ACCESS_TOKEN_PREFIX + tokenIdStr;
-                    String refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenIdStr;
-                    keysToDelete.add(accessTokenKey);
-                    keysToDelete.add(refreshTokenKey);
+            if (accessToken != null && !accessToken.isBlank()) {
+                UUID userId = jwtServiceImpl.extractUserId(accessToken);
+                String userTokensKey = USER_TOKENS_PREFIX + userId;
+                Set<Object> tokenIds = redisTemplate.opsForSet().members(userTokensKey);
+                if (tokenIds != null && !tokenIds.isEmpty()) {
+                    List<String> keysToDelete = new ArrayList<>();
+                    for (Object tokenId : tokenIds) {
+                        String tokenIdStr = (String) tokenId;
+                        String accessTokenKey = ACCESS_TOKEN_PREFIX + tokenIdStr;
+                        String refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenIdStr;
+                        keysToDelete.add(accessTokenKey);
+                        keysToDelete.add(refreshTokenKey);
+                    }
+                    redisTemplate.delete(keysToDelete);
                 }
-                redisTemplate.delete(keysToDelete);
+                redisTemplate.delete(userTokensKey);
             }
-            redisTemplate.delete(userTokensKey);
         } catch (Exception e) {
             log.error("Exception : {}", e.getMessage());
+        } finally {
+            clearAuthCookies(response);
         }
         return ActionMessageResponse.builder()
                 .message("Đăng xuất thành công")
@@ -641,19 +643,12 @@ public class UserServiceImpl implements UserService {
     // Rotate refresh token and issue a new access token while preserving refresh
     // TTL.
     @Override
-    public LoginResponse refreshToken(HttpServletRequest request, HttpServletResponse response) {
-        String cookieRefreshToken = null;
-        if (request.getCookies() != null) {
-            for (Cookie cookie : request.getCookies()) {
-                if (RefreshToken.equals(cookie.getName())) {
-                    cookieRefreshToken = cookie.getValue();
-                    break;
-                }
-            }
-        }
+    public ActionMessageResponse refreshToken(HttpServletRequest request, HttpServletResponse response) {
+        String cookieRefreshToken = extractCookieValue(request, RefreshToken);
 
         // Neu refresh_token khong co trong cookie
         if (cookieRefreshToken == null) {
+            clearAuthCookies(response);
             throw new BusinessException(ErrorCode.REFRESH_TOKEN_MISSING);
         }
 
@@ -712,20 +707,73 @@ public class UserServiceImpl implements UserService {
             String accessToken = jwtServiceImpl.generateAccessToken(user, tokenId);
             String refreshToken = jwtServiceImpl.generateRefreshTokenWithExp(user, tokenId, ttlMillis);
 
-            Cookie refreshTokenCookie = new Cookie(RefreshToken, refreshToken);
-            refreshTokenCookie.setHttpOnly(true);
-            refreshTokenCookie.setSecure(false);
-            refreshTokenCookie.setPath("/");
-            refreshTokenCookie.setMaxAge((int) (ttlMillis / 1000));
-            response.addCookie(refreshTokenCookie);
-            return LoginResponse.builder().accessToken(accessToken).build();
+            setTokenCookie(response, AccessToken, accessToken, jwtServiceImpl.getAccessTokenExpiration());
+            setTokenCookie(response, RefreshToken, refreshToken, ttlMillis);
+            return ActionMessageResponse.builder()
+                    .message("Làm mới phiên đăng nhập thành công")
+                    .build();
         } catch (BusinessException e) {
+            clearAuthCookies(response);
             throw e;
         } catch (Exception e) {
             // Neu nguoi dung sua gia tri refresh_token tren cookie
             log.warn("Refresh token error", e);
+            clearAuthCookies(response);
             throw new BusinessException(REFRESH_TOKEN_MISSING);
         }
+    }
+
+    private void setTokenCookie(HttpServletResponse response, String cookieName, String value, long ttlMillis) {
+        ResponseCookie cookie = ResponseCookie.from(cookieName, value)
+                .httpOnly(true)
+                .secure(authCookieSecure)
+                .path("/")
+                .sameSite(authCookieSameSite)
+                .maxAge(Duration.ofMillis(Math.max(ttlMillis, 0)))
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private void clearTokenCookie(HttpServletResponse response, String cookieName) {
+        ResponseCookie cookie = ResponseCookie.from(cookieName, "")
+                .httpOnly(true)
+                .secure(authCookieSecure)
+                .path("/")
+                .sameSite(authCookieSameSite)
+                .maxAge(Duration.ZERO)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private void clearAuthCookies(HttpServletResponse response) {
+        clearTokenCookie(response, AccessToken);
+        clearTokenCookie(response, RefreshToken);
+    }
+
+    private String extractCookieValue(HttpServletRequest request, String cookieName) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (cookieName.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
+    }
+
+    private String extractAccessTokenFromRequest(HttpServletRequest request) {
+        String tokenFromCookie = extractCookieValue(request, AccessToken);
+        if (tokenFromCookie != null && !tokenFromCookie.isBlank()) {
+            return tokenFromCookie;
+        }
+
+        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return null;
+        }
+        return authHeader.substring(7);
     }
 
     private OtpData getOtpData(String otpKey) {

@@ -8,7 +8,6 @@ import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
 import com.cinema.identity_service.dto.request.RegisterStaffRequest;
 import com.cinema.identity_service.dto.request.VerifyRequest;
-import com.cinema.identity_service.dto.response.LoginResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -28,9 +27,9 @@ public interface UserService {
 
     ActionMessageResponse changePassword(ChangePasswordRequest changePasswordRequest, HttpServletRequest request);
 
-    LoginResponse login(LoginRequest loginRequest, HttpServletResponse response);
+    ActionMessageResponse login(LoginRequest loginRequest, HttpServletResponse response);
 
-    ActionMessageResponse logout(HttpServletRequest request);
+    ActionMessageResponse logout(HttpServletRequest request, HttpServletResponse response);
 
-    LoginResponse refreshToken(HttpServletRequest request, HttpServletResponse response);
+    ActionMessageResponse refreshToken(HttpServletRequest request, HttpServletResponse response);
 }

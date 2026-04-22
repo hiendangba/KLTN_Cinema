@@ -167,7 +167,9 @@ public class RedisConfig implements CachingConfigurer {
     }
 
     private RedisSerializer<Object> jsonSerializer() {
-        return GenericJacksonJsonRedisSerializer.builder().build();
+        return GenericJacksonJsonRedisSerializer.builder()
+                .enableUnsafeDefaultTyping()
+                .build();
     }
 
     @Bean

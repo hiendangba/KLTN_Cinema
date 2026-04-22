@@ -57,3 +57,8 @@ spring:
           address: "${USER_GRPC_HOST:localhost}:${USER_GRPC_PORT:9191}"
 server:
   port: ${SERVER_PORT:8090}
+app:
+  auth:
+    cookie:
+      secure: ${AUTH_COOKIE_SECURE:false}
+      same-site: ${AUTH_COOKIE_SAME_SITE:Strict}
