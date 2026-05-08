@@ -37,6 +37,7 @@ CinemaStar tập trung giải quyết các điểm này bằng một nền tản
 
 - Đăng ký, đăng nhập an toàn bằng email và OTP.
 - Xem danh sách phim và lịch chiếu theo từng rạp.
+- Đặt tối đa `5 vé` trong một lượt booking (vượt quá sẽ trả lỗi nghiệp vụ).
 - Quản lý phòng chiếu và sơ đồ ghế trực quan.
 - Thiết lập chính sách giá vé theo từng rạp.
 - Nhận email thông báo tự động cho các sự kiện quan trọng.
@@ -229,6 +230,15 @@ Nếu bạn là developer hoặc AI agent cần tài liệu kỹ thuật chi ti�
   - Phạm vi áp dụng: bổ sung endpoint `PUT /api/cinemas/{id}/staffs` theo luồng `controller -> service -> serviceImpl`, cập nhật tài liệu API cho nhóm `Cinema`.
   - Skills: `backend-dev-guidelines`, `java-pro`, `api-documentation`
   - Phạm vi áp dụng: chuẩn hóa `cinema-service` sang MapStruct (`CinemaMapper` interface + cấu hình `mapstruct-processor`), đồng bộ fix Redis config tại `identity-service`, `user-service`, `film-service`, `showtime-service` (generic pool type + thay `GenericJackson2JsonRedisSerializer` bằng `GenericJacksonJsonRedisSerializer`).
+- 08/05/2026:
+  - Skills: `backend-dev-guidelines`, `api-documentation`
+  - Phạm vi áp dụng: triển khai MVP `Product` trong `booking-service` (entity/repository/service/controller + MapStruct mapper), thêm gRPC `GetCinemaByUserId` để scope cinema theo account cho luồng operator, bổ sung API customer theo `cinemaId`, cập nhật tài liệu kỹ thuật vào `TECHNICAL_AGENT_GUIDE.md` theo hướng dùng file md chung.
+  - Skills: `backend-dev-guidelines`, `api-documentation`
+  - Phạm vi áp dụng: mở rộng booking core với `Booking`, `BookingSeatItem`, `BookingProductItem`, chuẩn hóa create booking theo **1 request payload** duy nhất cho frontend, bổ sung khóa ghế Redis TTL 5 phút trong lúc chờ thanh toán, thêm API booking cần thiết (`create/get/me/operator/status/cancel`) và cập nhật decision log chi tiết trong `TECHNICAL_AGENT_GUIDE.md`.
+  - Skills: `backend-dev-guidelines`, `api-documentation`
+  - Phạm vi áp dụng: bổ sung gRPC internal cho `booking-service` (`CheckShowtimeBooked`) để service khác (đặc biệt `showtime-service`) gọi kiểm tra trạng thái đã có booking, đồng thời cập nhật wiring vận hành (`compose.prod.yaml`, `envoy.prod.yaml`, `envoy.local.yaml`) để `booking-service` có thể được route/gọi đầy đủ trong môi trường Docker/local gateway.
+  - Skills: `java-pro`, `backend-dev-guidelines`
+  - Phạm vi áp dụng: kiểm tra lại end-to-end luồng gRPC `showtime-service -> booking-service` (proto/server/client/config), xác nhận compile thành công đa module bằng Maven Wrapper (`common-lib`, `showtime-service`, `booking-service`) và đồng bộ lại decision note trong `TECHNICAL_AGENT_GUIDE.md` để phản ánh đúng trạng thái hiện tại.
 
 ---
 

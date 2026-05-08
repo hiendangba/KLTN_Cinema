@@ -113,6 +113,16 @@ static_resources:
                           route:
                             cluster: email-service
                             timeout: 30s
+                        - match:
+                            path: /api/bookings
+                          route:
+                            cluster: booking-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/bookings/
+                          route:
+                            cluster: booking-service
+                            timeout: 30s
 
   clusters:
     - name: identity-service
@@ -213,6 +223,20 @@ static_resources:
                     socket_address:
                       address: host.docker.internal
                       port_value: 8096
+    - name: booking-service
+      connect_timeout: 1s
+      type: LOGICAL_DNS
+      dns_lookup_family: ALL
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: booking-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: host.docker.internal
+                      port_value: 8095
 
 admin:
   access_log_path: /tmp/admin_access.log

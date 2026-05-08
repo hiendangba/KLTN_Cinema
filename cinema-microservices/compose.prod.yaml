@@ -144,8 +144,39 @@ services:
       - postgres
       - redis
       - rabbitmq
+      - booking-service
       - film-service
       - hall-services
+      - cinema-service
+    mem_limit: 224m
+
+  booking-service:
+    image: ${IMAGE_REPO}/booking-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/booking_db
+      DB_USERNAME: booking_user
+      DB_PASSWORD: booking_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      CINEMA_GRPC_HOST: cinema-service
+      CINEMA_GRPC_PORT: 9196
+      GRPC_SERVER_PORT: 9195
+      SERVER_PORT: 8095
+      BOOKING_SEAT_LOCK_MINUTES: ${BOOKING_SEAT_LOCK_MINUTES:-5}
+    expose:
+      - "9195"
+      - "8095"
+    depends_on:
+      - postgres
+      - redis
       - cinema-service
     mem_limit: 224m
 

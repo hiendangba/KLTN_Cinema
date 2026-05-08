@@ -575,7 +575,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 | Hạng Mục Tương Lai Mở Rộng | Mức Phân Quyền | Diễn Giải Nhiệm Vụ |
 |---|---|---|
 | **Hall Service (Rạp & Ghế)** | 🔴 Cao | Xây dựng sơ đồ rạp, phòng chiếu, ghế; chuẩn hóa map ghế để liên kết lịch chiếu. |
-| **Booking Core Service** | 🔴 Cao | Xương sống kinh doanh (Bán Vé Core, Giữ Chỗ Redis Locking). Tương thích Gateway sẵn. |
+| **Booking Core Service** | 🔴 Cao | Xương sống kinh doanh (Bán Vé Core, Giữ Chỗ Redis Locking). Tương thích Gateway sẵn. Rule cứng: mỗi lượt booking tối đa 5 vé, vượt quá phải trả lỗi business. |
 | **Payment Integration** | 🟡 Trung | VNPay/MoMo IPN, cập nhật trạng thái vé và giao dịch thanh toán. |
 
 ### 🗓️ 02/04/2026 — Nâng cấp Phân trang (Offset Pagination)
@@ -670,8 +670,104 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Điều chỉnh `showtime-service` dùng `HALL_GRPC_PORT` mặc định `9197`.
 - Build compile đã pass với Maven local (`mvn`) cho `hall-service` + `common-lib`.
 - Chuẩn hóa lại nội dung tổng kết README theo mốc cập nhật mới nhất ngày `10/04/2026`.
+
+### 08/05/2026 - Booking service product MVP (gộp tài liệu về file chung)
+**Nội dung cập nhật:**
+- Nối `booking-service` vào parent multi-module (`pom.xml`) để build chung theo chuẩn repo.
+- Bổ sung DB bootstrap cho booking:
+  - `booking_user`
+  - `booking_db`
+  - grant/revoke tương ứng trong `postgres-init/create-databases.sql`.
+- Nâng `booking-service` từ skeleton sang REST + JPA + Validation + gRPC client.
+- Bổ sung entity `Product` trong `booking-service` (MVP chưa tách service riêng):
+  - `cinemaId`, `name`, `type`, `price`, `description`, `imageUrl`, `status`, `isDeleted`, `timeCreated`, `timeUpdated`.
+- Chuẩn hóa mapper theo style các service hiện có (MapStruct):
+  - `ProductMapper.toEntity(...)`
+  - `ProductMapper.updateEntityFromRequest(...)`
+  - `ProductMapper.toResponse(...)`.
+- Bổ sung gRPC `CinemaGrpcClient` để resolve `cinemaId` từ `X-User-ID` qua `GetCinemaByUserId` cho luồng operator.
+- Bổ sung API product trong `booking-service`:
+  - `POST /api/bookings/products`
+  - `PUT /api/bookings/products/{id}`
+  - `DELETE /api/bookings/products/{id}`
+  - `GET /api/bookings/products/{id}`
+  - `GET /api/bookings/products/me` (manager/staff theo cinema đăng nhập)
+  - `GET /api/bookings/products/cinemas/{cinemaId}` (customer theo cinema đã chọn)
+- Rule nghiệp vụ áp dụng:
+  - Soft delete cho product.
+  - Unique tên product trong cùng `cinemaId` (trên tập record chưa xóa).
+  - `create/update/delete` được scope theo cinema của operator.
+- Build check đã pass bằng Maven Wrapper:
+  - `booking-service\\mvnw.cmd -DskipTests compile`
+  - `booking-service\\mvnw.cmd -DskipTests test-compile`
+- Mở rộng booking core cho phase đặt vé:
+  - Bổ sung entity:
+    - `Booking`
+    - `BookingSeatItem`
+    - `BookingProductItem`
+    - `CustomerInfo` (embedded)
+  - Bổ sung enums:
+    - `BookingStatus` (`PENDING`, `RESERVED`, `CONFIRMED`, `CANCELLED`, `EXPIRED`)
+    - `PaymentStatus` (`UNPAID`, `PAID`, `FAILED`, `REFUNDED`)
+  - Bổ sung API booking:
+    - `POST /api/bookings`
+    - `GET /api/bookings/{id}`
+    - `GET /api/bookings/me`
+    - `GET /api/bookings/cinemas/me`
+    - `PATCH /api/bookings/{id}/status`
+    - `POST /api/bookings/{id}/cancel`
+  - Chuẩn request frontend:
+    - Chỉ dùng **1 payload** `CreateBookingRequest` khi khách đã chọn xong toàn bộ ghế + sản phẩm.
+    - `customerInfo`, `seatItems`, `productItems` được thiết kế dạng nested object/list trong cùng request.
+  - Redis seat lock:
+    - Khóa ghế theo key `booking:seat-lock:{showtimeId}:{seatCode}`.
+    - TTL mặc định `5` phút (`booking.seat-lock-minutes`).
+    - Khi lock thất bại giữa chừng, rollback lock đã set trước đó.
+    - Khi `cancel` hoặc status chuyển terminal (`CANCELLED`, `EXPIRED`, `CONFIRMED`) thì release lock.
+  - Rule nghiệp vụ booking đã áp:
+    - Tối đa `5` ghế mỗi booking.
+    - Không cho seat trùng trong cùng request.
+    - Snapshot tên/giá sản phẩm vào `BookingProductItem`.
+    - Unique `(booking_id, seat_code)` và `(booking_id, product_id)`.
+  - gRPC booking internal:
+    - Triển khai `BookingInternalService/CheckShowtimeBooked` trong `booking-service`.
+    - Mục tiêu: cho `showtime-service` kiểm tra suất chiếu đã có booking hay chưa trước khi update/delete.
+    - Cấu hình server port: `spring.grpc.server.port` (`GRPC_SERVER_PORT`, mặc định `9195`).
+  - Runtime wiring để service khác gọi được:
+    - Bổ sung `booking-service` vào `compose.prod.yaml` (HTTP `8095`, gRPC `9195`).
+    - Thêm route và cluster `/api/bookings` trong `envoy.prod.yaml` và `envoy.local.yaml`.
+
+**Decision log (vì sao chọn như hiện tại):**
+- Bối cảnh:
+  - MVP cần lên nhanh chức năng menu bắp/nước để phục vụ đặt vé.
+  - `booking-service` thời điểm bắt đầu vẫn là skeleton nên ưu tiên làm thẳng trong service này trước.
+- Quyết định 1: chưa tách `product-service`, giữ `Product` trong `booking-service`.
+  - Lý do: giảm độ phức tạp triển khai ban đầu, tránh tăng số lượng service khi nghiệp vụ chưa ổn định.
+  - Hệ quả chấp nhận: sau này khi scale lớn có thể phải tách service và làm migration.
+- Quyết định 2: dùng MapStruct mapper (`toEntity`, `updateEntityFromRequest`, `toResponse`) giống `film-service`/`showtime-service`.
+  - Lý do: đồng nhất style code toàn repo, dễ review, giảm mapping thủ công.
+- Quyết định 3: tách 2 luồng API đọc danh sách product:
+  - Operator (`MANAGER`/`STAFF`): `GET /api/bookings/products/me` lấy cinema theo account đăng nhập.
+  - Customer: `GET /api/bookings/products/cinemas/{cinemaId}` lấy theo cinema đã chọn trên UI.
+  - Lý do: customer không có ngữ cảnh "cinema quản lý", nên phải dựa vào cinema được chọn.
+- Quyết định 4: `GET /api/bookings/products/{id}` đọc theo `id` thuần.
+  - Lý do: endpoint chi tiết by-id cần trả đúng record theo định danh; không ép scope manager cho use case đọc chi tiết cơ bản.
+- Quyết định 5: create/update/delete vẫn scope theo account operator qua `GetCinemaByUserId`.
+  - Lý do: tránh sửa dữ liệu xuyên cinema.
+- Quyết định 6: booking create dùng một request tổng hợp duy nhất cho frontend.
+  - Lý do: đúng flow checkout thực tế (khách chọn ghế + bắp nước xong mới submit 1 lần).
+- Quyết định 7: dùng Redis lock ghế TTL 5 phút trong lúc chờ thanh toán.
+  - Lý do: chặn tranh chấp ghế theo thời gian thực, đồng thời tự giải phóng lock khi hết hạn.
+- Rule chốt hiện tại:
+  - Soft delete (`isDeleted`) cho product.
+  - Unique tên product trong cùng `cinemaId` trên tập chưa xóa.
+  - Trạng thái mặc định khi tạo nếu request không truyền: `ACTIVE`.
+- Các điểm chưa làm ở phase này:
+  - Chưa tách `payment-service`/`product-service` ở mức production scale.
+  - Chưa triển khai flow thanh toán hoàn chỉnh (capture/refund/webhook callback).
+  - Chưa có job cleanup tự động để mark `EXPIRED` cho booking quá hạn `reservedUntil` ở background scheduler.
 ---
-> Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **10/04/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
+> Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **08/05/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
 
 ---
 
@@ -779,4 +875,4 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ---
 
-Cập nhật kỹ thuật gần nhất: 22/04/2026.
+Cập nhật kỹ thuật gần nhất: 08/05/2026.
