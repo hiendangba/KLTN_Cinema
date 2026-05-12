@@ -20,7 +20,7 @@ import java.util.UUID;
         @Index(name = "idx_language", columnList = "language"),
         @Index(name = "idx_is_deleted", columnList = "is_deleted")
 }, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_film_title_release_date", columnNames = {"title", "release_date"})
+        @UniqueConstraint(name = "uk_film_title_release_date_isdeleted", columnNames = {"title", "release_date,is_deleted"})
 })
 @Getter
 @Setter
@@ -89,7 +89,6 @@ public class Film {
             this.id = UuidCreator.getTimeOrderedEpoch();
         }
         isDeleted = false;
-        status = FilmEnum.FilmStatus.COMING_SOON;
         timeCreated = LocalDateTime.now();
         timeUpdated = LocalDateTime.now();
     }

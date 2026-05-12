@@ -48,12 +48,13 @@ public class FilmServiceImpl implements FilmService {
         log.info("Tạo mới phim: {}", request.getTitle());
         validateAdminRole(httpRequest, "createFilm");
         // Kiểm tra tên phim và năm phát hành đã tồn tại hay chưa
-        if (filmRepository.findByTitleAndReleaseDate(request.getTitle(), request.getReleaseDate()).isPresent()) {
+        if (filmRepository.findByTitleAndReleaseDateAndIsDeletedFalse(request.getTitle(), request.getReleaseDate()).isPresent()) {
             log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
-
+        log.info("Trạng trái phim {} trước khi map", request.getStatus());
         Film film = filmMapper.toEntity(request);
+        log.info("Trạng trái phim {} sau khi map", film.getStatus());
         Film savedFilm = filmRepository.save(film);
         log.info("Phim được tạo thành công với ID: {}", savedFilm.getId());
         return ActionMessageResponse.builder()
@@ -75,7 +76,7 @@ public class FilmServiceImpl implements FilmService {
         filmMapper.updateEntityFromRequest(film, request);
 
         // Kiểm tra tên phim và năm phát hành đã tồn tại ở phim khác hay chưa
-        if (filmRepository.existsByTitleAndReleaseDateAndIdNot(request.getTitle(), request.getReleaseDate(), id)) {
+        if (filmRepository.existsByTitleAndReleaseDateAndIdNotAndIsDeletedFalse(request.getTitle(), request.getReleaseDate(), id)) {
             log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }

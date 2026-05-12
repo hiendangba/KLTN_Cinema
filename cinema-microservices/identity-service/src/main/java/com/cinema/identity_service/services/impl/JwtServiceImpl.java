@@ -28,7 +28,7 @@ public class JwtServiceImpl {
     private Long accessTokenExpiration;
     @Value("${spring.jwt.refresh-token-expiration}")
     private Long refreshTokenExpiration;
-
+    
     private Key getSigningKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
         return Keys.hmacShaKeyFor(keyBytes);

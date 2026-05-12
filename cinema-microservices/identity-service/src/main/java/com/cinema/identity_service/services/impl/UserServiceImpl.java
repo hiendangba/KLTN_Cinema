@@ -80,6 +80,7 @@ public class UserServiceImpl implements UserService {
     static String ACCESS_TOKEN_PREFIX = "identity:token:access:";
     static String REFRESH_TOKEN_PREFIX = "identity:token:refresh:";
     static String USER_TOKENS_PREFIX = "identity:user_tokens:";
+    private static final long TOKEN_EXPIRY_BUFFER = 60_000L;
 
     static Pattern STRONG_PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,32}$");
@@ -89,8 +90,7 @@ public class UserServiceImpl implements UserService {
     // Register customer account: create OTP payload, cache verification state, and
     // queue OTP email.
     @Override
-    public ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
-                                                  HttpServletResponse response) {
+    public ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest) {
         if (userRepository.existsByEmail(registerCustomerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
         }
@@ -125,13 +125,6 @@ public class UserServiceImpl implements UserService {
         }
         log.warn("otp generate :{}", otp);
         redisTemplate.opsForValue().set(otpKey, otpData, 5, TimeUnit.MINUTES);
-        Cookie refreshTokenCookie = new Cookie(VerifyToken, verifyToken);
-        refreshTokenCookie.setHttpOnly(true);
-        refreshTokenCookie.setSecure(false);
-        refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge(300);
-        response.addCookie(refreshTokenCookie);
-
         internalEmailDispatchService.sendAsync(new SendEmailRequest(
                 registerCustomerRequest.getEmail(),
                 "Đăng ký tài khoản thành công",
@@ -591,7 +584,9 @@ public class UserServiceImpl implements UserService {
         String accessTokenKey = ACCESS_TOKEN_PREFIX + tokenId;
         String refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenId;
 
-        redisTemplate.opsForValue().set(accessTokenKey, user.getId().toString(), jwtServiceImpl.getAccessTokenExpiration(),
+
+        //Trừ thêm 1 biến buffer để không xảy ra trường hợp dưới local hết hạn mà trên redis vẫn còn hạn buffer = 60s
+        redisTemplate.opsForValue().set(accessTokenKey, user.getId().toString(), jwtServiceImpl.getAccessTokenExpiration() - TOKEN_EXPIRY_BUFFER,
                 TimeUnit.MILLISECONDS);
         redisTemplate.opsForValue().set(refreshTokenKey, user.getId().toString(), jwtServiceImpl.getRefreshTokenExpiration(),
                 TimeUnit.MILLISECONDS);
@@ -682,7 +677,7 @@ public class UserServiceImpl implements UserService {
             String userTokensKey = USER_TOKENS_PREFIX + userId;
 
             redisTemplate.delete(refreshTokenKey);
-            // Neu van con access token tren redis
+            //Nếu vẫn còn AccessToken trên redis
             if (Boolean.TRUE.equals(hasAccessToken)) {
                 redisTemplate.delete(accessTokenKey);
                 redisTemplate.opsForSet().remove(userTokensKey, tokenId);
