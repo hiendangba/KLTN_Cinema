@@ -9,16 +9,17 @@ import com.cinema.cinema_service.dto.response.CinemaResponse;
 import com.cinema.cinema_service.dto.response.CinemaStaffResponse;
 import com.cinema.cinema_service.entity.Cinema;
 import com.cinema.cinema_service.entity.CinemaStaff;
+import com.cinema.cinema_service.grpc.UserGrpcClient;
 import com.cinema.cinema_service.mapper.CinemaMapper;
 import com.cinema.cinema_service.repository.CinemaRepository;
 import com.cinema.cinema_service.repository.CinemaRepositoryImpl;
 import com.cinema.cinema_service.repository.CinemaStaffRepository;
 import com.cinema.cinema_service.services.CinemaService;
-import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
@@ -47,6 +48,7 @@ public class CinemaServiceImpl implements CinemaService {
     CinemaRepositoryImpl cinemaRepositoryImpl;
     CinemaStaffRepository cinemaStaffRepository;
     CinemaMapper cinemaMapper;
+    UserGrpcClient userGrpcClient;
 
     @Override
     @Transactional
@@ -71,52 +73,47 @@ public class CinemaServiceImpl implements CinemaService {
     public CinemaResponse getCinemaById(UUID cinemaId) {
         Cinema cinema = getActiveCinemaOrThrow(cinemaId);
         List<UUID> staffIds = getActiveStaffIdsByCinemaId(cinemaId);
-        return cinemaMapper.toResponse(cinema, staffIds);
+        CinemaResponse response = cinemaMapper.toResponse(cinema, staffIds);
+        populateManagerName(response);
+        return response;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public CursorPageResponse<CinemaResponse> searchCinemas(CursorPageRequest<CinemaField> request) {
-        String[] cursorParts = request.getParsedCompositeCursor();
+    public PageResponse<CinemaResponse> searchCinemas(PageRequest<CinemaField> request) {
         String keyword = request.getNormalizedKeyword();
+        int page = request.getPageOrDefault();
         int size = request.getSizeOrDefault();
 
         List<SortField<CinemaField>> sortFields = request.getSortBy();
         sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        sortFields.add(new SortField<>(CinemaField.ID, "ASC"));
+        boolean hasIdSort = sortFields.stream()
+                .anyMatch(sort -> sort != null && sort.getField() == CinemaField.ID);
+        if (!hasIdSort) {
+            sortFields.add(new SortField<>(CinemaField.ID, "ASC"));
+        }
 
         List<FilterField<CinemaField>> filterFields = request.getFilterBy();
-        List<Cinema> cinemas = cinemaRepositoryImpl.searchWithCursorAndSortAndFilter(
-                cursorParts, keyword, size, sortFields, filterFields);
-
-        boolean hasNext = cinemas.size() > size;
-        String nextCursor = null;
-        if (hasNext) {
-            cinemas = cinemas.subList(0, size);
-            nextCursor = CursorPageRequest.encodeCompositeCursor(
-                    CinemaField.getFieldValues(cinemas.get(cinemas.size() - 1), sortFields));
-        }
-
-        String prevCursor = null;
-        if (cursorParts != null && cursorParts.length > 0) {
-            List<Cinema> prevCinemas = cinemaRepositoryImpl.previousCursor(cursorParts, keyword, size, sortFields, filterFields);
-            if (!prevCinemas.isEmpty() && prevCinemas.size() == size) {
-                prevCursor = CursorPageRequest.encodeCompositeCursor(
-                        CinemaField.getFieldValues(prevCinemas.get(size - 1), sortFields));
-            }
-        }
+        long totalElements = cinemaRepositoryImpl.countWithFilter(keyword, filterFields);
+        List<Cinema> cinemas = cinemaRepositoryImpl.searchWithPageAndSortAndFilter(
+                keyword, page, size, sortFields, filterFields);
 
         Map<UUID, List<UUID>> staffByCinema = mapActiveStaffIdsByCinema(cinemas);
         List<CinemaResponse> data = cinemas.stream()
                 .map(cinema -> cinemaMapper.toResponse(cinema, staffByCinema.getOrDefault(cinema.getId(), List.of())))
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
+        populateManagerNames(data);
 
-        return CursorPageResponse.<CinemaResponse>builder()
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+
+        return PageResponse.<CinemaResponse>builder()
                 .data(data)
-                .nextCursor(nextCursor)
-                .prevCursor(prevCursor)
-                .hasNext(hasNext)
-                .size(data.size())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
                 .build();
     }
 
@@ -254,7 +251,9 @@ public class CinemaServiceImpl implements CinemaService {
         Cinema cinema = cinemaRepository.findByManagerIdAndIsDeletedFalse(managerId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CINEMA_NOT_FOUND));
         List<UUID> staffIds = getActiveStaffIdsByCinemaId(cinema.getId());
-        return cinemaMapper.toResponse(cinema, staffIds);
+        CinemaResponse response = cinemaMapper.toResponse(cinema, staffIds);
+        populateManagerName(response);
+        return response;
     }
 
     private Cinema getActiveCinemaOrThrow(UUID cinemaId) {
@@ -283,6 +282,42 @@ public class CinemaServiceImpl implements CinemaService {
                     .add(staffLink.getStaffId());
         }
         return result;
+    }
+
+    private void populateManagerNames(List<CinemaResponse> responses) {
+        if (responses == null || responses.isEmpty()) {
+            return;
+        }
+
+        Map<UUID, String> managerNameCache = new HashMap<>();
+        for (CinemaResponse response : responses) {
+            if (response == null || response.getManagerId() == null) {
+                continue;
+            }
+            UUID managerId = response.getManagerId();
+            String managerName = managerNameCache.computeIfAbsent(managerId, this::resolveManagerNameSafely);
+            response.setManagerName(managerName);
+        }
+    }
+
+    private void populateManagerName(CinemaResponse response) {
+        if (response == null || response.getManagerId() == null) {
+            return;
+        }
+        response.setManagerName(resolveManagerNameSafely(response.getManagerId()));
+    }
+
+    private String resolveManagerNameSafely(UUID managerId) {
+        try {
+            return userGrpcClient.getUserNameById(managerId);
+        } catch (BusinessException ex) {
+            log.warn("Cannot resolve manager name from user-service for managerId={}, errorKey={}",
+                    managerId, ex.getErrorCode().name());
+            return null;
+        } catch (Exception ex) {
+            log.warn("Unexpected error when resolving manager name for managerId={}", managerId, ex);
+            return null;
+        }
     }
 
     private void validateOperatingTime(java.time.LocalTime openTime, java.time.LocalTime closeTime) {

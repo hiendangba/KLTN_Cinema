@@ -48,7 +48,6 @@ public class PageRequest<T extends Enum<T>> {
     public Pageable toPageable() {
         return org.springframework.data.domain.PageRequest.of(
                 getPageOrDefault() - 1,
-                getSizeOrDefault()
-        );
+                getSizeOrDefault());
     }
 }

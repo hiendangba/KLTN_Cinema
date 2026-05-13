@@ -7,9 +7,9 @@ import com.cinema.cinema_service.dto.request.UpdateCinemaRequest;
 import com.cinema.cinema_service.dto.request.UpdateCinemaStatusRequest;
 import com.cinema.cinema_service.dto.response.CinemaResponse;
 import com.cinema.cinema_service.dto.response.CinemaStaffResponse;
-import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
@@ -21,7 +21,7 @@ public interface CinemaService {
 
     CinemaResponse getCinemaById(UUID cinemaId);
 
-    CursorPageResponse<CinemaResponse> searchCinemas(CursorPageRequest<CinemaField> request);
+    PageResponse<CinemaResponse> searchCinemas(PageRequest<CinemaField> request);
 
     ActionMessageResponse updateCinema(UUID cinemaId, UpdateCinemaRequest request, HttpServletRequest httpRequest);
 

@@ -833,6 +833,45 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Files: `identity-service/src/main/java/com/cinema/identity_service/config/RedisConfig.java`, `user-service/src/main/java/com/cinema/user_service/config/RedisConfig.java`, `film-service/src/main/java/com/cinema/film_service/config/RedisConfig.java`, `showtime-service/src/main/java/com/cinema/showtime_service/config/RedisConfig.java`, `README.md`, `TECHNICAL_AGENT_GUIDE.md`
 - Result: Removed incompatible generic type errors in Lettuce pooling config and eliminated deprecated Redis serializer usage in the affected services.
 
+### 2026-05-13 07:05 (UTC+07:00) - Migrate cinema search pagination to PageRequest/PageResponse
+- Request: Refactor `cinema-service` search pagination from cursor-based to page-based request.
+- Skills used: `backend-dev-guidelines`, `api-documentation`.
+- Actions:
+  - Switched `POST /api/cinemas/search` request type from `CursorPageRequest<CinemaField>` to `PageRequest<CinemaField>`.
+  - Switched response type from `CursorPageResponse<CinemaResponse>` to `PageResponse<CinemaResponse>`.
+  - Reworked service search flow to use `page/size` and compute `totalElements`, `totalPages`, `hasNext`, `hasPrevious`.
+  - Added repository methods `searchWithPageAndSortAndFilter(...)` and `countWithFilter(...)` while preserving keyword/filter/sort behavior.
+  - Verified compile via containerized Maven build in Docker.
+- Files:
+  - `cinema-service/src/main/java/com/cinema/cinema_service/controller/CinemaController.java`
+  - `cinema-service/src/main/java/com/cinema/cinema_service/services/CinemaService.java`
+  - `cinema-service/src/main/java/com/cinema/cinema_service/services/impl/CinemaServiceImpl.java`
+  - `cinema-service/src/main/java/com/cinema/cinema_service/repository/CinemaRepositoryImpl.java`
+- Result: Cinema search API now supports page-based pagination payload:
+  - `{"page":1,"size":12,"keyword":"","filterBy":[],"sortBy":[]}`
+
+### 2026-05-13 07:20 (UTC+07:00) - Add managerName in CinemaResponse
+- Request: Add `managerName` field to cinema response for frontend usage.
+- Skills used: `backend-dev-guidelines`, `api-documentation`.
+- Actions:
+  - Added `managerName` to `CinemaResponse`.
+  - Updated `CinemaMapper` mapping to ignore `managerName` explicitly to keep MapStruct compile-safe with `ReportingPolicy.ERROR`.
+  - Verified compile via Docker build.
+- Files:
+  - `cinema-service/src/main/java/com/cinema/cinema_service/dto/response/CinemaResponse.java`
+  - `cinema-service/src/main/java/com/cinema/cinema_service/mapper/CinemaMapper.java`
+- Result: API response now includes `managerName` field (currently nullable until manager profile-name source is wired).
+
+### 2026-05-13 07:35 (UTC+07:00) - Wire managerName for cinema search/getById via user-service gRPC
+- Request: Return real `managerName` in `GET /api/cinemas/{id}` and `POST /api/cinemas/search`.
+- Skills used: `backend-dev-guidelines`, `api-documentation`.
+- Actions:
+  - Added internal RPC `GetUserBasicById` in shared `user_internal.proto`.
+  - Implemented RPC handler in `user-service` gRPC layer and exposed `UserService.getUserById(...)`.
+  - Added `UserGrpcClient` in `cinema-service` and enriched `managerName` for `getById` + `search`.
+  - Added gRPC client channel config in `cinema-service` and runtime env in `compose.prod.yaml`.
+- Result: `managerName` is now populated from `user-service` for search/getById responses, with graceful fallback to `null` if user-service is unavailable.
+
 
 ---
 
@@ -875,4 +914,4 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ---
 
-Cập nhật kỹ thuật gần nhất: 08/05/2026.
+Cập nhật kỹ thuật gần nhất: 13/05/2026.

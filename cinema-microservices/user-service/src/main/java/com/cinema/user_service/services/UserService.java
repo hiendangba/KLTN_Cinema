@@ -25,6 +25,8 @@ public interface UserService {
 
     UserResponse getMyProfile(HttpServletRequest request);
 
+    UserResponse getUserById(UUID userId);
+
     UserExistenceResponse checkUserExists(UUID userId);
 
     PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request);

@@ -227,6 +227,13 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserResponse getUserById(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        return userMapper.toUserResponse(user);
+    }
+
+    @Override
     public UserExistenceResponse checkUserExists(UUID userId) {
         boolean exists = userRepository.existsById(userId);
         return UserExistenceResponse.builder()

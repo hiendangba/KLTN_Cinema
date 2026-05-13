@@ -223,6 +223,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/cinema_db
       DB_USERNAME: cinema_user
       DB_PASSWORD: cinema_pass
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
       GRPC_SERVER_PORT: 9196
       SERVER_PORT: 8096
     expose:

@@ -69,6 +69,37 @@ public class CinemaRepositoryImpl {
         return query.getResultList();
     }
 
+    public List<Cinema> searchWithPageAndSortAndFilter(
+            String keyword,
+            int page,
+            int size,
+            List<SortField<CinemaField>> sortBy,
+            List<FilterField<CinemaField>> filterBy) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Cinema> cq = cb.createQuery(Cinema.class);
+        Root<Cinema> root = cq.from(Cinema.class);
+
+        List<Predicate> predicates = buildPredicates(cb, root, null, keyword, sortBy, filterBy, false);
+        cq.where(predicates.toArray(new Predicate[0]));
+        cq.orderBy(buildOrders(cb, root, sortBy));
+
+        TypedQuery<Cinema> query = entityManager.createQuery(cq);
+        query.setFirstResult(Math.max(0, (page - 1) * size));
+        query.setMaxResults(size);
+        return query.getResultList();
+    }
+
+    public long countWithFilter(String keyword, List<FilterField<CinemaField>> filterBy) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+        Root<Cinema> root = countQuery.from(Cinema.class);
+
+        List<Predicate> predicates = buildPredicates(cb, root, null, keyword, null, filterBy, false);
+        countQuery.select(cb.count(root));
+        countQuery.where(predicates.toArray(new Predicate[0]));
+        return entityManager.createQuery(countQuery).getSingleResult();
+    }
+
     private List<Predicate> buildPredicates(
             CriteriaBuilder cb,
             Root<Cinema> root,

@@ -9,10 +9,10 @@ import com.cinema.cinema_service.dto.response.CinemaResponse;
 import com.cinema.cinema_service.dto.response.CinemaStaffResponse;
 import com.cinema.cinema_service.services.CinemaService;
 import com.cinema.controller.BaseController;
-import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -53,9 +53,9 @@ public class CinemaController extends BaseController {
     }
 
     @PostMapping("/search")
-    public ResponseEntity<APIResponse<CursorPageResponse<CinemaResponse>>> searchCinemas(
-            @Valid @RequestBody CursorPageRequest<CinemaField> request) {
-        CursorPageResponse<CinemaResponse> response = cinemaService.searchCinemas(request);
+    public ResponseEntity<APIResponse<PageResponse<CinemaResponse>>> searchCinemas(
+            @Valid @RequestBody PageRequest<CinemaField> request) {
+        PageResponse<CinemaResponse> response = cinemaService.searchCinemas(request);
         return ok(response);
     }
 

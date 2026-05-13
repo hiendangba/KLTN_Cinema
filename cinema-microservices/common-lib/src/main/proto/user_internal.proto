@@ -13,6 +13,7 @@ service UserInternalService {
   rpc CreateManagerProfile(CreateManagerProfileRequest) returns (cinema.common.v1.OperationReply);
   rpc CreateStaffProfile(CreateStaffProfileRequest) returns (cinema.common.v1.OperationReply);
   rpc CheckUserExists(CheckUserExistsRequest) returns (CheckUserExistsReply);
+  rpc GetUserBasicById(GetUserBasicByIdRequest) returns (GetUserBasicByIdReply);
 }
 
 message CreateCustomerProfileRequest {
@@ -60,4 +61,20 @@ message CheckUserExistsReply {
   string error_key = 2;
   string message = 3;
   bool exists = 4;
+}
+
+message GetUserBasicByIdRequest {
+  string user_id = 1;
+}
+
+message UserBasicPayload {
+  string id = 1;
+  string name = 2;
+}
+
+message GetUserBasicByIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  UserBasicPayload user = 4;
 }

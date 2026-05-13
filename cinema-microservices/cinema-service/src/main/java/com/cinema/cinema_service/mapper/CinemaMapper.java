@@ -32,6 +32,7 @@ public interface CinemaMapper {
     void updateEntity(@MappingTarget Cinema cinema, UpdateCinemaRequest request);
 
     @Mapping(target = "staffIds", source = "staffIds")
+    @Mapping(target = "managerName", ignore = true)
     CinemaResponse toResponse(Cinema cinema, List<UUID> staffIds);
 
     CinemaStaffResponse toResponse(CinemaStaff entity);

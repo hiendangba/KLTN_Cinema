@@ -31,6 +31,7 @@ public class CinemaResponse {
     LocalTime closeTime;
     CinemaStatus status;
     UUID managerId;
+    String managerName;
     Boolean isDeleted;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
