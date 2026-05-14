@@ -1,12 +1,15 @@
 package com.cinema.booking_service.controller;
 
 import com.cinema.booking_service.dto.request.CreateProductRequest;
+import com.cinema.booking_service.dto.request.ProductField;
 import com.cinema.booking_service.dto.request.UpdateProductRequest;
 import com.cinema.booking_service.dto.response.ProductResponse;
 import com.cinema.booking_service.services.ProductService;
 import com.cinema.controller.BaseController;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -61,16 +63,19 @@ public class ProductController extends BaseController {
         return ok(response);
     }
 
-    @GetMapping("/me")
-    public ResponseEntity<APIResponse<List<ProductResponse>>> getProductsByOperatorCinema(
+    @PostMapping("/me/search")
+    public ResponseEntity<APIResponse<PageResponse<ProductResponse>>> getProductsByOperatorCinema(
+            @Valid @RequestBody PageRequest<ProductField> request,
             HttpServletRequest httpRequest) {
-        List<ProductResponse> response = productService.getProductsByOperatorCinema(httpRequest);
+        PageResponse<ProductResponse> response = productService.getProductsByOperatorCinema(request, httpRequest);
         return ok(response);
     }
 
-    @GetMapping("/cinemas/{cinemaId}")
-    public ResponseEntity<APIResponse<List<ProductResponse>>> getProductsByCinemaId(@PathVariable UUID cinemaId) {
-        List<ProductResponse> response = productService.getProductsByCinemaId(cinemaId);
+    @PostMapping("/cinemas/{cinemaId}/search")
+    public ResponseEntity<APIResponse<PageResponse<ProductResponse>>> getProductsByCinemaId(
+            @PathVariable UUID cinemaId,
+            @Valid @RequestBody PageRequest<ProductField> request) {
+        PageResponse<ProductResponse> response = productService.getProductsByCinemaId(cinemaId, request);
         return ok(response);
     }
 }

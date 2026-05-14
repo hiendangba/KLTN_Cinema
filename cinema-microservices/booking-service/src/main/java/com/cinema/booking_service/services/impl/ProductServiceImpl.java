@@ -1,6 +1,7 @@
 package com.cinema.booking_service.services.impl;
 
 import com.cinema.booking_service.dto.request.CreateProductRequest;
+import com.cinema.booking_service.dto.request.ProductField;
 import com.cinema.booking_service.dto.request.UpdateProductRequest;
 import com.cinema.booking_service.dto.response.ProductResponse;
 import com.cinema.booking_service.entity.Product;
@@ -9,12 +10,18 @@ import com.cinema.booking_service.grpc.CinemaGrpcClient;
 import com.cinema.booking_service.mapper.ProductMapper;
 import com.cinema.booking_service.repository.ProductRepository;
 import com.cinema.booking_service.services.ProductService;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -95,22 +102,42 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> getProductsByOperatorCinema(HttpServletRequest httpRequest) {
+    public PageResponse<ProductResponse> getProductsByOperatorCinema(
+            PageRequest<ProductField> request,
+            HttpServletRequest httpRequest) {
         validateOperatorRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        return productRepository.findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(cinemaId)
-                .stream()
-                .map(productMapper::toResponse)
-                .toList();
+        return getPagedProductsByCinemaId(cinemaId, request);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductResponse> getProductsByCinemaId(UUID cinemaId) {
-        return productRepository.findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(cinemaId)
-                .stream()
+    public PageResponse<ProductResponse> getProductsByCinemaId(UUID cinemaId, PageRequest<ProductField> request) {
+        return getPagedProductsByCinemaId(cinemaId, request);
+    }
+
+    private PageResponse<ProductResponse> getPagedProductsByCinemaId(UUID cinemaId, PageRequest<ProductField> request) {
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                page - 1,
+                size,
+                Sort.by(Sort.Direction.DESC, "timeCreated"));
+
+        Page<Product> productPage = productRepository.findAllByCinemaIdAndIsDeletedFalse(cinemaId, pageable);
+        List<ProductResponse> data = productPage.getContent().stream()
                 .map(productMapper::toResponse)
                 .toList();
+
+        return PageResponse.<ProductResponse>builder()
+                .data(data)
+                .currentPage(page)
+                .totalPages(productPage.getTotalPages())
+                .totalElements(productPage.getTotalElements())
+                .size(size)
+                .hasNext(productPage.hasNext())
+                .hasPrevious(productPage.hasPrevious())
+                .build();
     }
 
     private Product getActiveProductOrThrow(UUID id) {
@@ -127,29 +154,17 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!HeaderNames.ROLE_MANAGER.equals(role)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
     }
 
     private void validateOperatorRole(HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!(HeaderNames.ROLE_MANAGER.equals(role) || HeaderNames.ROLE_STAFF.equals(role))) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
     }
 
     private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
-        String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
-        if (userIdRaw == null || userIdRaw.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
         try {
-            return cinemaGrpcClient.getCinemaIdByUserId(UUID.fromString(userIdRaw));
-        } catch (IllegalArgumentException ex) {
-            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+            UUID userId = RequestAuthUtils.requireUserId(httpRequest);
+            return cinemaGrpcClient.getCinemaIdByUserId(userId);
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.CINEMA_NOT_FOUND
                     || ex.getErrorCode() == ErrorCode.NOT_FOUND

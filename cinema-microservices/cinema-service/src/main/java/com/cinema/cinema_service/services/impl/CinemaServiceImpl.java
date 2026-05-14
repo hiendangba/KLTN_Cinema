@@ -23,6 +23,7 @@ import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -367,18 +368,13 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     private UUID extractUserId(HttpServletRequest httpRequest) {
-        String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
-        if (userIdRaw == null || userIdRaw.isBlank()) {
-            log.warn("Unauthorized request: missing userId header method={} path={}",
-                    httpRequest.getMethod(), httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
         try {
-            return UUID.fromString(userIdRaw);
-        } catch (IllegalArgumentException ex) {
-            log.warn("Invalid userId header: userId={} method={} path={}",
-                    userIdRaw, httpRequest.getMethod(), httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+            return RequestAuthUtils.requireUserId(httpRequest);
+        } catch (BusinessException ex) {
+            if (ex.getErrorCode() == ErrorCode.UNAUTHORIZED || ex.getErrorCode() == ErrorCode.INVALID_FORMAT) {
+                log.warn("Invalid auth headers method={} path={}", httpRequest.getMethod(), httpRequest.getRequestURI());
+            }
+            throw ex;
         }
     }
 
@@ -390,28 +386,10 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     private void validateAdminRole(HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
-            log.warn("Forbidden request: requiredRole={} actualRole={} userId={} method={} path={}",
-                    HeaderNames.ROLE_ADMIN,
-                    role,
-                    httpRequest.getHeader(HeaderNames.X_USER_ID),
-                    httpRequest.getMethod(),
-                    httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN, log, "cinema_admin_action");
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!HeaderNames.ROLE_MANAGER.equals(role)) {
-            log.warn("Forbidden request: requiredRole={} actualRole={} userId={} method={} path={}",
-                    HeaderNames.ROLE_MANAGER,
-                    role,
-                    httpRequest.getHeader(HeaderNames.X_USER_ID),
-                    httpRequest.getMethod(),
-                    httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "cinema_manager_action");
     }
 }

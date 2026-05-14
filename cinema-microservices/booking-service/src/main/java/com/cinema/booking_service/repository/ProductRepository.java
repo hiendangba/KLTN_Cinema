@@ -2,6 +2,8 @@ package com.cinema.booking_service.repository;
 
 import com.cinema.booking_service.entity.Product;
 import com.cinema.booking_service.enums.ProductStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -13,6 +15,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     Optional<Product> findByIdAndIsDeletedFalse(UUID id);
 
     List<Product> findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID cinemaId);
+
+    Page<Product> findAllByCinemaIdAndIsDeletedFalse(UUID cinemaId, Pageable pageable);
 
     List<Product> findAllByIdInAndIsDeletedFalse(Set<UUID> ids);
 

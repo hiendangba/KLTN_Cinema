@@ -6,6 +6,7 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import com.cinema.identity_service.dto.request.ChangePasswordRequest;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
@@ -203,17 +204,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public ActionMessageResponse createStaff(RegisterStaffRequest registerStaffRequest,
                                              HttpServletRequest request) {
-        String role = request.getHeader(HeaderNames.X_USER_ROLE);
-        if (!(HeaderNames.ROLE_ADMIN.equals(role) || HeaderNames.ROLE_MANAGER.equals(role))) {
-            log.warn("Forbidden createStaff request: requiredRoles=[{},{}] actualRole={} userId={} method={} path={}",
-                    HeaderNames.ROLE_ADMIN,
-                    HeaderNames.ROLE_MANAGER,
-                    role,
-                    request.getHeader(HeaderNames.X_USER_ID),
-                    request.getMethod(),
-                    request.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireAnyRole(request, log, "createStaff",
+                HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
 
         // Kiem tra email da ton tai
         if (userRepository.existsByEmail(registerStaffRequest.getEmail())) {
@@ -403,19 +395,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.PASSWORD_DUPLICATED);
         }
 
-        String userId = request.getHeader(HeaderNames.X_USER_ID);
-
-        if (userId == null || userId.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
-        UUID userUUID;
-
-        try {
-            userUUID = UUID.fromString(userId);
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
+        UUID userUUID = RequestAuthUtils.requireUserId(request, ErrorCode.UNAUTHORIZED);
 
         User user = userRepository.findById(userUUID)
                 .orElseThrow(() -> new BusinessException(USER_NOT_FOUND));
@@ -429,7 +409,7 @@ public class UserServiceImpl implements UserService {
         user.setPassword(passwordEncoder.encode(changePasswordRequest.getNewPassword()));
         userRepository.save(user);
 
-        log.info("Password changed for user: {}", userId);
+        log.info("Password changed for user: {}", userUUID);
         return ActionMessageResponse.builder()
                 .message("Đổi mật khẩu thành công")
                 .build();

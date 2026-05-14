@@ -11,6 +11,7 @@ import com.cinema.dto.response.SuccessResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
@@ -323,16 +324,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!HeaderNames.ROLE_MANAGER.equals(role)) {
-            log.warn("Forbidden request: requiredRole={} actualRole={} userId={} method={} path={}",
-                    HeaderNames.ROLE_MANAGER,
-                    role,
-                    httpRequest.getHeader(HeaderNames.X_USER_ID),
-                    httpRequest.getMethod(),
-                    httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "showtime_manager_action");
     }
 
     private void validatePricingPolicy(UUID pricingPolicyId, UUID cinemaId) {
@@ -378,19 +370,14 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     }
 
     private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
-        String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
-        if (userIdRaw == null || userIdRaw.isBlank()) {
-            log.warn("Unauthorized request: missing userId header method={} path={}",
-                    httpRequest.getMethod(), httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
         try {
-            return cinemaGrpcClient.getCinemaIdByUserId(UUID.fromString(userIdRaw));
-        } catch (IllegalArgumentException ex) {
-            log.warn("Invalid userId header: userId={} method={} path={}",
-                    userIdRaw, httpRequest.getMethod(), httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+            UUID userId = RequestAuthUtils.requireUserId(httpRequest);
+            return cinemaGrpcClient.getCinemaIdByUserId(userId);
+        } catch (BusinessException ex) {
+            if (ex.getErrorCode() == ErrorCode.UNAUTHORIZED || ex.getErrorCode() == ErrorCode.INVALID_FORMAT) {
+                log.warn("Invalid auth headers method={} path={}", httpRequest.getMethod(), httpRequest.getRequestURI());
+            }
+            throw ex;
         }
     }
 }

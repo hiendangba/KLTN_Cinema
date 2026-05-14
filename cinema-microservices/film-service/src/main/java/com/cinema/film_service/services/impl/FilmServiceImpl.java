@@ -18,6 +18,7 @@ import com.cinema.film_service.services.FilmService;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -187,16 +188,6 @@ public class FilmServiceImpl implements FilmService {
     }
 
     private void validateAdminRole(HttpServletRequest httpRequest, String action) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
-            log.warn("Forbidden action={} requiredRole={} actualRole={} userId={} method={} path={}",
-                    action,
-                    HeaderNames.ROLE_ADMIN,
-                    role,
-                    httpRequest.getHeader(HeaderNames.X_USER_ID),
-                    httpRequest.getMethod(),
-                    httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN, log, action);
     }
 }

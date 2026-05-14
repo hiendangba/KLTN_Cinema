@@ -22,6 +22,7 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import com.github.f4b6a3.uuid.UuidCreator;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -202,7 +203,7 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void authorizeBookingRead(Booking booking, HttpServletRequest httpRequest) {
-        String role = resolveRole(httpRequest);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
             UUID userId = resolveUserId(httpRequest);
             if (!userId.equals(booking.getUserId())) {
@@ -315,37 +316,15 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void validateCustomerRole(HttpServletRequest httpRequest) {
-        String role = resolveRole(httpRequest);
-        if (!HeaderNames.ROLE_CUSTOMER.equals(role)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_CUSTOMER);
     }
 
     private void validateOperatorRole(HttpServletRequest httpRequest) {
-        String role = resolveRole(httpRequest);
-        if (!(HeaderNames.ROLE_MANAGER.equals(role) || HeaderNames.ROLE_STAFF.equals(role))) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
-    }
-
-    private String resolveRole(HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (role == null || role.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-        return role;
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
     }
 
     private UUID resolveUserId(HttpServletRequest httpRequest) {
-        String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
-        if (userIdRaw == null || userIdRaw.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-        try {
-            return UUID.fromString(userIdRaw);
-        } catch (IllegalArgumentException ex) {
-            throw new BusinessException(ErrorCode.INVALID_FORMAT);
-        }
+        return RequestAuthUtils.requireUserId(httpRequest);
     }
 
     private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {

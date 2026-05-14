@@ -23,6 +23,7 @@ import com.cinema.hall_service.repository.HallRepository;
 import com.cinema.hall_service.repository.HallRepositoryImpl;
 import com.cinema.hall_service.services.HallService;
 import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -403,22 +404,13 @@ public class HallServiceImpl implements HallService {
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!HeaderNames.ROLE_MANAGER.equals(role)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
     }
 
     private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
-        String userIdRaw = httpRequest.getHeader(HeaderNames.X_USER_ID);
-        if (userIdRaw == null || userIdRaw.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
         try {
-            return cinemaGrpcClient.getCinemaIdByUserId(UUID.fromString(userIdRaw));
-        } catch (IllegalArgumentException ex) {
-            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+            UUID userId = RequestAuthUtils.requireUserId(httpRequest);
+            return cinemaGrpcClient.getCinemaIdByUserId(userId);
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.CINEMA_NOT_FOUND
                     || ex.getErrorCode() == ErrorCode.NOT_FOUND

@@ -7,6 +7,7 @@ import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import com.cinema.user_service.dto.request.*;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
@@ -90,31 +91,8 @@ public class UserServiceImpl implements UserService {
     @Override
     public ActionMessageResponse updateCustomerProfile(UpdateCustomerRequest request,
             HttpServletRequest httpRequest) {
-        String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
-
-        if (userId == null || userId.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
-        UUID userUUID;
-
-        try {
-            userUUID = UUID.fromString(userId);
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!(HeaderNames.ROLE_ADMIN.equals(role))) {
-            log.warn("Forbidden action={} requiredRole={} actualRole={} userId={} method={} path={}",
-                    "updateCustomerProfile",
-                    HeaderNames.ROLE_ADMIN,
-                    role,
-                    httpRequest.getHeader(HeaderNames.X_USER_ID),
-                    httpRequest.getMethod(),
-                    httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN, log, "updateCustomerProfile");
 
         User user = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.CUSTOMER)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -127,7 +105,7 @@ public class UserServiceImpl implements UserService {
         userMapper.updateUserCustomer(user, request);
         userRepository.save(user);
 
-        log.info("Customer profile updated: customerId={}, email={}", userId, request.getEmail());
+        log.info("Customer profile updated: customerId={}, email={}", userUUID, request.getEmail());
         return ActionMessageResponse.builder()
                 .message("Cập nhật profile cho Customer thành công")
                 .build();
@@ -135,17 +113,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ActionMessageResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest) {
-        String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
-        if (userId == null || userId.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
-        UUID userUUID;
-        try {
-            userUUID = UUID.fromString(userId);
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
+        UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
 
         User manager = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.MANAGER)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -157,7 +125,7 @@ public class UserServiceImpl implements UserService {
 
         userMapper.updateUserManager(manager, request);
         userRepository.save(manager);
-        log.info("Manager profile updated: managerId={}, email={}", userId, request.getEmail());
+        log.info("Manager profile updated: managerId={}, email={}", userUUID, request.getEmail());
         return ActionMessageResponse.builder()
                 .message("Cập nhật profile cho Manager thành công")
                 .build();
@@ -165,29 +133,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public ActionMessageResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest) {
-        String userId = httpRequest.getHeader(HeaderNames.X_USER_ID);
-        if (userId == null || userId.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
-        UUID userUUID;
-        try {
-            userUUID = UUID.fromString(userId);
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
-        String role = httpRequest.getHeader(HeaderNames.X_USER_ROLE);
-        if (!(HeaderNames.ROLE_MANAGER.equals(role))) {
-            log.warn("Forbidden action={} requiredRole={} actualRole={} userId={} method={} path={}",
-                    "updateStaffProfile",
-                    HeaderNames.ROLE_MANAGER,
-                    role,
-                    httpRequest.getHeader(HeaderNames.X_USER_ID),
-                    httpRequest.getMethod(),
-                    httpRequest.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "updateStaffProfile");
 
         User staff = userRepository.findByIdAndRole(userUUID, UserEnum.UserRole.STAFF)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -199,7 +146,7 @@ public class UserServiceImpl implements UserService {
 
         userMapper.updateUserStaff(staff, request);
         userRepository.save(staff);
-        log.info("Staff profile updated: staffId={}, email={}", userId, request.getEmail());
+        log.info("Staff profile updated: staffId={}, email={}", userUUID, request.getEmail());
         return ActionMessageResponse.builder()
                 .message("Cập nhật profile cho Staff thành công")
                 .build();
@@ -207,17 +154,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse getMyProfile(HttpServletRequest request) {
-        String userId = request.getHeader(HeaderNames.X_USER_ID);
-        if (userId == null || userId.isBlank()) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-
-        UUID userUUID;
-        try {
-            userUUID = UUID.fromString(userId);
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
+        UUID userUUID = RequestAuthUtils.requireUserId(request, ErrorCode.UNAUTHORIZED);
 
         User user = userRepository.findById(userUUID)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -244,18 +181,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request) {
-        String role = request.getHeader(HeaderNames.X_USER_ROLE);
-        if (!(HeaderNames.ROLE_ADMIN.equals(role) || HeaderNames.ROLE_MANAGER.equals(role))) {
-            log.warn("Forbidden action={} requiredRoles=[{},{}] actualRole={} userId={} method={} path={}",
-                    "getAllStaff",
-                    HeaderNames.ROLE_ADMIN,
-                    HeaderNames.ROLE_MANAGER,
-                    role,
-                    request.getHeader(HeaderNames.X_USER_ID),
-                    request.getMethod(),
-                    request.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireAnyRole(request, log, "getAllStaff",
+                HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
 
         Pageable pageable = pageRequest.toPageable();
         Page<User> userPage = userRepository.findByRole(UserEnum.UserRole.STAFF, pageable);
@@ -273,17 +200,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public PageResponse<UserResponse> getAllManager(PageRequest<?> pageRequest, HttpServletRequest request) {
-        String role = request.getHeader(HeaderNames.X_USER_ROLE);
-        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
-            log.warn("Forbidden action={} requiredRole={} actualRole={} userId={} method={} path={}",
-                    "getAllManager",
-                    HeaderNames.ROLE_ADMIN,
-                    role,
-                    request.getHeader(HeaderNames.X_USER_ID),
-                    request.getMethod(),
-                    request.getRequestURI());
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        RequestAuthUtils.requireRole(request, HeaderNames.ROLE_ADMIN, log, "getAllManager");
 
         Pageable pageable = pageRequest.toPageable();
         Page<User> userPage = userRepository.findByRole(UserEnum.UserRole.MANAGER, pageable);
