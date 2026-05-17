@@ -206,7 +206,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaStaffRepository.save(cinemaStaff);
 
         return ActionMessageResponse.builder()
-                .message("Cap nhat nhan vien vao rap thanh cong")
+                .message("Cập nhật nhân viên vào rạp thành công")
                 .build();
     }
 
