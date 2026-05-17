@@ -1,8 +1,8 @@
 package com.cinema.hall_service.services;
 
-import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.hall_service.dto.request.HallCreateRequest;
 import com.cinema.hall_service.dto.request.HallField;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
@@ -18,7 +18,7 @@ public interface HallService {
 
     HallResponse getHallById(UUID id);
 
-    CursorPageResponse<HallResponse> searchHalls(CursorPageRequest<HallField> request);
+    PageResponse<HallResponse> searchHalls(PageRequest<HallField> request);
 
     ActionMessageResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest);
 

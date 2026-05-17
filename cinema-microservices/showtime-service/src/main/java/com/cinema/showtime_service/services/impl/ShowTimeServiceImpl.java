@@ -1,11 +1,11 @@
 package com.cinema.showtime_service.services.impl;
 
 import com.cinema.Enum.ShowTimeEnum;
-import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.FilterField;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.dto.response.SuccessResponse;
 import com.cinema.exception.BusinessException;
@@ -67,8 +67,8 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     @Transactional(readOnly = true)
-    public CursorPageResponse<ShowTimeResponse> searchShowtimes(CursorPageRequest<ShowTimeField> request) {
-        CursorPageResponse<ShowTimeResponse> base = searchShowtimesBase(request);
+    public PageResponse<ShowTimeResponse> searchShowtimes(PageRequest<ShowTimeField> request) {
+        PageResponse<ShowTimeResponse> base = searchShowtimesBase(request);
         List<ShowTimeResponse> showtimes = new ArrayList<>(base.getData());
 
         List<UUID> filmIds = showtimes.stream()
@@ -87,60 +87,52 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             showtime.setHall(hallMap.get(showtime.getHallId()));
         });
 
-        return CursorPageResponse.<ShowTimeResponse>builder()
+        return PageResponse.<ShowTimeResponse>builder()
                 .data(showtimes)
-                .nextCursor(base.getNextCursor())
-                .prevCursor(base.getPrevCursor())
-                .hasNext(base.isHasNext())
+                .currentPage(base.getCurrentPage())
+                .totalPages(base.getTotalPages())
+                .totalElements(base.getTotalElements())
                 .size(base.getSize())
+                .hasNext(base.isHasNext())
+                .hasPrevious(base.isHasPrevious())
                 .build();
     }
 
-    private CursorPageResponse<ShowTimeResponse> searchShowtimesBase(CursorPageRequest<ShowTimeField> request) {
-        log.info("Lay danh sach showtime (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
-                request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
+    private PageResponse<ShowTimeResponse> searchShowtimesBase(PageRequest<ShowTimeField> request) {
+        log.info("Lay danh sach showtime (page={}, size={}, keyword={}, sortBy={}, filterBy={})",
+                request.getPage(), request.getSize(), request.getKeyword(), request.getSortBy(),
                 request.getFilterBy());
 
-        String[] cursorParts = request.getParsedCompositeCursor();
         String keyword = request.getNormalizedKeyword();
+        int page = request.getPageOrDefault();
         int size = request.getSizeOrDefault();
 
         List<SortField<ShowTimeField>> sortFields = request.getSortBy();
         sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        sortFields.add(new SortField<>(ShowTimeField.ID, "ASC"));
+        boolean hasIdSort = sortFields.stream()
+                .anyMatch(sort -> sort != null && sort.getField() == ShowTimeField.ID);
+        if (!hasIdSort) {
+            sortFields.add(new SortField<>(ShowTimeField.ID, "ASC"));
+        }
 
         List<FilterField<ShowTimeField>> filterFields = request.getFilterBy();
-        List<ShowTime> showTimes = showTimeRepositoryImpl.searchWithCursorAndSortAndFilter(
-                cursorParts, keyword, size, sortFields, filterFields);
-
-        boolean hasNext = showTimes.size() > size;
-        String nextCursor = null;
-        if (hasNext) {
-            showTimes = showTimes.subList(0, size);
-            nextCursor = CursorPageRequest.encodeCompositeCursor(
-                    ShowTimeField.getFieldValues(showTimes.get(showTimes.size() - 1), sortFields));
-        }
-
-        String prevCursor = null;
-        if (cursorParts != null && cursorParts.length > 0) {
-            List<ShowTime> prevShowTimes = showTimeRepositoryImpl.previousCursor(
-                    cursorParts, keyword, size, sortFields, filterFields);
-            if (!prevShowTimes.isEmpty() && prevShowTimes.size() == size) {
-                prevCursor = CursorPageRequest.encodeCompositeCursor(
-                        ShowTimeField.getFieldValues(prevShowTimes.get(size - 1), sortFields));
-            }
-        }
+        long totalElements = showTimeRepositoryImpl.countWithFilter(keyword, filterFields);
+        List<ShowTime> showTimes = showTimeRepositoryImpl.searchWithPageAndSortAndFilter(
+                keyword, page, size, sortFields, filterFields);
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
 
         Map<UUID, PricingPolicyResponse> pricingPolicyMap = getPricingPolicyResponseMap(showTimes);
 
-        return CursorPageResponse.<ShowTimeResponse>builder()
+        return PageResponse.<ShowTimeResponse>builder()
                 .data(showTimes.stream()
                         .map(showTime -> toShowTimeResponse(showTime, pricingPolicyMap.get(showTime.getPricingPolicyId())))
                         .collect(Collectors.toList()))
-                .nextCursor(nextCursor)
-                .prevCursor(prevCursor)
-                .hasNext(hasNext)
-                .size(showTimes.size())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
                 .build();
     }
 

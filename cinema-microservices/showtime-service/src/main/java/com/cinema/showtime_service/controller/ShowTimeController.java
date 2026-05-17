@@ -1,10 +1,10 @@
 package com.cinema.showtime_service.controller;
 
 import com.cinema.controller.BaseController;
-import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
@@ -36,9 +36,9 @@ public class ShowTimeController extends BaseController {
     private final ShowTimeService showTimeService;
 
     @PostMapping("/search")
-    public ResponseEntity<APIResponse<CursorPageResponse<ShowTimeResponse>>> searchShowtimes(
-            @Valid @RequestBody CursorPageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request) {
-        CursorPageResponse<ShowTimeResponse> response = showTimeService.searchShowtimes(request);
+    public ResponseEntity<APIResponse<PageResponse<ShowTimeResponse>>> searchShowtimes(
+            @Valid @RequestBody PageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request) {
+        PageResponse<ShowTimeResponse> response = showTimeService.searchShowtimes(request);
         return ok(response);
     }
 

@@ -1,10 +1,10 @@
 package com.cinema.hall_service.controller;
 
 import com.cinema.controller.BaseController;
-import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.hall_service.dto.request.HallCreateRequest;
 import com.cinema.hall_service.dto.request.HallField;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
@@ -51,9 +51,9 @@ public class HallController extends BaseController {
     }
 
     @PostMapping("/search")
-    public ResponseEntity<APIResponse<CursorPageResponse<HallResponse>>> searchHalls(
-            @Valid @RequestBody CursorPageRequest<HallField> request) {
-        CursorPageResponse<HallResponse> response = hallService.searchHalls(request);
+    public ResponseEntity<APIResponse<PageResponse<HallResponse>>> searchHalls(
+            @Valid @RequestBody PageRequest<HallField> request) {
+        PageResponse<HallResponse> response = hallService.searchHalls(request);
         return ok(response);
     }
 

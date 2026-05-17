@@ -1,11 +1,11 @@
 package com.cinema.hall_service.services.impl;
 
 import com.cinema.Enum.HallEnum;
-import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.FilterField;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.hall_service.config.RedisConfig;
@@ -92,48 +92,38 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional(readOnly = true)
-    public CursorPageResponse<HallResponse> searchHalls(CursorPageRequest<HallField> request) {
-        String[] cursorParts = request.getParsedCompositeCursor();
+    public PageResponse<HallResponse> searchHalls(PageRequest<HallField> request) {
         String keyword = request.getNormalizedKeyword();
+        int page = request.getPageOrDefault();
         int size = request.getSizeOrDefault();
 
         List<SortField<HallField>> sortFields = request.getSortBy();
         sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        sortFields.add(new SortField<>(HallField.ID, "ASC"));
+        boolean hasIdSort = sortFields.stream()
+                .anyMatch(sort -> sort != null && sort.getField() == HallField.ID);
+        if (!hasIdSort) {
+            sortFields.add(new SortField<>(HallField.ID, "ASC"));
+        }
 
         List<FilterField<HallField>> filterFields = request.getFilterBy();
-        List<Hall> halls = hallRepositoryImpl.searchWithCursorAndSortAndFilter(
-                cursorParts, keyword, size, sortFields, filterFields);
-
-        boolean hasNext = halls.size() > size;
-        String nextCursor = null;
-        if (hasNext) {
-            halls = halls.subList(0, size);
-            nextCursor = CursorPageRequest.encodeCompositeCursor(
-                    HallField.getFieldValues(halls.get(halls.size() - 1), sortFields));
-        }
-
-        String prevCursor = null;
-        if (cursorParts != null && cursorParts.length > 0) {
-            List<Hall> prevHalls = hallRepositoryImpl.previousCursor(cursorParts, keyword, size, sortFields,
-                    filterFields);
-            if (!prevHalls.isEmpty() && prevHalls.size() == size) {
-                prevCursor = CursorPageRequest.encodeCompositeCursor(
-                        HallField.getFieldValues(prevHalls.get(size - 1), sortFields));
-            }
-        }
+        long totalElements = hallRepositoryImpl.countWithFilter(keyword, filterFields);
+        List<Hall> halls = hallRepositoryImpl.searchWithPageAndSortAndFilter(
+                keyword, page, size, sortFields, filterFields);
 
         Map<UUID, CinemaResponse> cinemaResponseCache = new HashMap<>();
         List<HallResponse> data = halls.stream()
                 .map(hall -> toHallResponse(hall, cinemaResponseCache))
                 .toList();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
 
-        return CursorPageResponse.<HallResponse>builder()
+        return PageResponse.<HallResponse>builder()
                 .data(data)
-                .nextCursor(nextCursor)
-                .prevCursor(prevCursor)
-                .hasNext(hasNext)
-                .size(data.size())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
                 .build();
     }
 

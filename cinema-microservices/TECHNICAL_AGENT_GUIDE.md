@@ -237,7 +237,9 @@ cinema-microservices/
 Mọi service đều import thư viện này. Nó giải quyết triệt để sự lặp lại mã (DRY):
 - **Dynamic API Response**: Class `APIResponse<T>` chuẩn hóa mọi payload gửi về Frontend (success, code, data, timestamp).
 - **Global Error Handling**: Bắt lỗi toàn cục qua `@RestControllerAdvice`. Sử dụng Enum `ErrorCode` để quản lý tập trung mã lỗi logic (vd: 4001: USER_NOT_FOUND, 4002: FILM_TITLE_EXISTED).
-- **Pagination Optimization**: Áp dụng **Cursor Pagination** (`CursorPageRequest`, `CursorPageResponse`) dựa trên Base64 token mã hóa (Sort fields + Offset IDs), giúp vượt qua giới hạn chậm chạp của cấu trúc `LIMIT/OFFSET`.
+- **Pagination Strategy**:
+  - `film-service`: dùng **Cursor Pagination** (`CursorPageRequest`, `CursorPageResponse`) cho tập dữ liệu lớn.
+  - `hall-service`, `showtime-service`, `cinema-service`: dùng **Page Pagination** (`PageRequest`, `PageResponse`) để đồng nhất payload cho FE/QA.
 
 ### 2. `identity-service` & Bảo mật (Security Model)
 Đảm nhận trọng trách cổng kiểm tra chứng minh thư của hệ thống.
@@ -253,7 +255,10 @@ Mọi service đều import thư viện này. Nó giải quyết triệt để s
 
 ### 4. `film-service`
 Kho báu nội dung hệ thống.
-- **Index Constraining**: Kiểm soát tính duy nhất qua hàm ràng buộc DB, tự động báo lỗi nếu có phim trùng `Title` + `Release_Date`.
+- **Index Constraining**: Kiểm soát tính duy nhất theo partial unique index:
+  - Chỉ chặn trùng `title + release_date` trên tập `is_deleted = false`.
+  - Record đã xóa mềm (`is_deleted = true`) được phép trùng.
+  - Script migration: `scripts/sql/2026-05-17-film-active-unique-index.sql`.
 - **Soft Delete**: Mọi hành vi `DELETE` chỉ đổi cờ status DB `IsDeleted` sang True. Toàn vẹn dữ liệu cho các truy vấn báo cáo bán hàng lịch sử vẫn được bảo đảm tuyệt đối.
 - **Complex Querying**: Tìm phim bằng từ khóa, lọc theo độ tuổi `AgeRating`, hoặc tình trạng hiện hành phim `FilmStatus`.
 
@@ -314,7 +319,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/showtimes/search` | ❌ Public | Lấy danh sách suất chiếu và trả full thông tin `film`, `hall`, `pricingPolicy`. |
+| `POST` | `/api/showtimes/search` | ❌ Public | Lấy danh sách suất chiếu theo `PageRequest` và trả full thông tin `film`, `hall`, `pricingPolicy`. |
 | `POST` | `/api/showtimes` | ✅ MGMT | Tạo lịch chiếu hàng loạt theo khung giờ và gắn `pricingPolicyId` cho toàn bộ batch. |
 | `PUT` | `/api/showtimes/{id}` | ✅ MGMT | Cập nhật chi tiết một showtime gồm thời gian, trạng thái và `pricingPolicyId`. |
 | `PATCH` | `/api/showtimes/{id}` | ✅ MGMT | Tinh chỉnh nhanh trạng thái showtime. |
@@ -337,7 +342,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 |---|---|---|---|
 | `POST` | `/api/halls` | ✅ MGMT | Tạo hall mới với `layoutJson` (JSON sơ đồ ghế để FE render). |
 | `GET` | `/api/halls/{id}` | ❌ Public | Lấy chi tiết hall và trả `layoutJson` đầy đủ. |
-| `POST` | `/api/halls/search` | ❌ Public | Tìm hall bằng cursor pagination. |
+| `POST` | `/api/halls/search` | ❌ Public | Tìm hall bằng `PageRequest/PageResponse`. |
 | `PATCH` | `/api/halls/{id}/layout` | ✅ MGMT | Cập nhật toàn bộ `layoutJson` của hall. |
 
 ### 6. Cinema Service (`/api/cinemas`)
@@ -346,7 +351,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 |---|---|---|---|
 | `POST` | `/api/cinemas` | ✅ ADMIN | Tạo cinema mới. |
 | `GET` | `/api/cinemas/{id}` | ❌ Public | Lấy chi tiết một cinema theo id. |
-| `POST` | `/api/cinemas/search` | ❌ Public | Tìm kiếm cinema bằng cursor pagination. |
+| `POST` | `/api/cinemas/search` | ❌ Public | Tìm kiếm cinema bằng `PageRequest/PageResponse`. |
 | `PUT` | `/api/cinemas/{id}` | ✅ ADMIN | Cập nhật thông tin cinema (địa chỉ, tọa độ, giờ hoạt động, manager). |
 | `PATCH` | `/api/cinemas/{id}` | ✅ ADMIN | Cập nhật nhanh trạng thái cinema. |
 | `DELETE` | `/api/cinemas/{id}` | ✅ ADMIN | Xóa mềm cinema và ngắt active staff mapping liên quan. |

@@ -18,9 +18,13 @@ import java.util.UUID;
         @Index(name = "idx_release_date", columnList = "release_date"),
         @Index(name = "idx_country", columnList = "country"),
         @Index(name = "idx_language", columnList = "language"),
-        @Index(name = "idx_is_deleted", columnList = "is_deleted")
-}, uniqueConstraints = {
-        @UniqueConstraint(name = "uk_film_title_release_date_isdeleted", columnNames = {"title", "release_date,is_deleted"})
+        @Index(name = "idx_is_deleted", columnList = "is_deleted"),
+        @Index(
+                name = "uk_film_title_release_date_active",
+                columnList = "title, release_date",
+                unique = true,
+                options = "where is_deleted = false"
+        )
 })
 @Getter
 @Setter

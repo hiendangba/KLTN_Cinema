@@ -32,9 +32,9 @@ public class ShowTimeRepositoryImpl {
     @PersistenceContext
     private final EntityManager entityManager;
 
-    public List<ShowTime> searchWithCursorAndSortAndFilter(
-            String[] cursorParts,
+    public List<ShowTime> searchWithPageAndSortAndFilter(
             String keyword,
+            int page,
             int size,
             List<SortField<ShowTimeField>> sortBy,
             List<FilterField<ShowTimeField>> filterBy) {
@@ -42,80 +42,33 @@ public class ShowTimeRepositoryImpl {
         CriteriaQuery<ShowTime> cq = cb.createQuery(ShowTime.class);
         Root<ShowTime> root = cq.from(ShowTime.class);
 
-        List<Predicate> predicates = buildPredicates(cb, root, cursorParts, keyword, sortBy, filterBy, false);
+        List<Predicate> predicates = buildPredicates(cb, root, keyword, filterBy);
         cq.where(predicates.toArray(new Predicate[0]));
         cq.orderBy(buildOrders(cb, root, sortBy));
 
         TypedQuery<ShowTime> query = entityManager.createQuery(cq);
-        query.setMaxResults(size + 1);
+        query.setFirstResult(Math.max(0, (page - 1) * size));
+        query.setMaxResults(size);
         return query.getResultList();
     }
 
-    public List<ShowTime> previousCursor(
-            String[] cursorParts,
-            String keyword,
-            int size,
-            List<SortField<ShowTimeField>> sortBy,
-            List<FilterField<ShowTimeField>> filterBy) {
+    public long countWithFilter(String keyword, List<FilterField<ShowTimeField>> filterBy) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<ShowTime> cq = cb.createQuery(ShowTime.class);
-        Root<ShowTime> root = cq.from(ShowTime.class);
+        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+        Root<ShowTime> root = countQuery.from(ShowTime.class);
 
-        List<Predicate> predicates = buildPredicates(cb, root, cursorParts, keyword, sortBy, filterBy, true);
-        cq.where(predicates.toArray(new Predicate[0]));
-        cq.orderBy(buildOrders(cb, root, sortBy));
-
-        TypedQuery<ShowTime> query = entityManager.createQuery(cq);
-        query.setMaxResults(size);
-        return query.getResultList();
+        List<Predicate> predicates = buildPredicates(cb, root, keyword, filterBy);
+        countQuery.select(cb.count(root));
+        countQuery.where(predicates.toArray(new Predicate[0]));
+        return entityManager.createQuery(countQuery).getSingleResult();
     }
 
     private List<Predicate> buildPredicates(
             CriteriaBuilder cb,
             Root<ShowTime> root,
-            String[] cursorParts,
             String keyword,
-            List<SortField<ShowTimeField>> sortBy,
-            List<FilterField<ShowTimeField>> filterBy,
-            boolean previous) {
+            List<FilterField<ShowTimeField>> filterBy) {
         List<Predicate> predicates = new ArrayList<>();
-
-        if (cursorParts != null && sortBy != null && !sortBy.isEmpty() && cursorParts.length >= sortBy.size()) {
-            List<Predicate> orPredicates = new ArrayList<>();
-            int n = sortBy.size();
-
-            for (int level = 0; level < n; level++) {
-                List<Predicate> andPredicates = new ArrayList<>();
-
-                for (int j = 0; j < level; j++) {
-                    SortField<ShowTimeField> prevSort = sortBy.get(j);
-                    Comparable<?> eqValue = ShowTimeField.convertValue(cursorParts[j], prevSort.getField().getDataType());
-                    andPredicates.add(cb.equal(root.get(prevSort.getField().getEntityField()), eqValue));
-                }
-
-                SortField<ShowTimeField> currentSort = sortBy.get(level);
-                Comparable<?> cmpValue = ShowTimeField.convertValue(cursorParts[level], currentSort.getField().getDataType());
-                String fieldName = currentSort.getField().getEntityField();
-                Path<? extends Comparable<?>> fieldPath = comparablePath(root, fieldName);
-
-                boolean desc = "DESC".equalsIgnoreCase(currentSort.getDirection());
-                Predicate cmpPredicate;
-                if (previous) {
-                    cmpPredicate = desc
-                            ? greaterThanPredicate(cb, fieldPath, cmpValue)
-                            : lessThanPredicate(cb, fieldPath, cmpValue);
-                } else {
-                    cmpPredicate = desc
-                            ? lessThanPredicate(cb, fieldPath, cmpValue)
-                            : greaterThanPredicate(cb, fieldPath, cmpValue);
-                }
-
-                andPredicates.add(cmpPredicate);
-                orPredicates.add(cb.and(andPredicates.toArray(new Predicate[0])));
-            }
-
-            predicates.add(cb.or(orPredicates.toArray(new Predicate[0])));
-        }
 
         Predicate keywordPredicate = buildKeywordPredicate(cb, root, keyword);
         if (keywordPredicate != null) {
@@ -304,22 +257,6 @@ public class ShowTimeRepositoryImpl {
             Path<? extends Comparable<?>> path,
             Comparable<?> value) {
         return cb.greaterThanOrEqualTo((Path<T>) path, (T) value);
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T extends Comparable<? super T>> Predicate greaterThanPredicate(
-            CriteriaBuilder cb,
-            Path<? extends Comparable<?>> path,
-            Comparable<?> value) {
-        return cb.greaterThan((Path<T>) path, (T) value);
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T extends Comparable<? super T>> Predicate lessThanPredicate(
-            CriteriaBuilder cb,
-            Path<? extends Comparable<?>> path,
-            Comparable<?> value) {
-        return cb.lessThan((Path<T>) path, (T) value);
     }
 
     @SuppressWarnings("unchecked")
