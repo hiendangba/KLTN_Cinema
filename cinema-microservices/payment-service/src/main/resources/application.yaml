@@ -1,3 +1,29 @@
 spring:
+  config:
+    import: optional:file:src/main/resources/.env[.properties]
   application:
     name: payment-service
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+
+server:
+  port: ${SERVER_PORT:8096}
+
+vietqr:
+  base-url: ${VIETQR_BASE_URL}
+  banks-path: ${VIETQR_BANKS_PATH}
+  api-key: ${VIETQR_API_KEY}
+  secret-key: ${VIETQR_SECRET_KEY}
+  sync-cron: ${VIETQR_SYNC_CRON:0 0 3 1 * *}

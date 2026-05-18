@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package cinema.showtime.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.showtime";
+option java_outer_classname = "ShowtimeInternalProto";
+
+service ShowtimeInternalService {
+  rpc GetShowtimeById(GetShowtimeByIdRequest) returns (GetShowtimeByIdReply);
+}
+
+message GetShowtimeByIdRequest {
+  string showtime_id = 1;
+}
+
+message ShowtimePayload {
+  string id = 1;
+  string hall_id = 2;
+  string cinema_id = 3;
+}
+
+message GetShowtimeByIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  ShowtimePayload showtime = 4;
+}

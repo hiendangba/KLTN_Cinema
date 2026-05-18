@@ -34,9 +34,9 @@ public class Hall {
 
     @Column(nullable = false)
     private String name;
-
-    @Column(name = "layout_json", columnDefinition = "text", nullable = false)
-    private String layoutJson;
+    
+    @Column(name = "layout_json", columnDefinition = "text")
+    private String layoutJsonLegacy;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

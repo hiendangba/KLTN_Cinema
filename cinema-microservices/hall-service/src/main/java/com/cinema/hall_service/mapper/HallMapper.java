@@ -13,19 +13,20 @@ import org.mapstruct.ReportingPolicy;
 public interface HallMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "cinemaId", ignore = true)
-    @Mapping(target = "layoutJson", ignore = true)
+    @Mapping(target = "layoutJsonLegacy", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
     @Mapping(target = "timeUpdated", ignore = true)
     Hall toEntity(HallCreateRequest request);
 
-    @Mapping(target = "layoutJson", ignore = true)
+    @Mapping(target = "seats", ignore = true)
+    @Mapping(target = "images", ignore = true)
     @Mapping(target = "cinemaResponse", ignore = true)
     HallResponse toResponse(Hall hall);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "cinemaId", ignore = true)
-    @Mapping(target = "layoutJson", ignore = true)
+    @Mapping(target = "layoutJsonLegacy", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)

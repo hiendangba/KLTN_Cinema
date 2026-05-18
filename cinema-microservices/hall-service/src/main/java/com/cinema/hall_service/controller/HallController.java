@@ -5,11 +5,13 @@ import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
+import com.cinema.hall_service.dto.request.AddHallImageRequest;
 import com.cinema.hall_service.dto.request.HallCreateRequest;
 import com.cinema.hall_service.dto.request.HallField;
+import com.cinema.hall_service.dto.request.ReplaceHallSeatsRequest;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
-import com.cinema.hall_service.dto.request.UpdateHallLayoutRequest;
 import com.cinema.hall_service.dto.request.UpdateHallStatusRequest;
+import com.cinema.hall_service.dto.response.HallImageResponse;
 import com.cinema.hall_service.dto.response.HallResponse;
 import com.cinema.hall_service.services.HallService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -57,12 +60,12 @@ public class HallController extends BaseController {
         return ok(response);
     }
 
-    @PatchMapping("/{id}/layout")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> updateHallLayout(
+    @PutMapping("/{id}/seats")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> replaceHallSeats(
             @PathVariable UUID id,
-            @Valid @RequestBody UpdateHallLayoutRequest request,
+            @Valid @RequestBody ReplaceHallSeatsRequest request,
             HttpServletRequest httpRequest) {
-        ActionMessageResponse response = hallService.updateHallLayout(id, request, httpRequest);
+        ActionMessageResponse response = hallService.replaceHallSeats(id, request, httpRequest);
         return ok(response);
     }
 
@@ -88,6 +91,30 @@ public class HallController extends BaseController {
     public ResponseEntity<APIResponse<ActionMessageResponse>> deleteHall(@PathVariable UUID id,
                                                                          HttpServletRequest httpRequest) {
         ActionMessageResponse response = hallService.deleteHall(id, httpRequest);
+        return ok(response);
+    }
+
+    @PostMapping("/{id}/images")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> addHallImage(
+            @PathVariable UUID id,
+            @Valid @RequestBody AddHallImageRequest request,
+            HttpServletRequest httpRequest) {
+        ActionMessageResponse response = hallService.addHallImage(id, request, httpRequest);
+        return created(response);
+    }
+
+    @GetMapping("/{id}/images")
+    public ResponseEntity<APIResponse<List<HallImageResponse>>> getHallImages(@PathVariable UUID id) {
+        List<HallImageResponse> response = hallService.getHallImages(id);
+        return ok(response);
+    }
+
+    @DeleteMapping("/{hallId}/images/{imageId}")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> deleteHallImage(
+            @PathVariable UUID hallId,
+            @PathVariable UUID imageId,
+            HttpServletRequest httpRequest) {
+        ActionMessageResponse response = hallService.deleteHallImage(hallId, imageId, httpRequest);
         return ok(response);
     }
 }

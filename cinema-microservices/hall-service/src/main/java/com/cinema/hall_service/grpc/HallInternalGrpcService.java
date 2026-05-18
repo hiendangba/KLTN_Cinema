@@ -69,7 +69,7 @@ public class HallInternalGrpcService extends HallInternalServiceGrpc.HallInterna
                 .setId(hall.getId().toString())
                 .setCinemaId(hall.getCinemaId().toString())
                 .setName(Objects.toString(hall.getName(), ""))
-                .setLayoutJson(hall.getLayoutJson() == null ? "" : hall.getLayoutJson().toString())
+                .setLayoutJson("")
                 .build();
     }
 }

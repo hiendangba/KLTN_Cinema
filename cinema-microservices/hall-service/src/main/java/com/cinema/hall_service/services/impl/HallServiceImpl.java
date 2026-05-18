@@ -9,18 +9,27 @@ import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.hall_service.config.RedisConfig;
+import com.cinema.hall_service.dto.request.AddHallImageRequest;
 import com.cinema.hall_service.dto.request.HallCreateRequest;
 import com.cinema.hall_service.dto.request.HallField;
-import com.cinema.hall_service.dto.request.UpdateHallLayoutRequest;
+import com.cinema.hall_service.dto.request.ReplaceHallSeatsRequest;
+import com.cinema.hall_service.dto.request.SeatUpsertRequest;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
 import com.cinema.hall_service.dto.request.UpdateHallStatusRequest;
 import com.cinema.hall_service.dto.response.CinemaResponse;
+import com.cinema.hall_service.dto.response.HallImageResponse;
 import com.cinema.hall_service.dto.response.HallResponse;
 import com.cinema.hall_service.entity.Hall;
+import com.cinema.hall_service.entity.HallImage;
+import com.cinema.hall_service.entity.Seat;
 import com.cinema.hall_service.grpc.CinemaGrpcClient;
+import com.cinema.hall_service.mapper.HallImageMapper;
 import com.cinema.hall_service.mapper.HallMapper;
+import com.cinema.hall_service.mapper.SeatMapper;
+import com.cinema.hall_service.repository.HallImageRepository;
 import com.cinema.hall_service.repository.HallRepository;
 import com.cinema.hall_service.repository.HallRepositoryImpl;
+import com.cinema.hall_service.repository.SeatRepository;
 import com.cinema.hall_service.services.HallService;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
@@ -33,14 +42,11 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.json.JsonMapper;
-import tools.jackson.databind.node.StringNode;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -53,14 +59,14 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class HallServiceImpl implements HallService {
 
-    private static final Set<String> REQUIRED_LAYOUT_ITEM_FIELDS = Set.of(
-            "id", "type", "seatType", "row", "col", "rowspan", "colspan", "seatCount");
-
     HallRepository hallRepository;
     HallRepositoryImpl hallRepositoryImpl;
+    SeatRepository seatRepository;
+    HallImageRepository hallImageRepository;
     HallMapper hallMapper;
+    SeatMapper seatMapper;
+    HallImageMapper hallImageMapper;
     CinemaGrpcClient cinemaGrpcClient;
-    ObjectMapper objectMapper = JsonMapper.builder().build();
 
     @Override
     @Transactional
@@ -71,13 +77,16 @@ public class HallServiceImpl implements HallService {
             throw new BusinessException(ErrorCode.HALL_NAME_EXISTED);
         }
 
-        validateLayoutJson(request.getLayoutJson());
+        validateSeats(request.getSeats());
 
         Hall hall = hallMapper.toEntity(request);
         hall.setCinemaId(cinemaId);
         hall.setStatus(request.getStatus() == null ? HallEnum.HallStatus.ACTIVE : request.getStatus());
-        hall.setLayoutJson(toJsonString(request.getLayoutJson()));
         hallRepository.save(hall);
+
+        List<Seat> seats = buildSeatEntities(hall, request.getSeats());
+        seatRepository.saveAll(seats);
+
         return ActionMessageResponse.builder()
                 .message("Tạo phòng chiếu thành công")
                 .build();
@@ -87,7 +96,7 @@ public class HallServiceImpl implements HallService {
     @Transactional(readOnly = true)
     @Cacheable(value = RedisConfig.CACHE_HALLS, key = "#id")
     public HallResponse getHallById(UUID id) {
-        return toHallResponse(getActiveHallOrThrow(id));
+        return toHallResponse(getActiveHallOrThrow(id), new HashMap<>());
     }
 
     @Override
@@ -165,7 +174,7 @@ public class HallServiceImpl implements HallService {
     @Override
     @Transactional
     @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
-    public ActionMessageResponse updateHallLayout(UUID hallId, UpdateHallLayoutRequest request,
+    public ActionMessageResponse replaceHallSeats(UUID hallId, ReplaceHallSeatsRequest request,
                                                   HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
@@ -174,11 +183,12 @@ public class HallServiceImpl implements HallService {
             throw new BusinessException(ErrorCode.HALL_MAINTENANCE);
         }
 
-        validateLayoutJson(request.getLayoutJson());
-        hall.setLayoutJson(toJsonString(request.getLayoutJson()));
-        hallRepository.save(hall);
+        validateSeats(request.getSeats());
+        seatRepository.deleteAllByHall_Id(hallId);
+        seatRepository.saveAll(buildSeatEntities(hall, request.getSeats()));
+
         return ActionMessageResponse.builder()
-                .message("Cập nhật sơ đồ phòng chiếu thành công")
+                .message("Cập nhật sơ đồ ghế thành công")
                 .build();
     }
 
@@ -196,6 +206,57 @@ public class HallServiceImpl implements HallService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
+    public ActionMessageResponse addHallImage(UUID hallId, AddHallImageRequest request, HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        Hall hall = getManagedHallOrThrow(hallId, cinemaId);
+
+        String imagePath = normalizeAndValidateImagePath(request.getImagePath());
+        if (hallImageRepository.existsByHall_IdAndImagePathAndIsDeletedFalse(hallId, imagePath)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        HallImage hallImage = new HallImage();
+        hallImage.setHall(hall);
+        hallImage.setImagePath(imagePath);
+        hallImageRepository.save(hallImage);
+
+        return ActionMessageResponse.builder()
+                .message("Thêm ảnh phòng chiếu thành công")
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<HallImageResponse> getHallImages(UUID hallId) {
+        getActiveHallOrThrow(hallId);
+        return hallImageRepository.findAllByHall_IdAndIsDeletedFalseOrderByTimeCreatedDesc(hallId)
+                .stream()
+                .map(hallImageMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
+    public ActionMessageResponse deleteHallImage(UUID hallId, UUID imageId, HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        getManagedHallOrThrow(hallId, cinemaId);
+
+        HallImage hallImage = hallImageRepository.findByIdAndHall_IdAndIsDeletedFalse(imageId, hallId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        hallImage.setIsDeleted(true);
+        hallImageRepository.save(hallImage);
+
+        return ActionMessageResponse.builder()
+                .message("Xóa ảnh phòng chiếu thành công")
+                .build();
+    }
+
     private Hall getActiveHallOrThrow(UUID hallId) {
         return hallRepository.findByIdAndIsDeletedFalse(hallId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.HALL_NOT_FOUND));
@@ -209,13 +270,16 @@ public class HallServiceImpl implements HallService {
         return hall;
     }
 
-    private HallResponse toHallResponse(Hall hall) {
-        return toHallResponse(hall, new HashMap<>());
-    }
-
     private HallResponse toHallResponse(Hall hall, Map<UUID, CinemaResponse> cinemaResponseCache) {
         HallResponse response = hallMapper.toResponse(hall);
-        response.setLayoutJson(toJsonNode(hall.getLayoutJson()));
+        response.setSeats(seatRepository.findAllByHall_IdAndIsDeletedFalseOrderByRowAscColAsc(hall.getId())
+                .stream()
+                .map(seatMapper::toResponse)
+                .toList());
+        response.setImages(hallImageRepository.findAllByHall_IdAndIsDeletedFalseOrderByTimeCreatedDesc(hall.getId())
+                .stream()
+                .map(hallImageMapper::toResponse)
+                .toList());
         response.setCinemaResponse(cinemaResponseCache.computeIfAbsent(hall.getCinemaId(), this::resolveCinemaResponse));
         return response;
     }
@@ -236,161 +300,57 @@ public class HallServiceImpl implements HallService {
         }
     }
 
-    private String toJsonString(JsonNode jsonNode) {
-        try {
-            return objectMapper.writeValueAsString(jsonNode);
-        } catch (Exception ex) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
+    private List<Seat> buildSeatEntities(Hall hall, List<SeatUpsertRequest> seatRequests) {
+        List<Seat> seats = new ArrayList<>(seatRequests.size());
+        for (SeatUpsertRequest request : seatRequests) {
+            Seat seat = seatMapper.toEntity(request);
+            seat.setHall(hall);
+            seat.setSeatCode(normalizeSeatCode(request.getSeatCode()));
+            seats.add(seat);
         }
+        return seats;
     }
 
-    private JsonNode toJsonNode(String rawJson) {
-        try {
-            return objectMapper.readTree(rawJson);
-        } catch (Exception ex) {
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR);
-        }
-    }
-
-    private void validateLayoutJson(JsonNode layoutJson) {
-        if (layoutJson == null || layoutJson.isNull() || !layoutJson.isObject()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        if (layoutJson.size() != 1 || !layoutJson.has("items")) {
+    private void validateSeats(List<SeatUpsertRequest> seats) {
+        if (seats == null || seats.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        JsonNode itemsNode = layoutJson.get("items");
-        if (itemsNode == null || !itemsNode.isArray()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
+        Set<String> seatCodes = new LinkedHashSet<>();
+        Set<String> cells = new HashSet<>();
+        for (SeatUpsertRequest seat : seats) {
+            String seatCode = normalizeSeatCode(seat.getSeatCode());
+            if (!seatCodes.add(seatCode)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            if (seat.getSeatType() == HallEnum.SeatType.AISLE) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
 
-        Set<String> itemIds = new HashSet<>();
-        Set<String> occupiedCells = new HashSet<>();
-
-        for (int i = 0; i < itemsNode.size(); i++) {
-            JsonNode itemNode = itemsNode.get(i);
-            validateLayoutItem(itemNode, i, itemIds, occupiedCells);
-        }
-    }
-
-    private void validateLayoutItem(JsonNode itemNode, int itemIndex, Set<String> itemIds, Set<String> occupiedCells) {
-        if (itemNode == null || !itemNode.isObject()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-
-        for (String requiredField : REQUIRED_LAYOUT_ITEM_FIELDS) {
-            if (!itemNode.has(requiredField)) {
+            String key = seat.getRow() + ":" + seat.getCol();
+            if (!cells.add(key)) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT);
             }
         }
-
-        String id = readRequiredText(itemNode, "id");
-        if (!itemIds.add(id)) {
-            log.warn("Duplicated layout item id detected: {}", id);
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-
-        String type = readRequiredText(itemNode, "type").toUpperCase(Locale.ROOT);
-        if (!("SEAT".equals(type) || "AISLE".equals(type))) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-
-        int row = readPositiveInt(itemNode, "row");
-        int col = readPositiveInt(itemNode, "col");
-        int rowspan = readPositiveInt(itemNode, "rowspan");
-        int colspan = readPositiveInt(itemNode, "colspan");
-        int seatCount = readNonNegativeInt(itemNode);
-
-        JsonNode seatTypeNode = itemNode.get("seatType");
-        if ("AISLE".equals(type)) {
-            if (seatTypeNode != null && !seatTypeNode.isNull()) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
-            }
-            if (seatCount != 0) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
-            }
-        } else {
-            HallEnum.SeatType seatType = parseSeatType(seatTypeNode);
-            if (seatType == HallEnum.SeatType.AISLE) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
-            }
-            if (seatCount < 1) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
-            }
-            if (seatType == HallEnum.SeatType.COUPLE && (rowspan != 1 || colspan != 2 || seatCount != 2)) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
-            }
-        }
-
-        int endRow = row + rowspan - 1;
-        int endCol = col + colspan - 1;
-
-        for (int r = row; r <= endRow; r++) {
-            for (int c = col; c <= endCol; c++) {
-                String cellKey = r + ":" + c;
-                if (!occupiedCells.add(cellKey)) {
-                    log.warn("Overlapped cell detected at item index {}: {}", itemIndex, cellKey);
-                    throw new BusinessException(ErrorCode.INVALID_INPUT);
-                }
-            }
-        }
     }
 
-    private String readRequiredText(JsonNode itemNode, String fieldName) {
-        JsonNode valueNode = itemNode.get(fieldName);
-        if (!(valueNode instanceof StringNode textNode)) {
+    private String normalizeAndValidateImagePath(String rawPath) {
+        String imagePath = rawPath == null ? "" : rawPath.trim();
+        if (imagePath.isEmpty() || imagePath.length() > 500) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-
-        String value = textNode.asString();
-        if (value == null || value.isBlank()) {
+        if (!imagePath.startsWith("/") || imagePath.startsWith("//")) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-        return value.trim();
+        String lower = imagePath.toLowerCase(Locale.ROOT);
+        if (lower.contains("://") || lower.startsWith("http:") || lower.startsWith("https:")) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return imagePath;
     }
 
-    private int readPositiveInt(JsonNode itemNode, String fieldName) {
-        JsonNode valueNode = itemNode.get(fieldName);
-        if (valueNode == null || !valueNode.isIntegralNumber()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-
-        long value = valueNode.asLong();
-        if (value < 1 || value > Integer.MAX_VALUE) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        return (int) value;
-    }
-
-    private int readNonNegativeInt(JsonNode itemNode) {
-        JsonNode valueNode = itemNode.get("seatCount");
-        if (valueNode == null || !valueNode.isIntegralNumber()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-
-        long value = valueNode.asLong();
-        if (value < 0 || value > Integer.MAX_VALUE) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        return (int) value;
-    }
-
-    private HallEnum.SeatType parseSeatType(JsonNode seatTypeNode) {
-        if (!(seatTypeNode instanceof StringNode textNode)) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-
-        String seatTypeText = textNode.asString();
-        if (seatTypeText == null || seatTypeText.isBlank()) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-
-        try {
-            return HallEnum.SeatType.valueOf(seatTypeText.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException ex) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
+    private String normalizeSeatCode(String seatCode) {
+        return seatCode == null ? "" : seatCode.trim().toUpperCase(Locale.ROOT);
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {

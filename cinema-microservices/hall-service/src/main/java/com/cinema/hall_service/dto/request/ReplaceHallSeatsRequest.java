@@ -1,8 +1,6 @@
 package com.cinema.hall_service.dto.request;
 
-import com.cinema.Enum.HallEnum;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -19,13 +17,8 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class HallCreateRequest {
-    @NotBlank(message = "Hall name is required")
-    String name;
-
+public class ReplaceHallSeatsRequest {
     @Valid
     @NotEmpty(message = "Seats must not be empty")
     List<SeatUpsertRequest> seats = new ArrayList<>();
-
-    HallEnum.HallStatus status;
 }

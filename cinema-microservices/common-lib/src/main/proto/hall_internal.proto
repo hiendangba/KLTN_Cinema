@@ -8,6 +8,7 @@ option java_outer_classname = "HallInternalProto";
 
 service HallInternalService {
   rpc GetHallById(GetHallByIdRequest) returns (GetHallByIdReply);
+  rpc GetSeatsByCodes(GetSeatsByCodesRequest) returns (GetSeatsByCodesReply);
 }
 
 message GetHallByIdRequest {
@@ -26,4 +27,24 @@ message GetHallByIdReply {
   string error_key = 2;
   string message = 3;
   HallPayload hall = 4;
+}
+
+message GetSeatsByCodesRequest {
+  string hall_id = 1;
+  repeated string seat_codes = 2;
+}
+
+message SeatPayload {
+  string id = 1;
+  string seat_code = 2;
+  int32 row = 3;
+  int32 col = 4;
+  string seat_type = 5;
+}
+
+message GetSeatsByCodesReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated SeatPayload seats = 4;
 }
