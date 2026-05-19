@@ -6,6 +6,7 @@ import com.cinema.dto.response.PageResponse;
 import com.cinema.hall_service.dto.request.AddHallImageRequest;
 import com.cinema.hall_service.dto.request.HallCreateRequest;
 import com.cinema.hall_service.dto.request.HallField;
+import com.cinema.hall_service.dto.request.HallLayoutDefinitionRequest;
 import com.cinema.hall_service.dto.request.ReplaceHallSeatsRequest;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
 import com.cinema.hall_service.dto.request.UpdateHallStatusRequest;
@@ -28,6 +29,10 @@ public interface HallService {
     ActionMessageResponse updateHallStatus(UUID hallId, UpdateHallStatusRequest request, HttpServletRequest httpRequest);
 
     ActionMessageResponse replaceHallSeats(UUID hallId, ReplaceHallSeatsRequest request, HttpServletRequest httpRequest);
+
+    ActionMessageResponse createHallLayoutDefinition(UUID hallId, HallLayoutDefinitionRequest request, HttpServletRequest httpRequest);
+
+    ActionMessageResponse replaceHallLayoutDefinition(UUID hallId, HallLayoutDefinitionRequest request, HttpServletRequest httpRequest);
 
     ActionMessageResponse deleteHall(UUID hallId, HttpServletRequest httpRequest);
 

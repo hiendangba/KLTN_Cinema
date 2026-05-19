@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -44,4 +45,13 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, UUID> {
             @Param("hallId") UUID hallId,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime);
+
+    @Query(value = """
+            SELECT s.id
+            FROM show_time s
+            WHERE s.hall_id = :hallId
+              AND s.status IN ('SCHEDULED', 'ONGOING')
+              AND s.is_deleted = false
+            """, nativeQuery = true)
+    List<UUID> findActiveShowtimeIdsByHallId(@Param("hallId") UUID hallId);
 }

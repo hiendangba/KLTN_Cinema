@@ -13,7 +13,6 @@ import org.mapstruct.ReportingPolicy;
 public interface HallMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "cinemaId", ignore = true)
-    @Mapping(target = "layoutJsonLegacy", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
     @Mapping(target = "timeUpdated", ignore = true)
@@ -26,7 +25,6 @@ public interface HallMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "cinemaId", ignore = true)
-    @Mapping(target = "layoutJsonLegacy", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)

@@ -17,4 +17,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     List<Booking> findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID cinemaId);
 
     boolean existsByShowtimeIdAndIsDeletedFalseAndBookingStatusIn(UUID showtimeId, Collection<BookingStatus> statuses);
+
+    boolean existsByShowtimeIdInAndIsDeletedFalseAndBookingStatusIn(
+            Collection<UUID> showtimeIds,
+            Collection<BookingStatus> statuses);
 }

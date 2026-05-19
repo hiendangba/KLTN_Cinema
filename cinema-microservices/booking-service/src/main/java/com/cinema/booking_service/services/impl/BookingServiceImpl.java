@@ -80,8 +80,8 @@ public class BookingServiceImpl implements BookingService {
         if (!showtime.getCinemaId().equals(request.getCinemaId())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
-        Map<String, HallEnum.SeatType> canonicalSeatTypeByCode =
-                validateAndResolveSeatTypes(showtime.getHallId(), seatItems, normalizedSeatCodes);
+        Map<String, SeatGrpcClient.SeatSnapshot> canonicalSeatSnapshotByCode =
+                validateAndResolveSeatSnapshots(showtime.getHallId(), seatItems, normalizedSeatCodes);
         if (bookingSeatItemRepository.existsLockedSeatCodes(
                 request.getShowtimeId(),
                 normalizedSeatCodes,
@@ -103,7 +103,7 @@ public class BookingServiceImpl implements BookingService {
                 booking,
                 seatItems,
                 normalizedSeatCodes,
-                canonicalSeatTypeByCode);
+                canonicalSeatSnapshotByCode);
         booking.setSeatItems(persistedSeatItems);
         BigDecimal ticketSubtotal = persistedSeatItems.stream()
                 .map(BookingSeatItem::getSeatPriceSnapshot)
@@ -243,15 +243,20 @@ public class BookingServiceImpl implements BookingService {
             Booking booking,
             List<CreateBookingRequest.SeatItem> seatItems,
             List<String> normalizedSeatCodes,
-            Map<String, HallEnum.SeatType> canonicalSeatTypeByCode) {
+            Map<String, SeatGrpcClient.SeatSnapshot> canonicalSeatSnapshotByCode) {
         List<BookingSeatItem> result = new ArrayList<>(seatItems.size());
         for (int i = 0; i < seatItems.size(); i++) {
             CreateBookingRequest.SeatItem seatItemRequest = seatItems.get(i);
             BookingSeatItem seatItem = bookingSeatItemMapper.toEntity(seatItemRequest);
             seatItem.setBooking(booking);
             String seatCode = normalizedSeatCodes.get(i);
+            SeatGrpcClient.SeatSnapshot seatSnapshot = canonicalSeatSnapshotByCode.get(seatCode);
+            if (seatSnapshot == null) {
+                throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
+            }
+            seatItem.setSeatId(seatSnapshot.seatId());
             seatItem.setSeatCode(seatCode);
-            seatItem.setSeatType(canonicalSeatTypeByCode.get(seatCode));
+            seatItem.setSeatType(seatSnapshot.seatType());
             result.add(seatItem);
         }
         return result;
@@ -321,19 +326,20 @@ public class BookingServiceImpl implements BookingService {
         return seatCode == null ? "" : seatCode.trim().toUpperCase(Locale.ROOT);
     }
 
-    private Map<String, HallEnum.SeatType> validateAndResolveSeatTypes(
+    private Map<String, SeatGrpcClient.SeatSnapshot> validateAndResolveSeatSnapshots(
             UUID hallId,
             List<CreateBookingRequest.SeatItem> seatItems,
             List<String> normalizedSeatCodes) {
-        Map<String, HallEnum.SeatType> canonicalSeatTypeByCode =
-                seatGrpcClient.getSeatTypesByCodes(hallId, normalizedSeatCodes);
-        if (canonicalSeatTypeByCode.size() != normalizedSeatCodes.size()) {
+        Map<String, SeatGrpcClient.SeatSnapshot> canonicalSeatSnapshotByCode =
+                seatGrpcClient.getSeatSnapshotsByCodes(hallId, normalizedSeatCodes);
+        if (canonicalSeatSnapshotByCode.size() != normalizedSeatCodes.size()) {
             throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
         }
 
         for (int i = 0; i < seatItems.size(); i++) {
             String seatCode = normalizedSeatCodes.get(i);
-            HallEnum.SeatType canonicalType = canonicalSeatTypeByCode.get(seatCode);
+            SeatGrpcClient.SeatSnapshot snapshot = canonicalSeatSnapshotByCode.get(seatCode);
+            HallEnum.SeatType canonicalType = snapshot == null ? null : snapshot.seatType();
             if (canonicalType == null || canonicalType == HallEnum.SeatType.AISLE) {
                 throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
             }
@@ -341,7 +347,7 @@ public class BookingServiceImpl implements BookingService {
                 throw new BusinessException(ErrorCode.BAD_REQUEST);
             }
         }
-        return canonicalSeatTypeByCode;
+        return canonicalSeatSnapshotByCode;
     }
 
     private boolean isTerminalStatus(BookingStatus status) {

@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,16 +21,23 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping({"/api/seats/halls", "/api/halls"})
+@RequestMapping("/api/seats/halls")
 public class SeatLayoutController extends BaseController {
 
     private final SeatLayoutService seatLayoutService;
 
-    @PutMapping("/{hallId}/layout-definition")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> putLayoutDefinition(
+    @PostMapping("/{hallId}/layout-definition")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createLayoutDefinition(
             @PathVariable UUID hallId,
             @Valid @RequestBody PutHallLayoutDefinitionRequest request) {
-        return ok(seatLayoutService.putHallLayoutDefinition(hallId, request));
+        return created(seatLayoutService.createHallLayoutDefinition(hallId, request));
+    }
+
+    @PutMapping("/{hallId}/layout-definition")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> replaceLayoutDefinition(
+            @PathVariable UUID hallId,
+            @Valid @RequestBody PutHallLayoutDefinitionRequest request) {
+        return ok(seatLayoutService.replaceHallLayoutDefinition(hallId, request));
     }
 
     @GetMapping("/{hallId}/layout-definition")

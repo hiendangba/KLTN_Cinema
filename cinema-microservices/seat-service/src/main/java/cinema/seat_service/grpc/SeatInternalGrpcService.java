@@ -1,7 +1,13 @@
 package cinema.seat_service.grpc;
 
+import cinema.seat_service.dto.request.PutHallLayoutDefinitionRequest;
 import cinema.seat_service.dto.response.HallLayoutDefinitionResponse;
+import cinema.seat_service.enums.ScreenPosition;
+import cinema.seat_service.enums.SeatType;
 import cinema.seat_service.service.SeatLayoutService;
+import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.grpc.seat.CreateLayoutDefinitionReply;
+import com.cinema.grpc.seat.CreateLayoutDefinitionRequest;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.seat.GetLayoutByHallIdReply;
@@ -11,6 +17,8 @@ import com.cinema.grpc.seat.GetSeatsByCodesRequest;
 import com.cinema.grpc.seat.LayoutCellPayload;
 import com.cinema.grpc.seat.LayoutProfilePayload;
 import com.cinema.grpc.seat.LayoutSeatPayload;
+import com.cinema.grpc.seat.ReplaceLayoutDefinitionReply;
+import com.cinema.grpc.seat.ReplaceLayoutDefinitionRequest;
 import com.cinema.grpc.seat.SeatInternalServiceGrpc;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -139,5 +147,112 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
                     .build());
             responseObserver.onCompleted();
         }
+    }
+
+    @Override
+    public void createLayoutDefinition(CreateLayoutDefinitionRequest request,
+                                       StreamObserver<CreateLayoutDefinitionReply> responseObserver) {
+        try {
+            UUID hallId = UUID.fromString(request.getHallId());
+            PutHallLayoutDefinitionRequest payload = toPutRequest(
+                    request.getTotalRows(),
+                    request.getTotalCols(),
+                    request.getScreenPosition(),
+                    request.getCellsList());
+            ActionMessageResponse result = seatLayoutService.createHallLayoutDefinition(hallId, payload);
+            responseObserver.onNext(CreateLayoutDefinitionReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage(result.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(CreateLayoutDefinitionReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(CreateLayoutDefinitionReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while creating layout definition", ex);
+            responseObserver.onNext(CreateLayoutDefinitionReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void replaceLayoutDefinition(ReplaceLayoutDefinitionRequest request,
+                                        StreamObserver<ReplaceLayoutDefinitionReply> responseObserver) {
+        try {
+            UUID hallId = UUID.fromString(request.getHallId());
+            PutHallLayoutDefinitionRequest payload = toPutRequest(
+                    request.getTotalRows(),
+                    request.getTotalCols(),
+                    request.getScreenPosition(),
+                    request.getCellsList());
+            ActionMessageResponse result = seatLayoutService.replaceHallLayoutDefinition(hallId, payload);
+            responseObserver.onNext(ReplaceLayoutDefinitionReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage(result.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(ReplaceLayoutDefinitionReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(ReplaceLayoutDefinitionReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while replacing layout definition", ex);
+            responseObserver.onNext(ReplaceLayoutDefinitionReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    private PutHallLayoutDefinitionRequest toPutRequest(
+            int totalRows,
+            int totalCols,
+            String screenPosition,
+            java.util.List<com.cinema.grpc.seat.LayoutDefinitionCellInput> cells) {
+        PutHallLayoutDefinitionRequest request = new PutHallLayoutDefinitionRequest();
+        request.setTotalRows(totalRows);
+        request.setTotalCols(totalCols);
+        request.setScreenPosition(ScreenPosition.valueOf(screenPosition.trim().toUpperCase()));
+
+        java.util.List<PutHallLayoutDefinitionRequest.CellInput> convertedCells = new java.util.ArrayList<>();
+        for (com.cinema.grpc.seat.LayoutDefinitionCellInput cell : cells) {
+            PutHallLayoutDefinitionRequest.CellInput converted = new PutHallLayoutDefinitionRequest.CellInput();
+            converted.setRow(cell.getRow());
+            converted.setCol(cell.getCol());
+            converted.setType(PutHallLayoutDefinitionRequest.CellInputType.valueOf(cell.getType().trim().toUpperCase()));
+            if (cell.getSeatType() != null && !cell.getSeatType().isBlank()) {
+                converted.setSeatType(SeatType.valueOf(cell.getSeatType().trim().toUpperCase()));
+            }
+            convertedCells.add(converted);
+        }
+        request.setCells(convertedCells);
+        return request;
     }
 }

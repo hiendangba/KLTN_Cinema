@@ -12,6 +12,7 @@ import com.cinema.hall_service.config.RedisConfig;
 import com.cinema.hall_service.dto.request.AddHallImageRequest;
 import com.cinema.hall_service.dto.request.HallCreateRequest;
 import com.cinema.hall_service.dto.request.HallField;
+import com.cinema.hall_service.dto.request.HallLayoutDefinitionRequest;
 import com.cinema.hall_service.dto.request.ReplaceHallSeatsRequest;
 import com.cinema.hall_service.dto.request.SeatUpsertRequest;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
@@ -22,7 +23,10 @@ import com.cinema.hall_service.dto.response.HallResponse;
 import com.cinema.hall_service.entity.Hall;
 import com.cinema.hall_service.entity.HallImage;
 import com.cinema.hall_service.entity.Seat;
+import com.cinema.hall_service.grpc.BookingGrpcClient;
 import com.cinema.hall_service.grpc.CinemaGrpcClient;
+import com.cinema.hall_service.grpc.SeatGrpcClient;
+import com.cinema.hall_service.grpc.ShowtimeGrpcClient;
 import com.cinema.hall_service.mapper.HallImageMapper;
 import com.cinema.hall_service.mapper.HallMapper;
 import com.cinema.hall_service.mapper.SeatMapper;
@@ -67,6 +71,9 @@ public class HallServiceImpl implements HallService {
     SeatMapper seatMapper;
     HallImageMapper hallImageMapper;
     CinemaGrpcClient cinemaGrpcClient;
+    ShowtimeGrpcClient showtimeGrpcClient;
+    BookingGrpcClient bookingGrpcClient;
+    SeatGrpcClient seatGrpcClient;
 
     @Override
     @Transactional
@@ -190,6 +197,31 @@ public class HallServiceImpl implements HallService {
         return ActionMessageResponse.builder()
                 .message("Cập nhật sơ đồ ghế thành công")
                 .build();
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
+    public ActionMessageResponse createHallLayoutDefinition(UUID hallId, HallLayoutDefinitionRequest request,
+                                                            HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        getManagedHallOrThrow(hallId, cinemaId);
+        return seatGrpcClient.createLayoutDefinition(hallId, request);
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
+    public ActionMessageResponse replaceHallLayoutDefinition(UUID hallId, HallLayoutDefinitionRequest request,
+                                                             HttpServletRequest httpRequest) {
+        validateManagerRole(httpRequest);
+        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        getManagedHallOrThrow(hallId, cinemaId);
+        if (hallHasActiveBookingOnActiveShowtime(hallId)) {
+            throw new BusinessException(ErrorCode.HALL_LAYOUT_IN_USE);
+        }
+        return seatGrpcClient.replaceLayoutDefinition(hallId, request);
     }
 
     @Override
@@ -351,6 +383,14 @@ public class HallServiceImpl implements HallService {
 
     private String normalizeSeatCode(String seatCode) {
         return seatCode == null ? "" : seatCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean hallHasActiveBookingOnActiveShowtime(UUID hallId) {
+        List<UUID> activeShowtimeIds = showtimeGrpcClient.listActiveShowtimeIdsByHall(hallId);
+        if (activeShowtimeIds.isEmpty()) {
+            return false;
+        }
+        return bookingGrpcClient.hasActiveBookingByShowtimeIds(activeShowtimeIds);
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {

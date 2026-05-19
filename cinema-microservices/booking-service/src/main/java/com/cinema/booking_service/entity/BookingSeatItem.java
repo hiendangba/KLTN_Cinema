@@ -35,6 +35,9 @@ public class BookingSeatItem {
     @JoinColumn(name = "booking_id", nullable = false)
     private Booking booking;
 
+    @Column(name = "seat_id", columnDefinition = "uuid")
+    private UUID seatId;
+
     @Column(name = "seat_code", nullable = false, length = 20)
     private String seatCode;
 
@@ -56,4 +59,3 @@ public class BookingSeatItem {
         timeCreated = LocalDateTime.now();
     }
 }
-

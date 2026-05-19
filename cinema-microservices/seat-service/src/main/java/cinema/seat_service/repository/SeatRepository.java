@@ -8,9 +8,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface SeatRepository extends JpaRepository<Seat, UUID> {
+    List<Seat> findAllByHallId(UUID hallId);
+
     List<Seat> findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(UUID hallId);
 
     List<Seat> findAllByHallIdAndSeatCodeInAndIsDeletedFalse(UUID hallId, Collection<String> seatCodes);
-
-    void deleteAllByHallId(UUID hallId);
 }

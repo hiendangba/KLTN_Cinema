@@ -49,6 +49,12 @@ spring:
       channels:
         cinema:
           address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
+        showtime:
+          address: "${SHOWTIME_GRPC_HOST:localhost}:${SHOWTIME_GRPC_PORT:9194}"
+        booking:
+          address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
+        seat:
+          address: "${SEAT_GRPC_HOST:localhost}:${SEAT_GRPC_PORT:9199}"
 
 server:
   port: ${SERVER_PORT:8097}

@@ -8,6 +8,7 @@ import com.cinema.dto.response.PageResponse;
 import com.cinema.hall_service.dto.request.AddHallImageRequest;
 import com.cinema.hall_service.dto.request.HallCreateRequest;
 import com.cinema.hall_service.dto.request.HallField;
+import com.cinema.hall_service.dto.request.HallLayoutDefinitionRequest;
 import com.cinema.hall_service.dto.request.ReplaceHallSeatsRequest;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
 import com.cinema.hall_service.dto.request.UpdateHallStatusRequest;
@@ -66,6 +67,24 @@ public class HallController extends BaseController {
             @Valid @RequestBody ReplaceHallSeatsRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = hallService.replaceHallSeats(id, request, httpRequest);
+        return ok(response);
+    }
+
+    @PostMapping("/{id}/layout-definition")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createHallLayoutDefinition(
+            @PathVariable UUID id,
+            @Valid @RequestBody HallLayoutDefinitionRequest request,
+            HttpServletRequest httpRequest) {
+        ActionMessageResponse response = hallService.createHallLayoutDefinition(id, request, httpRequest);
+        return created(response);
+    }
+
+    @PutMapping("/{id}/layout-definition")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> replaceHallLayoutDefinition(
+            @PathVariable UUID id,
+            @Valid @RequestBody HallLayoutDefinitionRequest request,
+            HttpServletRequest httpRequest) {
+        ActionMessageResponse response = hallService.replaceHallLayoutDefinition(id, request, httpRequest);
         return ok(response);
     }
 

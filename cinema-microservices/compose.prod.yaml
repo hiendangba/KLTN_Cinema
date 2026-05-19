@@ -229,6 +229,12 @@ services:
       REDIS_PASSWORD: ""
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
+      SHOWTIME_GRPC_HOST: showtime-service
+      SHOWTIME_GRPC_PORT: 9194
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      SEAT_GRPC_HOST: seat-service
+      SEAT_GRPC_PORT: 9199
       GRPC_SERVER_PORT: 9197
       SERVER_PORT: 8097
     expose:

@@ -10,6 +10,8 @@ import com.cinema.grpc.booking.CheckShowtimeBookedReply;
 import com.cinema.grpc.booking.CheckShowtimeBookedRequest;
 import com.cinema.grpc.booking.GetSeatRuntimeStatesReply;
 import com.cinema.grpc.booking.GetSeatRuntimeStatesRequest;
+import com.cinema.grpc.booking.HasActiveBookingByShowtimeIdsReply;
+import com.cinema.grpc.booking.HasActiveBookingByShowtimeIdsRequest;
 import com.cinema.grpc.booking.SeatRuntimeStatePayload;
 import io.grpc.BindableService;
 import io.grpc.stub.StreamObserver;
@@ -144,6 +146,58 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching seat runtime states", ex);
             responseObserver.onNext(GetSeatRuntimeStatesReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void hasActiveBookingByShowtimeIds(HasActiveBookingByShowtimeIdsRequest request,
+                                              StreamObserver<HasActiveBookingByShowtimeIdsReply> responseObserver) {
+        try {
+            Set<UUID> showtimeIds = request.getShowtimeIdsList().stream()
+                    .map(raw -> {
+                        try {
+                            return UUID.fromString(raw);
+                        } catch (IllegalArgumentException ex) {
+                            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+                        }
+                    })
+                    .collect(Collectors.toSet());
+
+            if (showtimeIds.isEmpty()) {
+                responseObserver.onNext(HasActiveBookingByShowtimeIdsReply.newBuilder()
+                        .setSuccess(true)
+                        .setMessage("No showtime provided")
+                        .setHasActiveBooking(false)
+                        .build());
+                responseObserver.onCompleted();
+                return;
+            }
+
+            boolean hasActiveBooking = bookingRepository.existsByShowtimeIdInAndIsDeletedFalseAndBookingStatusIn(
+                    showtimeIds,
+                    EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED));
+
+            responseObserver.onNext(HasActiveBookingByShowtimeIdsReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Active booking check completed")
+                    .setHasActiveBooking(hasActiveBooking)
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(HasActiveBookingByShowtimeIdsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while checking active bookings by showtime list", ex);
+            responseObserver.onNext(HasActiveBookingByShowtimeIdsReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())

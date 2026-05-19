@@ -26,7 +26,7 @@ public class SeatGrpcClient {
         this.seatBlockingStub = SeatInternalServiceGrpc.newBlockingStub(channelFactory.createChannel("seat"));
     }
 
-    public Map<String, HallEnum.SeatType> getSeatTypesByCodes(UUID hallId, Collection<String> seatCodes) {
+    public Map<String, SeatSnapshot> getSeatSnapshotsByCodes(UUID hallId, Collection<String> seatCodes) {
         try {
             GetSeatsByCodesReply reply = seatBlockingStub.getSeatsByCodes(
                     GetSeatsByCodesRequest.newBuilder()
@@ -38,13 +38,14 @@ public class SeatGrpcClient {
                 throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.SEAT_SERVICE_ERROR));
             }
 
-            Map<String, HallEnum.SeatType> result = new LinkedHashMap<>();
+            Map<String, SeatSnapshot> result = new LinkedHashMap<>();
             reply.getSeatsList().forEach(seat -> {
                 String normalizedSeatCode = seat.getSeatCode().trim().toUpperCase(Locale.ROOT);
                 try {
+                    UUID seatId = UUID.fromString(seat.getId().trim());
                     HallEnum.SeatType seatType = HallEnum.SeatType.valueOf(seat.getSeatType().trim().toUpperCase(Locale.ROOT));
-                    result.put(normalizedSeatCode, seatType);
-                } catch (IllegalArgumentException ex) {
+                    result.put(normalizedSeatCode, new SeatSnapshot(seatId, seatType));
+                } catch (RuntimeException ex) {
                     throw new BusinessException(ErrorCode.SEAT_SERVICE_ERROR);
                 }
             });
@@ -52,5 +53,8 @@ public class SeatGrpcClient {
         } catch (StatusRuntimeException ex) {
             throw new BusinessException(ErrorCode.SEAT_SERVICE_ERROR);
         }
+    }
+
+    public record SeatSnapshot(UUID seatId, HallEnum.SeatType seatType) {
     }
 }

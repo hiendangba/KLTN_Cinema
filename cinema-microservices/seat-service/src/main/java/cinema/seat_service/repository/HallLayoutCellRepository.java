@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface HallLayoutCellRepository extends JpaRepository<HallLayoutCell, UUID> {
-    List<HallLayoutCell> findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(UUID hallId);
+    List<HallLayoutCell> findAllByHallId(UUID hallId);
 
-    void deleteAllByHallId(UUID hallId);
+    List<HallLayoutCell> findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(UUID hallId);
 }

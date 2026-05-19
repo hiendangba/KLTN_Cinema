@@ -8,6 +8,7 @@ option java_outer_classname = "ShowtimeInternalProto";
 
 service ShowtimeInternalService {
   rpc GetShowtimeById(GetShowtimeByIdRequest) returns (GetShowtimeByIdReply);
+  rpc ListActiveShowtimeIdsByHall(ListActiveShowtimeIdsByHallRequest) returns (ListActiveShowtimeIdsByHallReply);
 }
 
 message GetShowtimeByIdRequest {
@@ -26,4 +27,15 @@ message GetShowtimeByIdReply {
   string error_key = 2;
   string message = 3;
   ShowtimePayload showtime = 4;
+}
+
+message ListActiveShowtimeIdsByHallRequest {
+  string hall_id = 1;
+}
+
+message ListActiveShowtimeIdsByHallReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated string showtime_ids = 4;
 }

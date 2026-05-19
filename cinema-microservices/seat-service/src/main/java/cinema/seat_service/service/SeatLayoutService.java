@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface SeatLayoutService {
-    ActionMessageResponse putHallLayoutDefinition(UUID hallId, PutHallLayoutDefinitionRequest request);
+    ActionMessageResponse createHallLayoutDefinition(UUID hallId, PutHallLayoutDefinitionRequest request);
+
+    ActionMessageResponse replaceHallLayoutDefinition(UUID hallId, PutHallLayoutDefinitionRequest request);
 
     HallLayoutDefinitionResponse getHallLayoutDefinition(UUID hallId);
 

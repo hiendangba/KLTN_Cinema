@@ -25,8 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -41,7 +43,23 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
 
     @Override
     @Transactional
-    public ActionMessageResponse putHallLayoutDefinition(UUID hallId, PutHallLayoutDefinitionRequest request) {
+    public ActionMessageResponse createHallLayoutDefinition(UUID hallId, PutHallLayoutDefinitionRequest request) {
+        if (hallLayoutProfileRepository.findByHallIdAndIsDeletedFalse(hallId).isPresent()) {
+            throw new BusinessException(ErrorCode.HALL_LAYOUT_ALREADY_EXISTS);
+        }
+        return upsertDefinition(hallId, request);
+    }
+
+    @Override
+    @Transactional
+    public ActionMessageResponse replaceHallLayoutDefinition(UUID hallId, PutHallLayoutDefinitionRequest request) {
+        if (hallLayoutProfileRepository.findByHallIdAndIsDeletedFalse(hallId).isEmpty()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        return upsertDefinition(hallId, request);
+    }
+
+    private ActionMessageResponse upsertDefinition(UUID hallId, PutHallLayoutDefinitionRequest request) {
         validateDefinition(request);
 
         HallLayoutProfile profile = hallLayoutProfileRepository.findById(hallId)
@@ -53,41 +71,87 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
         profile.setIsDeleted(false);
         hallLayoutProfileRepository.save(profile);
 
-        seatRepository.deleteAllByHallId(hallId);
-        hallLayoutCellRepository.deleteAllByHallId(hallId);
-
-        List<Seat> seats = new ArrayList<>();
-        List<HallLayoutCell> cells = new ArrayList<>();
+        Map<String, PutHallLayoutDefinitionRequest.CellInput> requestedSeatByCode = new LinkedHashMap<>();
+        Map<String, PutHallLayoutDefinitionRequest.CellInput> requestedCellByCoord = new LinkedHashMap<>();
         for (PutHallLayoutDefinitionRequest.CellInput input : request.getCells()) {
             if (input.getType() == PutHallLayoutDefinitionRequest.CellInputType.SEAT) {
-                Seat seat = new Seat();
-                seat.setHallId(hallId);
-                seat.setRow(input.getRow());
-                seat.setCol(input.getCol());
-                seat.setSeatType(input.getSeatType());
-                seat.setSeatCode(SeatCodeGenerator.fromRowCol(input.getRow(), input.getCol()).toUpperCase(Locale.ROOT));
-                seat.setIsDeleted(false);
-                seats.add(seat);
+                requestedSeatByCode.put(generateSeatCode(input.getRow(), input.getCol()), input);
                 continue;
             }
+            requestedCellByCoord.put(toCoordKey(input.getRow(), input.getCol()), input);
+        }
 
-            HallLayoutCell cell = new HallLayoutCell();
+        List<Seat> existingSeats = seatRepository.findAllByHallId(hallId);
+        Map<String, Seat> existingSeatByCode = new LinkedHashMap<>();
+        for (Seat existingSeat : existingSeats) {
+            existingSeatByCode.put(normalizeSeatCode(existingSeat.getSeatCode()), existingSeat);
+        }
+        List<Seat> seatsToSave = new ArrayList<>();
+        for (Map.Entry<String, PutHallLayoutDefinitionRequest.CellInput> entry : requestedSeatByCode.entrySet()) {
+            String seatCode = entry.getKey();
+            PutHallLayoutDefinitionRequest.CellInput input = entry.getValue();
+            Seat seat = existingSeatByCode.getOrDefault(seatCode, new Seat());
+            seat.setHallId(hallId);
+            seat.setSeatCode(seatCode);
+            seat.setRow(input.getRow());
+            seat.setCol(input.getCol());
+            seat.setSeatType(input.getSeatType());
+            seat.setIsDeleted(false);
+            seatsToSave.add(seat);
+        }
+        Set<String> requestedSeatCodes = requestedSeatByCode.keySet();
+        for (Seat existingSeat : existingSeats) {
+            String seatCode = normalizeSeatCode(existingSeat.getSeatCode());
+            if (!requestedSeatCodes.contains(seatCode) && !Boolean.TRUE.equals(existingSeat.getIsDeleted())) {
+                existingSeat.setIsDeleted(true);
+                seatsToSave.add(existingSeat);
+            }
+        }
+        seatRepository.saveAll(seatsToSave);
+
+        List<HallLayoutCell> existingCells = hallLayoutCellRepository.findAllByHallId(hallId);
+        Map<String, HallLayoutCell> existingCellByCoord = new LinkedHashMap<>();
+        for (HallLayoutCell existingCell : existingCells) {
+            existingCellByCoord.put(toCoordKey(existingCell.getRow(), existingCell.getCol()), existingCell);
+        }
+        List<HallLayoutCell> cellsToSave = new ArrayList<>();
+        for (Map.Entry<String, PutHallLayoutDefinitionRequest.CellInput> entry : requestedCellByCoord.entrySet()) {
+            PutHallLayoutDefinitionRequest.CellInput input = entry.getValue();
+            HallLayoutCell cell = existingCellByCoord.getOrDefault(entry.getKey(), new HallLayoutCell());
             cell.setHallId(hallId);
             cell.setRow(input.getRow());
             cell.setCol(input.getCol());
             cell.setCellType(input.getType() == PutHallLayoutDefinitionRequest.CellInputType.AISLE
                     ? LayoutCellType.AISLE : LayoutCellType.BLOCKED);
             cell.setIsDeleted(false);
-            cells.add(cell);
+            cellsToSave.add(cell);
         }
-
-        seatRepository.saveAll(seats);
-        hallLayoutCellRepository.saveAll(cells);
-        publishOutboxEvent(hallId, seats.size(), cells.size());
+        Set<String> requestedCellCoords = requestedCellByCoord.keySet();
+        for (HallLayoutCell existingCell : existingCells) {
+            String cellCoord = toCoordKey(existingCell.getRow(), existingCell.getCol());
+            if (!requestedCellCoords.contains(cellCoord) && !Boolean.TRUE.equals(existingCell.getIsDeleted())) {
+                existingCell.setIsDeleted(true);
+                cellsToSave.add(existingCell);
+            }
+        }
+        hallLayoutCellRepository.saveAll(cellsToSave);
+        publishOutboxEvent(hallId, requestedSeatByCode.size(), requestedCellByCoord.size());
 
         return ActionMessageResponse.builder()
                 .message("Hall layout definition updated successfully")
                 .build();
+    }
+
+    private String generateSeatCode(Integer row, Integer col) {
+        return SeatCodeGenerator.fromRowCol(row, col).toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeSeatCode(String seatCode) {
+        return seatCode == null ? "" : seatCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String toCoordKey(Integer row, Integer col) {
+        return row + ":" + col;
     }
 
     @Override
@@ -141,9 +205,20 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
     }
 
     private void validateDefinition(PutHallLayoutDefinitionRequest request) {
+        if (request.getTotalRows() == null || request.getTotalRows() <= 0
+                || request.getTotalCols() == null || request.getTotalCols() <= 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        if (request.getCells() == null || request.getCells().isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
         Set<String> occupied = new HashSet<>();
         for (PutHallLayoutDefinitionRequest.CellInput cell : request.getCells()) {
-            if (cell.getRow() > request.getTotalRows() || cell.getCol() > request.getTotalCols()) {
+            if (cell.getRow() == null || cell.getRow() <= 0
+                    || cell.getCol() == null || cell.getCol() <= 0
+                    || cell.getRow() > request.getTotalRows()
+                    || cell.getCol() > request.getTotalCols()) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT);
             }
             String key = cell.getRow() + ":" + cell.getCol();

@@ -9,6 +9,8 @@ option java_outer_classname = "SeatInternalProto";
 service SeatInternalService {
   rpc GetLayoutByHallId(GetLayoutByHallIdRequest) returns (GetLayoutByHallIdReply);
   rpc GetSeatsByCodes(GetSeatsByCodesRequest) returns (GetSeatsByCodesReply);
+  rpc CreateLayoutDefinition(CreateLayoutDefinitionRequest) returns (CreateLayoutDefinitionReply);
+  rpc ReplaceLayoutDefinition(ReplaceLayoutDefinitionRequest) returns (ReplaceLayoutDefinitionReply);
 }
 
 message GetLayoutByHallIdRequest {
@@ -58,4 +60,39 @@ message GetSeatsByCodesReply {
   string error_key = 2;
   string message = 3;
   repeated LayoutSeatPayload seats = 4;
+}
+
+message LayoutDefinitionCellInput {
+  int32 row = 1;
+  int32 col = 2;
+  string type = 3;
+  string seat_type = 4;
+}
+
+message CreateLayoutDefinitionRequest {
+  string hall_id = 1;
+  int32 total_rows = 2;
+  int32 total_cols = 3;
+  string screen_position = 4;
+  repeated LayoutDefinitionCellInput cells = 5;
+}
+
+message CreateLayoutDefinitionReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+}
+
+message ReplaceLayoutDefinitionRequest {
+  string hall_id = 1;
+  int32 total_rows = 2;
+  int32 total_cols = 3;
+  string screen_position = 4;
+  repeated LayoutDefinitionCellInput cells = 5;
+}
+
+message ReplaceLayoutDefinitionReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
 }

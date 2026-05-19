@@ -11,8 +11,8 @@ import java.util.UUID;
 @Builder
 public class BookingSeatItemResponse {
     private UUID id;
+    private UUID seatId;
     private String seatCode;
     private HallEnum.SeatType seatType;
     private BigDecimal seatPriceSnapshot;
 }
-

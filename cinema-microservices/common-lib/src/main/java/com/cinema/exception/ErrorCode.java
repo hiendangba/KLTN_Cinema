@@ -70,6 +70,8 @@ public enum ErrorCode {
         SEAT_NOT_FOUND("4304", "Ghế không tìm thấy trong phòng chiếu", HttpStatus.NOT_FOUND),
         HALL_MAINTENANCE("4305", "Phòng chiếu đang bảo trì", HttpStatus.BAD_REQUEST),
         MANAGER_NOT_ASSIGNED_CINEMA("4306", "Quản lý này không quản lý cinema nào cả", HttpStatus.BAD_REQUEST),
+        HALL_LAYOUT_ALREADY_EXISTS("4307", "Sơ đồ ghế của phòng chiếu đã tồn tại", HttpStatus.CONFLICT),
+        HALL_LAYOUT_IN_USE("4308", "Phòng chiếu đang có suất chiếu được đặt vé, không thể sửa sơ đồ ghế", HttpStatus.CONFLICT),
 
         EMAIL_SEND_FAILED("9100", "Gửi email thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
         FILM_SERVICE_ERROR("9101", "Lỗi khi gọi Film Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),

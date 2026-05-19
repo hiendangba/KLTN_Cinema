@@ -11,6 +11,7 @@ import org.mapstruct.ReportingPolicy;
 public interface BookingSeatItemMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "booking", ignore = true)
+    @Mapping(target = "seatId", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
     BookingSeatItem toEntity(CreateBookingRequest.SeatItem request);
 
