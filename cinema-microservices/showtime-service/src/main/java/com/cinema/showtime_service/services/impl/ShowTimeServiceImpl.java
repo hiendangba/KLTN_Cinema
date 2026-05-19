@@ -19,6 +19,8 @@ import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
 import com.cinema.showtime_service.dto.response.HallResponse;
 import com.cinema.showtime_service.dto.response.PricingPolicyResponse;
+import com.cinema.showtime_service.dto.response.SeatMapCellResponse;
+import com.cinema.showtime_service.dto.response.SeatMapResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import com.cinema.showtime_service.entity.PricingPolicy;
 import com.cinema.showtime_service.entity.ShowTime;
@@ -26,6 +28,7 @@ import com.cinema.showtime_service.grpc.BookingGrpcClient;
 import com.cinema.showtime_service.grpc.CinemaGrpcClient;
 import com.cinema.showtime_service.grpc.FilmGrpcClient;
 import com.cinema.showtime_service.grpc.HallGrpcClient;
+import com.cinema.showtime_service.grpc.SeatGrpcClient;
 import com.cinema.showtime_service.mapper.PricingPolicyMapper;
 import com.cinema.showtime_service.mapper.ShowTimeMapper;
 import com.cinema.showtime_service.repository.PricingPolicyRepository;
@@ -42,6 +45,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +67,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     BookingGrpcClient bookingGrpcClient;
     CinemaGrpcClient cinemaGrpcClient;
     HallGrpcClient hallGrpcClient;
+    SeatGrpcClient seatGrpcClient;
     PricingPolicyRepository pricingPolicyRepository;
 
     @Override
@@ -148,6 +153,48 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         response.setFilm(film);
         response.setHall(hall);
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SeatMapResponse getSeatMapByShowtimeId(UUID showtimeId) {
+        ShowTime showTime = showTimeRepository.findById(showtimeId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+        PricingPolicy pricingPolicy = pricingPolicyRepository.findByIdAndIsDeletedFalse(showTime.getPricingPolicyId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        SeatGrpcClient.LayoutBundle layout = seatGrpcClient.getLayoutByHallId(showTime.getHallId());
+        List<String> seatCodes = layout.getSeats().stream()
+                .map(com.cinema.grpc.seat.LayoutSeatPayload::getSeatCode)
+                .toList();
+        Map<String, String> stateMap = bookingGrpcClient.getSeatRuntimeStates(showtimeId, seatCodes);
+
+        List<SeatMapCellResponse> cells = new ArrayList<>();
+        layout.getSeats().forEach(seat -> cells.add(SeatMapCellResponse.builder()
+                .kind("SEAT")
+                .row(seat.getRow())
+                .col(seat.getCol())
+                .seatCode(seat.getSeatCode())
+                .seatType(seat.getSeatType())
+                .state(stateMap.getOrDefault(seat.getSeatCode().toUpperCase(), "AVAILABLE"))
+                .price(resolvePriceBySeatType(seat.getSeatType(), pricingPolicy))
+                .build()));
+        layout.getCells().forEach(cell -> cells.add(SeatMapCellResponse.builder()
+                .kind("CELL")
+                .row(cell.getRow())
+                .col(cell.getCol())
+                .cellType(cell.getCellType())
+                .state("UNAVAILABLE")
+                .build()));
+        cells.sort(Comparator.comparing(SeatMapCellResponse::getRow).thenComparing(SeatMapCellResponse::getCol));
+
+        return SeatMapResponse.builder()
+                .showtimeId(showtimeId)
+                .hallId(showTime.getHallId())
+                .totalRows(layout.getTotalRows())
+                .totalCols(layout.getTotalCols())
+                .screenPosition(layout.getScreenPosition())
+                .cells(cells)
+                .build();
     }
 
     @Override
@@ -371,5 +418,16 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             }
             throw ex;
         }
+    }
+
+    private Long resolvePriceBySeatType(String seatType, PricingPolicy pricingPolicy) {
+        if (seatType == null) {
+            return pricingPolicy.getStandardPrice();
+        }
+        return switch (seatType.trim().toUpperCase()) {
+            case "VIP" -> pricingPolicy.getVipPrice();
+            case "COUPLE" -> pricingPolicy.getCouplePrice();
+            default -> pricingPolicy.getStandardPrice();
+        };
     }
 }

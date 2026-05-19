@@ -77,6 +77,8 @@ public enum ErrorCode {
         BOOKING_TICKET_LIMIT_EXCEEDED("4401", "One booking can include at most 5 tickets.", HttpStatus.BAD_REQUEST),
         BOOKING_SERVICE_ERROR("9104", "Lỗi khi gọi Booking Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         CINEMA_SERVICE_ERROR("9105", "Lỗi khi gọi Cinema Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
+        SHOWTIME_SERVICE_ERROR("9106", "Lỗi khi gọi Showtime Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
+        SEAT_SERVICE_ERROR("9107", "Lỗi khi gọi Seat Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         UN_SUPPORTED_FIELD_TYPE("9103", "Loại dữ liệu của trường không được hỗ trợ", HttpStatus.BAD_REQUEST);
 
         private final String code;

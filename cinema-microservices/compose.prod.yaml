@@ -137,8 +137,12 @@ services:
       CINEMA_GRPC_PORT: 9196
       HALL_GRPC_HOST: hall-services
       HALL_GRPC_PORT: 9197
+      SEAT_GRPC_HOST: seat-service
+      SEAT_GRPC_PORT: 9199
+      GRPC_SERVER_PORT: 9194
       SERVER_PORT: 8094
     expose:
+      - "9194"
       - "8094"
     depends_on:
       - postgres
@@ -148,6 +152,7 @@ services:
       - film-service
       - hall-services
       - cinema-service
+      - seat-service
     mem_limit: 224m
 
   booking-service:
@@ -168,6 +173,10 @@ services:
       REDIS_PASSWORD: ""
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
+      SHOWTIME_GRPC_HOST: showtime-service
+      SHOWTIME_GRPC_PORT: 9194
+      SEAT_GRPC_HOST: seat-service
+      SEAT_GRPC_PORT: 9199
       GRPC_SERVER_PORT: 9195
       SERVER_PORT: 8095
       BOOKING_SEAT_LOCK_MINUTES: ${BOOKING_SEAT_LOCK_MINUTES:-5}
@@ -229,6 +238,35 @@ services:
       - postgres
       - redis
       - cinema-service
+    mem_limit: 208m
+
+  seat-service:
+    image: ${IMAGE_REPO}/seat-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      JAVA_OPTS: "-Xms48m -Xmx144m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/seat_db
+      DB_USERNAME: seat_user
+      DB_PASSWORD: seat_pass
+      JPA_DDL_AUTO: update
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      GRPC_SERVER_PORT: 9199
+      SERVER_PORT: 8099
+    expose:
+      - "9199"
+      - "8099"
+    depends_on:
+      - postgres
+      - redis
+      - booking-service
     mem_limit: 208m
 
   cinema-service:

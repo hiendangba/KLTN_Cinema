@@ -1,59 +1,64 @@
-# RFC: Kế Hoạch Tách Seat Thành `seat-service`
+# RFC: Chuẩn Hóa Seat-Map Canonical Cho BE + FE
 
-## 1. Thông Tin Tài Liệu
-- Tên tài liệu: `SEAT_SERVICE_MIGRATION_PLAN.md`
-- Mục tiêu: Chuẩn hóa kế hoạch tách ghế sang microservice riêng.
-- Phạm vi: `hall-service`, `seat-service`, `showtime-service`, `booking-service`, `common-lib`, `compose/envoy`.
-- Trạng thái: Draft để duyệt trước khi code.
-- Ngày cập nhật: 2026-05-18 (UTC+07:00)
+## 1. Mục tiêu tài liệu
+- Tên tài liệu chính thức: `SEAT_SERVICE_MIGRATION_PLAN.md`.
+- Dùng chung cho Backend và Frontend để triển khai mô hình seat-map canonical.
+- Chỉ dùng **1 file RFC duy nhất**, không tách thêm file phụ.
 
-## 2. Tổng Quan Thay Đổi Lớn
+## 2. Tổng quan thay đổi
+- Backend là nguồn chuẩn cho layout và trạng thái ghế.
+- FE chỉ render từ một payload duy nhất của showtime.
+- `layoutJsonLegacy` còn giữ tạm cho giai đoạn dual-read/cutover, không còn là source of truth dài hạn.
 
-## 2.1 Vấn đề hiện tại
-- Dữ liệu ghế đang phụ thuộc `hall.layout_json`, gây khó quản lý vòng đời ghế như một domain độc lập.
-- Luồng booking chưa có nguồn sự thật tập trung cho seat inventory theo hall/showtime.
-- Các thay đổi liên quan ghế dễ lan sang `hall-service` vì chưa có boundary rõ.
+## 3. Class Diagram chuẩn (domain-level)
+> Ghi chú: Diagram cố ý **không** đưa `timeCreated/timeUpdated` theo yêu cầu.
 
-## 2.2 Mục tiêu sau thay đổi
-- Tách ghế thành service riêng `seat-service`, là nguồn dữ liệu ghế duy nhất.
-- Booking validate ghế dựa trên dữ liệu backend (`showtime -> hall -> seat`) trước khi lock Redis.
-- Giữ `HallImage` ở `hall-service`, chỉ lưu `imagePath` dạng relative path.
-
-## 2.3 Không nằm trong phạm vi phase này
-- Không triển khai upload file ảnh trong backend.
-- Không lưu `AISLE` thành bản ghi ghế trong v1.
-- Không mô tả chi tiết FE implementation.
-
-## 3. Kiến Trúc Đích Và Boundary Service
-
-| Service | Trách nhiệm chính | Không chịu trách nhiệm |
-|---|---|---|
-| `seat-service` | Quản lý seat inventory theo hall; API seat; gRPC seat nội bộ | Hall metadata, showtime lifecycle, upload ảnh |
-| `hall-service` | Hall metadata + HallImage (`imagePath`) | Validate seat booking theo showtime |
-| `showtime-service` | Showtime metadata; ánh xạ `showtimeId -> hallId/cinemaId` | Quản lý seat inventory |
-| `booking-service` | Booking lifecycle, payment status, lock ghế Redis | Định nghĩa seat master data |
-
-Luồng validate ghế chuẩn:
-1. `booking-service` nhận request tạo booking.
-2. Gọi `showtime-service` gRPC lấy `hallId` từ `showtimeId`.
-3. Gọi `seat-service` gRPC lấy/validate danh sách `seatCode` trong hall đó.
-4. Nếu hợp lệ mới lock Redis và tạo booking.
-
-## 4. Class Diagram Và Mô Hình Dữ Liệu
-
-## 4.1 Class diagram đề xuất
 ```mermaid
 classDiagram
+direction LR
+
+class Hall {
+  +UUID id
+  +UUID cinemaId
+  +String name
+  +String status
+  +Integer capacity
+  +Boolean isDeleted
+  +JSON layoutJsonLegacy
+}
+
+class HallImage {
+  +UUID id
+  +UUID hallId
+  +String hallImagePath
+  +Boolean isDeleted
+}
+
+class HallLayoutProfile {
+  +UUID hallId
+  +Integer totalRows
+  +Integer totalCols
+  +ScreenPosition screenPosition
+  +Boolean isDeleted
+}
+
 class Seat {
   +UUID id
   +UUID hallId
-  +String seatCode
   +Integer row
   +Integer col
+  +String seatCode
   +SeatType seatType
   +Boolean isDeleted
-  +LocalDateTime timeCreated
-  +LocalDateTime timeUpdated
+}
+
+class HallLayoutCell {
+  +UUID id
+  +UUID hallId
+  +Integer row
+  +Integer col
+  +CellType cellType
+  +Boolean isDeleted
 }
 
 class SeatType {
@@ -63,314 +68,114 @@ class SeatType {
   COUPLE
 }
 
-class HallImage {
-  +UUID id
-  +UUID hallId
-  +String imagePath
-  +Boolean isDeleted
-  +LocalDateTime timeCreated
-  +LocalDateTime timeUpdated
+class CellType {
+  <<enumeration>>
+  AISLE
+  BLOCKED
 }
+
+class SeatState {
+  <<enumeration>>
+  AVAILABLE
+  LOCKED
+  BOOKED
+  UNAVAILABLE
+}
+
+Hall "1" --> "0..*" HallImage : has
+Hall "1" --> "1" HallLayoutProfile : has
+Hall "1" --> "0..*" Seat : has
+Hall "1" --> "0..*" HallLayoutCell : has
+Seat --> SeatType
+HallLayoutCell --> CellType
 ```
 
-## 4.2 Chi tiết bảng `seat` (thuộc `seat-service`)
-- Cột:
-  - `id uuid primary key`
-  - `hall_id uuid not null`
-  - `seat_code varchar(20) not null`
-  - `seat_row int not null`
-  - `seat_col int not null`
-  - `seat_type varchar(20) not null` (`STANDARD|VIP|COUPLE`)
-  - `is_deleted boolean not null default false`
-  - `time_created timestamp not null`
-  - `time_updated timestamp not null`
-- Constraint:
-  - `unique (hall_id, seat_code)`
-  - `unique (hall_id, seat_row, seat_col)`
-- Index:
-  - `(hall_id, is_deleted)`
-  - `(hall_id, seat_type, is_deleted)`
+## 4. Ràng buộc dữ liệu bắt buộc
+- `HallImage`: unique `(hall_id, hall_image_path)`.
+- `Seat`: unique `(hall_id, seat_code)`.
+- `Seat`: unique `(hall_id, row, col)`.
+- `HallLayoutCell`: unique `(hall_id, row, col)`.
+- Một tọa độ `(hall_id, row, col)` không được vừa là `Seat` vừa là `HallLayoutCell`.
 
-## 4.3 Chi tiết bảng `hall_image` (giữ ở `hall-service`)
-- Cột:
-  - `id uuid primary key`
-  - `hall_id uuid not null`
-  - `image_path varchar(500) not null`
-  - `is_deleted boolean not null default false`
-  - `time_created timestamp not null`
-  - `time_updated timestamp not null`
-- Constraint:
-  - `unique (hall_id, image_path)`
-- Index:
-  - `(hall_id, is_deleted)`
+## 5. Vì sao cần cả `HallLayoutProfile` và `HallLayoutCell`
+- `HallLayoutProfile` lưu metadata toàn lưới để FE biết cách dựng khung: số hàng/cột và hướng màn hình.
+- `HallLayoutCell` lưu các ô không bán vé (`AISLE`, `BLOCKED`) để FE render đúng bản đồ ghế.
+- `Seat` chỉ lưu ghế thật có thể bán vé (`STANDARD`, `VIP`, `COUPLE`).
 
-## 5. API Contract Chi Tiết (Dự Kiến Triển Khai)
+### Ví dụ hall 3x5
+- `HallLayoutProfile`: `totalRows=3`, `totalCols=5`, `screenPosition=TOP`.
+- `Seat`: có `A1, A2, A4, A5, ...`.
+- `HallLayoutCell`: có `(row=1,col=3,type=AISLE)`, `(row=3,col=3,type=BLOCKED)`.
 
-## 5.1 `seat-service` REST API
+Kết quả: FE render được đầy đủ sơ đồ (ghế + lối đi + blocked), còn booking chỉ xử lý ghế thật.
 
-### A. `PUT /api/seats/halls/{hallId}`
-- Mục đích: Replace toàn bộ seat inventory của một hall.
-- Request mẫu:
-```json
-{
-  "seats": [
-    { "seatCode": "A1", "row": 1, "col": 1, "seatType": "STANDARD" },
-    { "seatCode": "A2", "row": 1, "col": 2, "seatType": "VIP" },
-    { "seatCode": "A3-A4", "row": 1, "col": 3, "seatType": "COUPLE" }
-  ]
-}
-```
-- Response thành công (mẫu):
-```json
-{
-  "message": "Seats replaced successfully"
-}
-```
+## 6. FE Rendering Contract (Canonical)
 
-### B. `GET /api/seats/halls/{hallId}`
-- Mục đích: Lấy danh sách ghế active của hall theo thứ tự `row, col`.
-- Response mẫu:
-```json
-{
-  "hallId": "f88f4a58-9b13-4fd7-a066-4f03d0f40e5a",
-  "seats": [
-    {
-      "id": "a9177f8b-b4ec-4223-a216-b4e3e301a4d9",
-      "seatCode": "A1",
-      "row": 1,
-      "col": 1,
-      "seatType": "STANDARD"
-    }
-  ]
-}
-```
+### 6.1 API FE chỉ cần gọi
+- `GET /api/showtimes/{showtimeId}/seat-map`
 
-### C. `POST /api/seats/validate`
-- Mục đích: Validate danh sách seatCode theo `showtimeId`.
-- Request mẫu:
-```json
-{
-  "showtimeId": "e46f4f67-0e24-4f49-8c90-92db5a46dc29",
-  "seatCodes": ["A1", "A2", "A3-A4"]
-}
-```
-- Response hợp lệ:
-```json
-{
-  "valid": true,
-  "hallId": "f88f4a58-9b13-4fd7-a066-4f03d0f40e5a",
-  "resolvedSeats": [
-    { "seatCode": "A1", "seatType": "STANDARD" },
-    { "seatCode": "A2", "seatType": "VIP" }
-  ]
-}
-```
-- Response không hợp lệ:
-```json
-{
-  "valid": false,
-  "hallId": "f88f4a58-9b13-4fd7-a066-4f03d0f40e5a",
-  "missingSeatCodes": ["A99"]
-}
-```
-
-## 5.2 `hall-service` image API (giữ nguyên định hướng)
-- `POST /api/halls/{hallId}/images`: thêm ảnh (lưu `imagePath`).
-- `GET /api/halls/{hallId}/images`: lấy danh sách ảnh.
-- `DELETE /api/halls/{hallId}/images/{imageId}`: soft delete ảnh.
-
-## 5.3 Quy tắc validate `imagePath`
-- Chỉ chấp nhận relative path, ví dụ `/uploads/halls/hall-a-01.jpg`.
-- Reject URL tuyệt đối (`http://...`, `https://...`).
-- Không cho rỗng và không vượt quá độ dài cho phép.
-
-## 6. gRPC Contract Nội Bộ
-
-## 6.1 `showtime-service` gRPC
-- Method: `GetShowtimeById(showtimeId)`
-- Mục đích: Trả về thông tin showtime để suy ra hall context.
-- Output tối thiểu:
+### 6.2 Response contract
+- Trả về:
   - `showtimeId`
   - `hallId`
-  - `cinemaId`
+  - `totalRows`
+  - `totalCols`
+  - `screenPosition`
+  - `cells[]`
 
-## 6.2 `seat-service` gRPC
-- Method: `GetSeatsByCodes(hallId, seatCodes[])`
-- Mục đích: Trả danh sách ghế tồn tại/active theo hall và seatCodes.
+### 6.3 Ý nghĩa `cells[]`
+- `kind=SEAT`:
+  - Có `seatCode`, `seatType`, `state`, `price`.
+  - FE render ghế; disable chọn nếu `state` là `LOCKED`, `BOOKED`, hoặc `UNAVAILABLE`.
+- `kind=CELL`:
+  - Có `cellType` (`AISLE|BLOCKED`) và `state=UNAVAILABLE`.
+  - FE render ô tĩnh; không cho chọn và không gửi booking.
 
-## 6.3 Gợi ý timeout/retry cho internal RPC
-- Timeout mặc định đề xuất: 1000ms-2000ms.
-- Retry đề xuất: chỉ retry idempotent call, tối đa 1-2 lần, có backoff ngắn.
-- Nếu timeout/fail: map về `*_SERVICE_ERROR` tương ứng.
+### 6.4 Quy tắc submit booking từ FE
+- Chỉ gửi `seatCode[]` của các phần tử `kind=SEAT`.
+- Không gửi `row/col`, không gửi `cellType`, không gửi ô `kind=CELL`.
 
-## 7. Luồng Booking End-To-End Và Điểm Fail
+### 6.5 Ví dụ payload đầy đủ
+```json
+{
+  "showtimeId": "11111111-1111-1111-1111-111111111111",
+  "hallId": "22222222-2222-2222-2222-222222222222",
+  "totalRows": 3,
+  "totalCols": 5,
+  "screenPosition": "TOP",
+  "cells": [
+    { "row": 1, "col": 1, "kind": "SEAT", "seatCode": "A1", "seatType": "STANDARD", "state": "BOOKED", "price": 70000 },
+    { "row": 1, "col": 2, "kind": "SEAT", "seatCode": "A2", "seatType": "STANDARD", "state": "AVAILABLE", "price": 70000 },
+    { "row": 1, "col": 3, "kind": "CELL", "cellType": "AISLE", "state": "UNAVAILABLE" },
+    { "row": 1, "col": 4, "kind": "SEAT", "seatCode": "A4", "seatType": "VIP", "state": "AVAILABLE", "price": 90000 },
+    { "row": 1, "col": 5, "kind": "SEAT", "seatCode": "A5", "seatType": "VIP", "state": "AVAILABLE", "price": 90000 },
 
-```mermaid
-flowchart TD
-    A["booking-service nhận CreateBookingRequest"] --> B["Gọi showtime-service:GetShowtimeById(showtimeId)"]
-    B -->|ok| C["Lấy hallId"]
-    B -->|fail| E1["Trả SHOWTIME_SERVICE_ERROR"]
-    C --> D["Gọi seat-service:GetSeatsByCodes(hallId, seatCodes)"]
-    D -->|thiếu ghế| E2["Trả SEAT_NOT_FOUND hoặc BAD_REQUEST"]
-    D -->|ok| F["Lock Redis theo showtimeId + seatCode"]
-    F -->|lock fail| E3["Trả BAD_REQUEST ghế đã bị giữ"]
-    F -->|lock ok| G["Tạo booking + bookingSeatItems"]
+    { "row": 2, "col": 1, "kind": "SEAT", "seatCode": "B1", "seatType": "STANDARD", "state": "AVAILABLE", "price": 70000 },
+    { "row": 2, "col": 2, "kind": "SEAT", "seatCode": "B2", "seatType": "STANDARD", "state": "AVAILABLE", "price": 70000 },
+    { "row": 2, "col": 3, "kind": "CELL", "cellType": "AISLE", "state": "UNAVAILABLE" },
+    { "row": 2, "col": 4, "kind": "SEAT", "seatCode": "B4", "seatType": "VIP", "state": "LOCKED", "price": 90000 },
+    { "row": 2, "col": 5, "kind": "SEAT", "seatCode": "B5", "seatType": "VIP", "state": "AVAILABLE", "price": 90000 },
+
+    { "row": 3, "col": 1, "kind": "SEAT", "seatCode": "C1", "seatType": "COUPLE", "state": "AVAILABLE", "price": 120000 },
+    { "row": 3, "col": 2, "kind": "SEAT", "seatCode": "C2", "seatType": "COUPLE", "state": "AVAILABLE", "price": 120000 },
+    { "row": 3, "col": 3, "kind": "CELL", "cellType": "BLOCKED", "state": "UNAVAILABLE" },
+    { "row": 3, "col": 4, "kind": "SEAT", "seatCode": "C4", "seatType": "COUPLE", "state": "AVAILABLE", "price": 120000 },
+    { "row": 3, "col": 5, "kind": "SEAT", "seatCode": "C5", "seatType": "COUPLE", "state": "AVAILABLE", "price": 120000 }
+  ]
+}
 ```
 
-Các điểm fail bắt buộc cover test:
-- Showtime không tồn tại.
-- Seat không thuộc hall của showtime.
-- Seat đã bị xóa mềm.
-- Redis lock conflict.
+## 7. Outbox vs Saga (kết luận chính thức)
+- Saga và Outbox không thay thế nhau.
+- Saga giải quyết điều phối nghiệp vụ đa service (orchestration/choreography).
+- Outbox giải quyết độ tin cậy khi publish event sau commit DB (tránh mất event do dual-write).
+- Vì vậy nếu có async event, vẫn cần Outbox dù sau này có Saga.
 
-## 8. Kế Hoạch Migration Dữ Liệu
+### Trạng thái hiện tại theo phase
+- `seat-service`: đã có outbox record khi đổi layout.
+- Phase tiếp theo: mở rộng publisher/retry Outbox cho `booking-service`.
 
-## 8.1 Nguồn dữ liệu
-- Nguồn: `hall.layout_json` hiện có ở `hall-service`.
-
-## 8.2 Quy tắc mapping
-- Parse `items[]`.
-- Item `type = SEAT`: convert thành ghế vật lý trong `seat`.
-- Item `type = AISLE`: bỏ qua, không insert vào `seat`.
-- Chuẩn hóa `seatCode` sang uppercase.
-
-## 8.3 Các phase migration
-1. Phase A: dựng `seat-service` + schema + API cơ bản.
-2. Phase B: backfill dữ liệu từ `layout_json` sang `seat`.
-3. Phase C: đối soát song song (seat count, duplicate, invalid type).
-4. Phase D: chuyển booking sang validate bằng `seat-service`.
-5. Phase E: ngừng phụ thuộc runtime vào `layout_json` (giữ cột tạm cho rollback window).
-
-## 8.4 Checklist đối soát dữ liệu
-- Số ghế mỗi hall đúng kỳ vọng từ layout cũ.
-- `duplicate (hallId, seatCode) = 0`.
-- `duplicate (hallId, row, col) = 0`.
-- `seatType` invalid = 0.
-
-## 9. Rollout / Cutover / Rollback
-
-## 9.1 Rollout
-- Deploy `seat-service`.
-- Chạy migration batch.
-- Bật validate seat qua feature flag/config.
-- Theo dõi error rate và latency.
-
-## 9.2 Điều kiện cutover
-- Tỷ lệ lỗi validation trong ngưỡng cho phép.
-- Không có mismatch nghiêm trọng khi đối soát dữ liệu.
-- Booking flow qua test tích hợp thành công.
-
-## 9.3 Rollback
-- Tắt feature flag validate qua `seat-service`.
-- Quay về luồng validate cũ tạm thời.
-- Giữ nguyên `layout_json` trong rollback window.
-- Ghi log đầy đủ để rerun migration sau khi fix.
-
-## 10. Bảng Quy Tắc Validate Seat
-
-| Quy tắc | Mô tả | Hành vi khi vi phạm |
-|---|---|---|
-| `seatCode` bắt buộc | Không null/rỗng, normalize uppercase | `BAD_REQUEST` |
-| `seatCode` unique trong cùng payload | Không trùng lặp request | `BAD_REQUEST` |
-| `row`, `col` > 0 | Tọa độ ghế hợp lệ | `BAD_REQUEST` |
-| `(row,col)` unique trong cùng hall | Không có 2 ghế cùng tọa độ | `BAD_REQUEST` |
-| `seatType` hợp lệ | Chỉ `STANDARD|VIP|COUPLE` ở v1 | `BAD_REQUEST` |
-| Không cho `AISLE` trong seat table | `AISLE` không lưu thành Seat | `BAD_REQUEST` |
-| Ghế phải thuộc hall của showtime | Validate theo `showtimeId -> hallId` | `SEAT_NOT_FOUND`/`BAD_REQUEST` |
-
-## 11. Bảng Mapping Lỗi Nghiệp Vụ
-
-| Nhóm lỗi | Mã lỗi dự kiến | Khi nào dùng |
-|---|---|---|
-| Dữ liệu request sai | `BAD_REQUEST`, `INVALID_INPUT`, `INVALID_FORMAT` | Payload sai format hoặc vi phạm rule validate |
-| Ghế không hợp lệ | `SEAT_NOT_FOUND` | SeatCode không tồn tại hoặc đã xóa mềm trong hall target |
-| Showtime/hall không tồn tại | `SHOWTIME_NOT_FOUND`, `HALL_NOT_FOUND` | Không resolve được context cho validation |
-| Lỗi gọi service nội bộ | `SHOWTIME_SERVICE_ERROR`, `SEAT_SERVICE_ERROR`, `BOOKING_SERVICE_ERROR` | gRPC timeout/network/unavailable |
-| Quyền truy cập | `FORBIDDEN`, `UNAUTHORIZED` | Sai role hoặc thiếu auth header |
-
-Ghi chú: tên error chi tiết sẽ bám `ErrorCode` trong `common-lib` khi implement.
-
-## 12. Test Matrix
-
-## 12.1 Unit test
-- Validate request seat:
-  - trùng `seatCode`
-  - trùng `(row,col)`
-  - `seatType` invalid
-  - `row/col <= 0`
-- Validate `imagePath`:
-  - nhận relative path hợp lệ
-  - reject absolute URL
-
-## 12.2 Integration test
-- `booking-service` + `showtime-service` + `seat-service`:
-  - seat hợp lệ -> booking tiếp tục bình thường
-  - seat sai hall -> reject
-  - seat không tồn tại -> reject
-  - seat đã xóa mềm -> reject
-- Migration test với dữ liệu có `COUPLE`, `VIP`, `AISLE`.
-
-## 12.3 Regression test
-- Quyền manager/staff/customer trên endpoint liên quan.
-- Lock/unlock seat hiện tại không bị phá vỡ.
-- API hall/showtime hiện hữu không regression ngoài phạm vi seat-flow.
-
-## 13. Tiêu Chí Nghiệm Thu (Đo Được)
-
-## 13.1 KPI chức năng
-- 100% booking mới phải đi qua validate seat backend trước lock.
-- 0 trường hợp đặt thành công ghế không tồn tại trong hall của showtime.
-- 100% API seat contract test pass.
-
-## 13.2 KPI chất lượng rollout
-- Error rate sau cutover không tăng vượt ngưỡng đã thống nhất.
-- P95 latency của luồng create booking không tăng bất thường sau bật validation.
-- Migration report không có mismatch nghiêm trọng.
-
-## 14. Checklist Triển Khai Theo Phase
-
-## 14.1 Phase A - Foundation
-- Tạo module `seat-service` chuẩn parent pom.
-- Tạo entity/repository/service/controller + validation.
-- Add module vào root `pom.xml`.
-- Cấu hình `compose` + `envoy` route cho seat API.
-
-## 14.2 Phase B - Internal Contracts
-- Bổ sung proto gRPC trong `common-lib`.
-- Add RPC `GetShowtimeById` ở `showtime-service`.
-- Add gRPC client seat/showtime ở `booking-service`.
-
-## 14.3 Phase C - Migration
-- Viết script/job convert `layout_json -> seat`.
-- Chạy migration theo batch + log kết quả.
-- Đối soát dữ liệu theo checklist.
-
-## 14.4 Phase D - Cutover
-- Bật validate seat theo config.
-- Theo dõi metrics/log.
-- Kích hoạt rollback nếu vượt ngưỡng lỗi.
-
-## 15. Thuật Ngữ Chuẩn Dùng Xuyên Suốt
-- `seatCode`: mã ghế nghiệp vụ (uppercase).
-- `hallId`: định danh hall.
-- `showtimeId`: định danh suất chiếu.
-- `imagePath`: đường dẫn tương đối ảnh hall.
-
----
-
-Tài liệu này là nguồn RFC duy nhất cho migration seat-service. Sau khi duyệt xong, implementation sẽ đi theo checklist từng phase ở trên.
-
-## 16. Quyet Dinh Tam Thoi Ve Don Tai Lieu Legacy
-
-Trong giai doan hien tai, KHONG xoa cac file tai lieu sau:
-- `HALL_LAYOUT_JSON_SPEC.md`
-- `RAM_OPTIMIZATION_NOTES.md`
-
-Ly do:
-- Refactor seat-service va cutover booking chua hoan tat.
-- Can giu tai lieu legacy de doi chieu trong qua trinh migration.
-
-Dieu kien duoc phep xoa sau nay:
-1. Booking da chuyen han sang luong validate seat-service.
-2. Runtime khong con phu thuoc contract `layoutJson` cu.
-3. `README.md` va `TECHNICAL_AGENT_GUIDE.md` da duoc cap nhat dong bo theo kien truc moi.
+## 8. Checklist review tài liệu
+- Diagram mới khớp mô hình canonical seat-map.
+- Thuật ngữ thống nhất: `showtimeId`, `hallId`, `seatCode`, `hallImagePath`, `SeatState`, `CellType`.
+- FE có đủ contract và ví dụ payload để tự triển khai render + submit.

@@ -8,6 +8,7 @@ import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
+import com.cinema.showtime_service.dto.response.SeatMapResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -29,4 +30,6 @@ public interface ShowTimeService {
             PageRequest<ShowTimeField> request);
 
     ShowTimeResponse getShowTimeById(UUID id);
+
+    SeatMapResponse getSeatMapByShowtimeId(UUID showtimeId);
 }

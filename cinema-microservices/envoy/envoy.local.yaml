@@ -114,6 +114,16 @@ static_resources:
                             cluster: email-service
                             timeout: 30s
                         - match:
+                            path: /api/seats
+                          route:
+                            cluster: seat-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/seats/
+                          route:
+                            cluster: seat-service
+                            timeout: 30s
+                        - match:
                             path: /api/bookings
                           route:
                             cluster: booking-service
@@ -237,6 +247,20 @@ static_resources:
                     socket_address:
                       address: host.docker.internal
                       port_value: 8095
+    - name: seat-service
+      connect_timeout: 1s
+      type: LOGICAL_DNS
+      dns_lookup_family: ALL
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: seat-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: host.docker.internal
+                      port_value: 8099
 
 admin:
   access_log_path: /tmp/admin_access.log

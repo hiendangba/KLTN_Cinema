@@ -6,6 +6,7 @@ CREATE USER hall_user WITH PASSWORD 'hall_pass';
 CREATE USER cinema_user WITH PASSWORD 'cinema_pass';
 CREATE USER booking_user WITH PASSWORD 'booking_pass';
 CREATE USER payment_user WITH PASSWORD 'payment_pass';
+CREATE USER seat_user WITH PASSWORD 'seat_pass';
 
 CREATE DATABASE identity_db OWNER identity_user;
 CREATE DATABASE user_db OWNER user_user;
@@ -15,6 +16,7 @@ CREATE DATABASE hall_db OWNER hall_user;
 CREATE DATABASE cinema_db OWNER cinema_user;
 CREATE DATABASE booking_db OWNER booking_user;
 CREATE DATABASE payment_db OWNER payment_user;
+CREATE DATABASE seat_db OWNER seat_user;
 
 REVOKE ALL ON DATABASE identity_db FROM PUBLIC;
 REVOKE ALL ON DATABASE user_db FROM PUBLIC;
@@ -24,6 +26,7 @@ REVOKE ALL ON DATABASE hall_db FROM PUBLIC;
 REVOKE ALL ON DATABASE cinema_db FROM PUBLIC;
 REVOKE ALL ON DATABASE booking_db FROM PUBLIC;
 REVOKE ALL ON DATABASE payment_db FROM PUBLIC;
+REVOKE ALL ON DATABASE seat_db FROM PUBLIC;
 
 GRANT ALL PRIVILEGES ON DATABASE identity_db TO identity_user;
 GRANT ALL PRIVILEGES ON DATABASE user_db TO user_user;
@@ -33,3 +36,4 @@ GRANT ALL PRIVILEGES ON DATABASE hall_db TO hall_user;
 GRANT ALL PRIVILEGES ON DATABASE cinema_db TO cinema_user;
 GRANT ALL PRIVILEGES ON DATABASE booking_db TO booking_user;
 GRANT ALL PRIVILEGES ON DATABASE payment_db TO payment_user;
+GRANT ALL PRIVILEGES ON DATABASE seat_db TO seat_user;

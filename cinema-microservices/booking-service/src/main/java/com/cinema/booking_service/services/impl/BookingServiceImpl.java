@@ -11,6 +11,8 @@ import com.cinema.booking_service.enums.BookingStatus;
 import com.cinema.booking_service.enums.PaymentStatus;
 import com.cinema.booking_service.enums.ProductStatus;
 import com.cinema.booking_service.grpc.CinemaGrpcClient;
+import com.cinema.booking_service.grpc.SeatGrpcClient;
+import com.cinema.booking_service.grpc.ShowtimeGrpcClient;
 import com.cinema.booking_service.mapper.BookingMapper;
 import com.cinema.booking_service.mapper.BookingSeatItemMapper;
 import com.cinema.booking_service.repository.BookingRepository;
@@ -18,6 +20,7 @@ import com.cinema.booking_service.repository.BookingSeatItemRepository;
 import com.cinema.booking_service.repository.ProductRepository;
 import com.cinema.booking_service.services.BookingService;
 import com.cinema.booking_service.services.SeatLockService;
+import com.cinema.Enum.HallEnum;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
@@ -54,6 +57,8 @@ public class BookingServiceImpl implements BookingService {
     private final BookingMapper bookingMapper;
     private final BookingSeatItemMapper bookingSeatItemMapper;
     private final CinemaGrpcClient cinemaGrpcClient;
+    private final ShowtimeGrpcClient showtimeGrpcClient;
+    private final SeatGrpcClient seatGrpcClient;
     private final SeatLockService seatLockService;
 
     @Value("${booking.seat-lock-minutes:5}")
@@ -71,6 +76,12 @@ public class BookingServiceImpl implements BookingService {
         }
 
         List<String> normalizedSeatCodes = normalizeAndValidateSeatCodes(seatItems);
+        ShowtimeGrpcClient.ShowtimeSummary showtime = showtimeGrpcClient.getShowtimeById(request.getShowtimeId());
+        if (!showtime.getCinemaId().equals(request.getCinemaId())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        Map<String, HallEnum.SeatType> canonicalSeatTypeByCode =
+                validateAndResolveSeatTypes(showtime.getHallId(), seatItems, normalizedSeatCodes);
         if (bookingSeatItemRepository.existsLockedSeatCodes(
                 request.getShowtimeId(),
                 normalizedSeatCodes,
@@ -83,18 +94,26 @@ public class BookingServiceImpl implements BookingService {
             booking.setId(UuidCreator.getTimeOrderedEpoch());
         }
         booking.setUserId(userId);
+        booking.setCinemaId(showtime.getCinemaId());
         booking.setBookingStatus(BookingStatus.RESERVED);
         booking.setPaymentStatus(PaymentStatus.UNPAID);
         booking.setReservedUntil(LocalDateTime.now().plusMinutes(seatLockMinutes));
 
-        List<BookingSeatItem> persistedSeatItems = buildSeatItems(booking, seatItems, normalizedSeatCodes);
+        List<BookingSeatItem> persistedSeatItems = buildSeatItems(
+                booking,
+                seatItems,
+                normalizedSeatCodes,
+                canonicalSeatTypeByCode);
         booking.setSeatItems(persistedSeatItems);
         BigDecimal ticketSubtotal = persistedSeatItems.stream()
                 .map(BookingSeatItem::getSeatPriceSnapshot)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         booking.setTicketSubtotal(ticketSubtotal);
 
-        List<BookingProductItem> persistedProductItems = buildProductItems(booking, request.getProductItems(), request.getCinemaId());
+        List<BookingProductItem> persistedProductItems = buildProductItems(
+                booking,
+                request.getProductItems(),
+                showtime.getCinemaId());
         booking.setProductItems(persistedProductItems);
         BigDecimal productSubtotal = persistedProductItems.stream()
                 .map(BookingProductItem::getLineTotal)
@@ -223,13 +242,16 @@ public class BookingServiceImpl implements BookingService {
     private List<BookingSeatItem> buildSeatItems(
             Booking booking,
             List<CreateBookingRequest.SeatItem> seatItems,
-            List<String> normalizedSeatCodes) {
+            List<String> normalizedSeatCodes,
+            Map<String, HallEnum.SeatType> canonicalSeatTypeByCode) {
         List<BookingSeatItem> result = new ArrayList<>(seatItems.size());
         for (int i = 0; i < seatItems.size(); i++) {
             CreateBookingRequest.SeatItem seatItemRequest = seatItems.get(i);
             BookingSeatItem seatItem = bookingSeatItemMapper.toEntity(seatItemRequest);
             seatItem.setBooking(booking);
-            seatItem.setSeatCode(normalizedSeatCodes.get(i));
+            String seatCode = normalizedSeatCodes.get(i);
+            seatItem.setSeatCode(seatCode);
+            seatItem.setSeatType(canonicalSeatTypeByCode.get(seatCode));
             result.add(seatItem);
         }
         return result;
@@ -297,6 +319,29 @@ public class BookingServiceImpl implements BookingService {
 
     private String normalizeSeatCode(String seatCode) {
         return seatCode == null ? "" : seatCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private Map<String, HallEnum.SeatType> validateAndResolveSeatTypes(
+            UUID hallId,
+            List<CreateBookingRequest.SeatItem> seatItems,
+            List<String> normalizedSeatCodes) {
+        Map<String, HallEnum.SeatType> canonicalSeatTypeByCode =
+                seatGrpcClient.getSeatTypesByCodes(hallId, normalizedSeatCodes);
+        if (canonicalSeatTypeByCode.size() != normalizedSeatCodes.size()) {
+            throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
+        }
+
+        for (int i = 0; i < seatItems.size(); i++) {
+            String seatCode = normalizedSeatCodes.get(i);
+            HallEnum.SeatType canonicalType = canonicalSeatTypeByCode.get(seatCode);
+            if (canonicalType == null || canonicalType == HallEnum.SeatType.AISLE) {
+                throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
+            }
+            if (seatItems.get(i).getSeatType() != canonicalType) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST);
+            }
+        }
+        return canonicalSeatTypeByCode;
     }
 
     private boolean isTerminalStatus(BookingStatus status) {

@@ -8,6 +8,7 @@ option java_outer_classname = "BookingInternalProto";
 
 service BookingInternalService {
   rpc CheckShowtimeBooked(CheckShowtimeBookedRequest) returns (CheckShowtimeBookedReply);
+  rpc GetSeatRuntimeStates(GetSeatRuntimeStatesRequest) returns (GetSeatRuntimeStatesReply);
 }
 
 message CheckShowtimeBookedRequest {
@@ -19,4 +20,21 @@ message CheckShowtimeBookedReply {
   string error_key = 2;
   string message = 3;
   bool booked = 4;
+}
+
+message GetSeatRuntimeStatesRequest {
+  string showtime_id = 1;
+  repeated string seat_codes = 2;
+}
+
+message SeatRuntimeStatePayload {
+  string seat_code = 1;
+  string state = 2;
+}
+
+message GetSeatRuntimeStatesReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated SeatRuntimeStatePayload seat_states = 4;
 }

@@ -9,6 +9,7 @@ import com.cinema.dto.response.ResultResponse;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
+import com.cinema.showtime_service.dto.response.SeatMapResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import com.cinema.showtime_service.services.ShowTimeService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -80,6 +81,12 @@ public class ShowTimeController extends BaseController {
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<ShowTimeResponse>> getShowTimeById(@PathVariable UUID id) {
         ShowTimeResponse response = showTimeService.getShowTimeById(id);
+        return ok(response);
+    }
+
+    @GetMapping("/{id}/seat-map")
+    public ResponseEntity<APIResponse<SeatMapResponse>> getSeatMap(@PathVariable UUID id) {
+        SeatMapResponse response = showTimeService.getSeatMapByShowtimeId(id);
         return ok(response);
     }
 }
