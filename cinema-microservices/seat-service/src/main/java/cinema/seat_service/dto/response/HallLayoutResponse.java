@@ -10,13 +10,13 @@ import java.util.UUID;
 
 @Getter
 @Builder
-public class HallLayoutDefinitionResponse {
+public class HallLayoutResponse {
     private UUID hallId;
     private Integer totalRows;
     private Integer totalCols;
     private ScreenPosition screenPosition;
     @Builder.Default
-    private List<LayoutSeatResponse> seats = new ArrayList<>();
+    private List<HallLayoutSeatResponse> seats = new ArrayList<>();
     @Builder.Default
-    private List<LayoutCellResponse> cells = new ArrayList<>();
+    private List<HallLayoutCellResponse> cells = new ArrayList<>();
 }

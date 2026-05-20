@@ -8,6 +8,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface HallImageRepository extends JpaRepository<HallImage, UUID> {
+    List<HallImage> findAllByHall_Id(UUID hallId);
+
     List<HallImage> findAllByHall_IdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID hallId);
 
     boolean existsByHall_IdAndImagePathAndIsDeletedFalse(UUID hallId, String imagePath);

@@ -14,7 +14,7 @@ import java.util.List;
 
 @Getter
 @Setter
-public class PutHallLayoutDefinitionRequest {
+public class HallLayoutDefinitionRequest {
     @NotNull(message = "totalRows is required")
     @Positive(message = "totalRows must be greater than 0")
     private Integer totalRows;

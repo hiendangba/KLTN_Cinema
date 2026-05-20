@@ -1,9 +1,9 @@
 package cinema.seat_service.service.impl;
 
-import cinema.seat_service.dto.request.PutHallLayoutDefinitionRequest;
-import cinema.seat_service.dto.response.HallLayoutDefinitionResponse;
-import cinema.seat_service.dto.response.LayoutCellResponse;
-import cinema.seat_service.dto.response.LayoutSeatResponse;
+import cinema.seat_service.dto.request.HallLayoutDefinitionRequest;
+import cinema.seat_service.dto.response.HallLayoutCellResponse;
+import cinema.seat_service.dto.response.HallLayoutResponse;
+import cinema.seat_service.dto.response.HallLayoutSeatResponse;
 import cinema.seat_service.entity.HallLayoutCell;
 import cinema.seat_service.entity.HallLayoutProfile;
 import cinema.seat_service.entity.OutboxEvent;
@@ -43,7 +43,7 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
 
     @Override
     @Transactional
-    public ActionMessageResponse createHallLayoutDefinition(UUID hallId, PutHallLayoutDefinitionRequest request) {
+    public ActionMessageResponse createHallLayoutDefinition(UUID hallId, HallLayoutDefinitionRequest request) {
         if (hallLayoutProfileRepository.findByHallIdAndIsDeletedFalse(hallId).isPresent()) {
             throw new BusinessException(ErrorCode.HALL_LAYOUT_ALREADY_EXISTS);
         }
@@ -52,14 +52,14 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
 
     @Override
     @Transactional
-    public ActionMessageResponse replaceHallLayoutDefinition(UUID hallId, PutHallLayoutDefinitionRequest request) {
+    public ActionMessageResponse replaceHallLayoutDefinition(UUID hallId, HallLayoutDefinitionRequest request) {
         if (hallLayoutProfileRepository.findByHallIdAndIsDeletedFalse(hallId).isEmpty()) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         return upsertDefinition(hallId, request);
     }
 
-    private ActionMessageResponse upsertDefinition(UUID hallId, PutHallLayoutDefinitionRequest request) {
+    private ActionMessageResponse upsertDefinition(UUID hallId, HallLayoutDefinitionRequest request) {
         validateDefinition(request);
 
         HallLayoutProfile profile = hallLayoutProfileRepository.findById(hallId)
@@ -71,10 +71,10 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
         profile.setIsDeleted(false);
         hallLayoutProfileRepository.save(profile);
 
-        Map<String, PutHallLayoutDefinitionRequest.CellInput> requestedSeatByCode = new LinkedHashMap<>();
-        Map<String, PutHallLayoutDefinitionRequest.CellInput> requestedCellByCoord = new LinkedHashMap<>();
-        for (PutHallLayoutDefinitionRequest.CellInput input : request.getCells()) {
-            if (input.getType() == PutHallLayoutDefinitionRequest.CellInputType.SEAT) {
+        Map<String, HallLayoutDefinitionRequest.CellInput> requestedSeatByCode = new LinkedHashMap<>();
+        Map<String, HallLayoutDefinitionRequest.CellInput> requestedCellByCoord = new LinkedHashMap<>();
+        for (HallLayoutDefinitionRequest.CellInput input : request.getCells()) {
+            if (input.getType() == HallLayoutDefinitionRequest.CellInputType.SEAT) {
                 requestedSeatByCode.put(generateSeatCode(input.getRow(), input.getCol()), input);
                 continue;
             }
@@ -87,9 +87,9 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
             existingSeatByCode.put(normalizeSeatCode(existingSeat.getSeatCode()), existingSeat);
         }
         List<Seat> seatsToSave = new ArrayList<>();
-        for (Map.Entry<String, PutHallLayoutDefinitionRequest.CellInput> entry : requestedSeatByCode.entrySet()) {
+        for (Map.Entry<String, HallLayoutDefinitionRequest.CellInput> entry : requestedSeatByCode.entrySet()) {
             String seatCode = entry.getKey();
-            PutHallLayoutDefinitionRequest.CellInput input = entry.getValue();
+            HallLayoutDefinitionRequest.CellInput input = entry.getValue();
             Seat seat = existingSeatByCode.getOrDefault(seatCode, new Seat());
             seat.setHallId(hallId);
             seat.setSeatCode(seatCode);
@@ -115,13 +115,13 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
             existingCellByCoord.put(toCoordKey(existingCell.getRow(), existingCell.getCol()), existingCell);
         }
         List<HallLayoutCell> cellsToSave = new ArrayList<>();
-        for (Map.Entry<String, PutHallLayoutDefinitionRequest.CellInput> entry : requestedCellByCoord.entrySet()) {
-            PutHallLayoutDefinitionRequest.CellInput input = entry.getValue();
+        for (Map.Entry<String, HallLayoutDefinitionRequest.CellInput> entry : requestedCellByCoord.entrySet()) {
+            HallLayoutDefinitionRequest.CellInput input = entry.getValue();
             HallLayoutCell cell = existingCellByCoord.getOrDefault(entry.getKey(), new HallLayoutCell());
             cell.setHallId(hallId);
             cell.setRow(input.getRow());
             cell.setCol(input.getCol());
-            cell.setCellType(input.getType() == PutHallLayoutDefinitionRequest.CellInputType.AISLE
+            cell.setCellType(input.getType() == HallLayoutDefinitionRequest.CellInputType.AISLE
                     ? LayoutCellType.AISLE : LayoutCellType.BLOCKED);
             cell.setIsDeleted(false);
             cellsToSave.add(cell);
@@ -156,13 +156,13 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
 
     @Override
     @Transactional(readOnly = true)
-    public HallLayoutDefinitionResponse getHallLayoutDefinition(UUID hallId) {
+    public HallLayoutResponse getHallLayoutDefinition(UUID hallId) {
         HallLayoutProfile profile = hallLayoutProfileRepository.findByHallIdAndIsDeletedFalse(hallId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
 
-        List<LayoutSeatResponse> seats = seatRepository.findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(hallId)
+        List<HallLayoutSeatResponse> seats = seatRepository.findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(hallId)
                 .stream()
-                .map(seat -> LayoutSeatResponse.builder()
+                .map(seat -> HallLayoutSeatResponse.builder()
                         .id(seat.getId())
                         .seatCode(seat.getSeatCode())
                         .row(seat.getRow())
@@ -171,9 +171,9 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
                         .build())
                 .toList();
 
-        List<LayoutCellResponse> cells = hallLayoutCellRepository.findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(hallId)
+        List<HallLayoutCellResponse> cells = hallLayoutCellRepository.findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(hallId)
                 .stream()
-                .map(cell -> LayoutCellResponse.builder()
+                .map(cell -> HallLayoutCellResponse.builder()
                         .id(cell.getId())
                         .row(cell.getRow())
                         .col(cell.getCol())
@@ -181,7 +181,7 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
                         .build())
                 .toList();
 
-        return HallLayoutDefinitionResponse.builder()
+        return HallLayoutResponse.builder()
                 .hallId(hallId)
                 .totalRows(profile.getTotalRows())
                 .totalCols(profile.getTotalCols())
@@ -204,7 +204,7 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
         return seatRepository.findAllByHallIdAndSeatCodeInAndIsDeletedFalse(hallId, normalized);
     }
 
-    private void validateDefinition(PutHallLayoutDefinitionRequest request) {
+    private void validateDefinition(HallLayoutDefinitionRequest request) {
         if (request.getTotalRows() == null || request.getTotalRows() <= 0
                 || request.getTotalCols() == null || request.getTotalCols() <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
@@ -214,7 +214,7 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
         }
 
         Set<String> occupied = new HashSet<>();
-        for (PutHallLayoutDefinitionRequest.CellInput cell : request.getCells()) {
+        for (HallLayoutDefinitionRequest.CellInput cell : request.getCells()) {
             if (cell.getRow() == null || cell.getRow() <= 0
                     || cell.getCol() == null || cell.getCol() <= 0
                     || cell.getRow() > request.getTotalRows()
@@ -226,7 +226,7 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
                 throw new BusinessException(ErrorCode.INVALID_INPUT);
             }
 
-            if (cell.getType() == PutHallLayoutDefinitionRequest.CellInputType.SEAT) {
+            if (cell.getType() == HallLayoutDefinitionRequest.CellInputType.SEAT) {
                 if (cell.getSeatType() == null) {
                     throw new BusinessException(ErrorCode.INVALID_INPUT);
                 }

@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @Getter
 @Builder
-public class LayoutSeatResponse {
+public class HallLayoutSeatResponse {
     private UUID id;
     private String seatCode;
     private Integer row;

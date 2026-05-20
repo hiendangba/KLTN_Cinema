@@ -920,3 +920,68 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 ---
 
 Cập nhật kỹ thuật gần nhất: 13/05/2026.
+
+### 2026-05-20 Hall API Simplification (ADR)
+- Status: Accepted
+- Skills used: architecture-decision-records, api-design-principles
+
+#### Context
+- FE su dung 1 man hinh duy nhat de tao/sua hall.
+- FE gui full payload moi lan submit (name, status, layoutDefinition).
+- Kien truc moi da tach seat canonical sang seat-service (gRPC internal).
+
+#### Options considered
+1. Giu 3 DTO + 3 endpoint rieng (`HallCreateRequest`, `UpdateHallRequest`, `UpdateHallStatusRequest`)
+- Pros: endpoint chuyen biet, de phan quyen chi tiet.
+- Cons: FE phai ghep nhieu flow, de goi nham endpoint, contract phuc tap.
+
+2. Gop 1 DTO chung cho create/update, bo patch status rieng
+- Pros: FE don gian, contract gon, dung voi UX 1 form.
+- Cons: can bao ve nghiep vu khi update layout trong luc dang co booking.
+
+#### Decision
+- Chon Option 2.
+- Tao DTO chung `HallUpsertRequest` cho ca `POST /api/halls` va `PUT /api/halls/{id}`.
+- Bo endpoint `PATCH /api/halls/{id}` cap nhat status rieng.
+- Bo cac DTO cu: `HallCreateRequest`, `UpdateHallRequest`, `UpdateHallStatusRequest`.
+- `createHall` va `updateHall` deu xu ly layoutDefinition thong qua `seat-service` (gRPC).
+
+#### Consequences
+- Positive:
+  - FE chi con 1 contract de tao/sua hall.
+  - Backend de maintain hon, it duplicate DTO.
+  - Van giu duoc rule an toan: chan sua layout neu hall dang co booking active.
+- Trade-off:
+  - Mat endpoint status-rieng; moi thay doi status di qua full form submit.
+
+#### Safety notes
+- `PUT /api/halls/{id}` van check `HALL_LAYOUT_IN_USE` truoc khi replace layout.
+- Neu seat-layout chua ton tai, backend fallback create layout trong update flow.
+
+### 2026-05-20 Hall Form Contract Refinement (ADR)
+- Status: Accepted (Supersedes `2026-05-20 Hall API Simplification (ADR)` phien ban truoc)
+- Skills used: architecture-decision-records, api-design-principles
+
+#### Context
+- FE van dung 1 giao dien tao/sua hall, gui full payload.
+- Team muon ten DTO ro nghia nghiep vu (`Create`/`Update`) thay vi `Upsert`.
+- Hall co nhieu anh, can gui danh sach anh trong cung request hall thay vi API them tung anh.
+
+#### Decision
+- Tach lai DTO:
+  - `HallCreateRequest`
+  - `UpdateHallRequest`
+- Ca 2 DTO deu gom:
+  - `name`, `status`, `layoutDefinition`, `imagePaths: List<String>`
+- Bo endpoint add image rieng `POST /api/halls/{id}/images`.
+- Dong bo anh theo full payload trong create/update:
+  - Anh co trong request: tao moi/khai phuc neu da soft-delete.
+  - Anh khong con trong request: soft-delete.
+
+#### Consequences
+- Positive:
+  - Ten request ro nghia va quen thuoc cho team.
+  - FE van chi can 1 form, 1 lan submit la cap nhat ca hall + layout + images.
+  - Khong can quan ly API them anh rieng.
+- Trade-off:
+  - Update la full-replace image list, FE phai gui day du danh sach anh hien tai.

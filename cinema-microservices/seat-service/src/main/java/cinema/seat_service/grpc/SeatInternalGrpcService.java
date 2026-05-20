@@ -1,7 +1,7 @@
 package cinema.seat_service.grpc;
 
-import cinema.seat_service.dto.request.PutHallLayoutDefinitionRequest;
-import cinema.seat_service.dto.response.HallLayoutDefinitionResponse;
+import cinema.seat_service.dto.request.HallLayoutDefinitionRequest;
+import cinema.seat_service.dto.response.HallLayoutResponse;
 import cinema.seat_service.enums.ScreenPosition;
 import cinema.seat_service.enums.SeatType;
 import cinema.seat_service.service.SeatLayoutService;
@@ -50,7 +50,7 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
         }
 
         try {
-            HallLayoutDefinitionResponse layout = seatLayoutService.getHallLayoutDefinition(hallId);
+            HallLayoutResponse layout = seatLayoutService.getHallLayoutDefinition(hallId);
             GetLayoutByHallIdReply.Builder builder = GetLayoutByHallIdReply.newBuilder()
                     .setSuccess(true)
                     .setMessage("Layout fetched successfully")
@@ -154,7 +154,7 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
                                        StreamObserver<CreateLayoutDefinitionReply> responseObserver) {
         try {
             UUID hallId = UUID.fromString(request.getHallId());
-            PutHallLayoutDefinitionRequest payload = toPutRequest(
+            HallLayoutDefinitionRequest payload = toLayoutDefinitionRequest(
                     request.getTotalRows(),
                     request.getTotalCols(),
                     request.getScreenPosition(),
@@ -195,7 +195,7 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
                                         StreamObserver<ReplaceLayoutDefinitionReply> responseObserver) {
         try {
             UUID hallId = UUID.fromString(request.getHallId());
-            PutHallLayoutDefinitionRequest payload = toPutRequest(
+            HallLayoutDefinitionRequest payload = toLayoutDefinitionRequest(
                     request.getTotalRows(),
                     request.getTotalCols(),
                     request.getScreenPosition(),
@@ -231,22 +231,22 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
         }
     }
 
-    private PutHallLayoutDefinitionRequest toPutRequest(
+    private HallLayoutDefinitionRequest toLayoutDefinitionRequest(
             int totalRows,
             int totalCols,
             String screenPosition,
             java.util.List<com.cinema.grpc.seat.LayoutDefinitionCellInput> cells) {
-        PutHallLayoutDefinitionRequest request = new PutHallLayoutDefinitionRequest();
+        HallLayoutDefinitionRequest request = new HallLayoutDefinitionRequest();
         request.setTotalRows(totalRows);
         request.setTotalCols(totalCols);
         request.setScreenPosition(ScreenPosition.valueOf(screenPosition.trim().toUpperCase()));
 
-        java.util.List<PutHallLayoutDefinitionRequest.CellInput> convertedCells = new java.util.ArrayList<>();
+        java.util.List<HallLayoutDefinitionRequest.CellInput> convertedCells = new java.util.ArrayList<>();
         for (com.cinema.grpc.seat.LayoutDefinitionCellInput cell : cells) {
-            PutHallLayoutDefinitionRequest.CellInput converted = new PutHallLayoutDefinitionRequest.CellInput();
+            HallLayoutDefinitionRequest.CellInput converted = new HallLayoutDefinitionRequest.CellInput();
             converted.setRow(cell.getRow());
             converted.setCol(cell.getCol());
-            converted.setType(PutHallLayoutDefinitionRequest.CellInputType.valueOf(cell.getType().trim().toUpperCase()));
+            converted.setType(HallLayoutDefinitionRequest.CellInputType.valueOf(cell.getType().trim().toUpperCase()));
             if (cell.getSeatType() != null && !cell.getSeatType().isBlank()) {
                 converted.setSeatType(SeatType.valueOf(cell.getSeatType().trim().toUpperCase()));
             }

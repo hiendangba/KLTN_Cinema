@@ -3,7 +3,7 @@ package com.cinema.hall_service.dto.request;
 import com.cinema.Enum.HallEnum;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,9 +23,14 @@ public class HallCreateRequest {
     @NotBlank(message = "Hall name is required")
     String name;
 
-    @Valid
-    @NotEmpty(message = "Seats must not be empty")
-    List<SeatUpsertRequest> seats = new ArrayList<>();
-
+    @NotNull(message = "status is required")
     HallEnum.HallStatus status;
+
+    @Valid
+    @NotNull(message = "layoutDefinition is required")
+    HallLayoutDefinitionRequest layoutDefinition;
+
+    @NotNull(message = "imagePaths is required")
+    @Builder.Default
+    List<String> imagePaths = new ArrayList<>();
 }

@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @Getter
 @Builder
-public class LayoutCellResponse {
+public class HallLayoutCellResponse {
     private UUID id;
     private Integer row;
     private Integer col;
