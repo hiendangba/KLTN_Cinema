@@ -13,6 +13,11 @@ function Build-And-Push {
         [string]$DockerfilePath
     )
 
+    if (-not (Test-Path $DockerfilePath)) {
+        Write-Warning "Skip ${ServiceName}: Dockerfile not found at $DockerfilePath"
+        return
+    }
+
     $image = "$ImageRepo/$ServiceName`:$Tag"
     Write-Host ">>> Building $image"
     docker build -t $image -f $DockerfilePath .
@@ -25,7 +30,11 @@ Build-And-Push -ServiceName "user-service" -DockerfilePath "./user-service/Docke
 Build-And-Push -ServiceName "film-service" -DockerfilePath "./film-service/Dockerfile"
 Build-And-Push -ServiceName "showtime-service" -DockerfilePath "./showtime-service/Dockerfile"
 Build-And-Push -ServiceName "hall-services" -DockerfilePath "./hall-service/Dockerfile"
+Build-And-Push -ServiceName "cinema-service" -DockerfilePath "./cinema-service/Dockerfile"
+Build-And-Push -ServiceName "seat-service" -DockerfilePath "./seat-service/Dockerfile"
 Build-And-Push -ServiceName "email-service" -DockerfilePath "./email-service/Dockerfile"
+Build-And-Push -ServiceName "booking-service" -DockerfilePath "./booking-service/Dockerfile"
+Build-And-Push -ServiceName "payment-service" -DockerfilePath "./payment-service/Dockerfile"
 
 Write-Host "Done."
 Write-Host "Set these vars on server before deploy:"
