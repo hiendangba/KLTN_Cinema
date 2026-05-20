@@ -1,6 +1,6 @@
 package com.cinema.hall_service.mapper;
 
-import com.cinema.hall_service.dto.request.HallCreateRequest;
+import com.cinema.hall_service.dto.request.CreateHallRequest;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
 import com.cinema.hall_service.dto.response.HallResponse;
 import com.cinema.hall_service.entity.Hall;
@@ -16,7 +16,7 @@ public interface HallMapper {
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
     @Mapping(target = "timeUpdated", ignore = true)
-    Hall toEntity(HallCreateRequest request);
+    Hall toEntity(CreateHallRequest request);
 
     @Mapping(target = "seats", ignore = true)
     @Mapping(target = "images", ignore = true)

@@ -19,7 +19,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class HallCreateRequest {
+public class CreateHallRequest {
     @NotBlank(message = "Hall name is required")
     String name;
 

@@ -5,7 +5,7 @@ import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
-import com.cinema.hall_service.dto.request.HallCreateRequest;
+import com.cinema.hall_service.dto.request.CreateHallRequest;
 import com.cinema.hall_service.dto.request.HallField;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
 import com.cinema.hall_service.dto.response.HallResponse;
@@ -35,7 +35,7 @@ public class HallController extends BaseController {
 
     @PostMapping
     public ResponseEntity<APIResponse<ActionMessageResponse>> createHall(
-            @Valid @RequestBody HallCreateRequest request,
+            @Valid @RequestBody CreateHallRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = hallService.createHall(request, httpRequest);
         return created(response);

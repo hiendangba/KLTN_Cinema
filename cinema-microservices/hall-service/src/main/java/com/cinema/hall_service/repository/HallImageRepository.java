@@ -14,5 +14,7 @@ public interface HallImageRepository extends JpaRepository<HallImage, UUID> {
 
     boolean existsByHall_IdAndImagePathAndIsDeletedFalse(UUID hallId, String imagePath);
 
+    boolean existsByImagePathAndHall_IdNot(String imagePath, UUID hallId);
+
     Optional<HallImage> findByIdAndHall_IdAndIsDeletedFalse(UUID imageId, UUID hallId);
 }

@@ -30,12 +30,14 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInternalServiceImplBase {
+public class SeatInternalGrpcService extends
+        SeatInternalServiceGrpc.SeatInternalServiceImplBase {
 
     private final SeatLayoutService seatLayoutService;
 
     @Override
-    public void getLayoutByHallId(GetLayoutByHallIdRequest request, StreamObserver<GetLayoutByHallIdReply> responseObserver) {
+    public void getLayoutByHallId(GetLayoutByHallIdRequest request,
+            StreamObserver<GetLayoutByHallIdReply> responseObserver) {
         UUID hallId;
         try {
             hallId = UUID.fromString(request.getHallId());
@@ -99,7 +101,8 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
     }
 
     @Override
-    public void getSeatsByCodes(GetSeatsByCodesRequest request, StreamObserver<GetSeatsByCodesReply> responseObserver) {
+    public void getSeatsByCodes(GetSeatsByCodesRequest request,
+            StreamObserver<GetSeatsByCodesReply> responseObserver) {
         UUID hallId;
         try {
             hallId = UUID.fromString(request.getHallId());
@@ -118,16 +121,17 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
                     .setSuccess(true)
                     .setMessage("Seats fetched successfully");
 
-            seatLayoutService.getSeatsByCodes(hallId, request.getSeatCodesList()).forEach(seat -> builder.addSeats(
-                    LayoutSeatPayload.newBuilder()
-                            .setId(seat.getId().toString())
-                            .setHallId(seat.getHallId().toString())
-                            .setSeatCode(seat.getSeatCode())
-                            .setRow(seat.getRow())
-                            .setCol(seat.getCol())
-                            .setSeatType(seat.getSeatType().name())
-                            .build()
-            ));
+            seatLayoutService.getSeatsByCodes(hallId,
+                    request.getSeatCodesList()).forEach(
+                            seat -> builder.addSeats(
+                                    LayoutSeatPayload.newBuilder()
+                                            .setId(seat.getId().toString())
+                                            .setHallId(seat.getHallId().toString())
+                                            .setSeatCode(seat.getSeatCode())
+                                            .setRow(seat.getRow())
+                                            .setCol(seat.getCol())
+                                            .setSeatType(seat.getSeatType().name())
+                                            .build()));
 
             responseObserver.onNext(builder.build());
             responseObserver.onCompleted();
@@ -151,7 +155,7 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
 
     @Override
     public void createLayoutDefinition(CreateLayoutDefinitionRequest request,
-                                       StreamObserver<CreateLayoutDefinitionReply> responseObserver) {
+            StreamObserver<CreateLayoutDefinitionReply> responseObserver) {
         try {
             UUID hallId = UUID.fromString(request.getHallId());
             HallLayoutDefinitionRequest payload = toLayoutDefinitionRequest(
@@ -192,7 +196,7 @@ public class SeatInternalGrpcService extends SeatInternalServiceGrpc.SeatInterna
 
     @Override
     public void replaceLayoutDefinition(ReplaceLayoutDefinitionRequest request,
-                                        StreamObserver<ReplaceLayoutDefinitionReply> responseObserver) {
+            StreamObserver<ReplaceLayoutDefinitionReply> responseObserver) {
         try {
             UUID hallId = UUID.fromString(request.getHallId());
             HallLayoutDefinitionRequest payload = toLayoutDefinitionRequest(

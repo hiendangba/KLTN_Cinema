@@ -9,7 +9,7 @@ import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.hall_service.config.RedisConfig;
-import com.cinema.hall_service.dto.request.HallCreateRequest;
+import com.cinema.hall_service.dto.request.CreateHallRequest;
 import com.cinema.hall_service.dto.request.HallField;
 import com.cinema.hall_service.dto.request.UpdateHallRequest;
 import com.cinema.hall_service.dto.response.CinemaResponse;
@@ -65,7 +65,7 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional
-    public ActionMessageResponse createHall(HallCreateRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse createHall(CreateHallRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         UUID cinemaId = resolveCinemaIdByUser(httpRequest);
         if (hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(cinemaId, request.getName())) {
@@ -76,8 +76,12 @@ public class HallServiceImpl implements HallService {
         hall.setCinemaId(cinemaId);
         hall.setStatus(request.getStatus() == null ? HallEnum.HallStatus.ACTIVE : request.getStatus());
         hallRepository.save(hall);
+        reconcileHallImages(hall, request.getImagePaths());
+
+        // Vẫn cần Saga để đảm bảo consistency giữa Hall và LayoutDefinition,
+        // nhưng tạm thời cứ tạo LayoutDefinition trước để tránh lỗi khi gọi
+        // Seat Service trong quá trình tạo Hall
         seatGrpcClient.createLayoutDefinition(hall.getId(), request.getLayoutDefinition());
-        syncHallImages(hall, request.getImagePaths());
 
         return ActionMessageResponse.builder()
                 .message("Hall created successfully")
@@ -155,7 +159,7 @@ public class HallServiceImpl implements HallService {
                 throw ex;
             }
         }
-        syncHallImages(hall, request.getImagePaths());
+        reconcileHallImages(hall, request.getImagePaths());
         return ActionMessageResponse.builder()
                 .message("Hall updated successfully")
                 .build();
@@ -195,27 +199,61 @@ public class HallServiceImpl implements HallService {
                 .stream()
                 .map(hallImageMapper::toResponse)
                 .toList());
-        response.setCinemaResponse(cinemaResponseCache.computeIfAbsent(hall.getCinemaId(), this::resolveCinemaResponse));
+        response.setCinemaResponse(
+                cinemaResponseCache.computeIfAbsent(hall.getCinemaId(), this::resolveCinemaResponse));
         return response;
     }
 
-    private void syncHallImages(Hall hall, List<String> rawImagePaths) {
+    private void reconcileHallImages(Hall hall, List<String> rawImagePaths) {
         List<String> imagePaths = rawImagePaths == null ? List.of() : rawImagePaths;
+        Set<String> normalizedRequested = normalizeAndValidateRequestedImagePaths(imagePaths);
+        List<HallImage> existingImages = hallImageRepository.findAllByHall_Id(hall.getId());
+        Map<String, HallImage> existingByPath = indexHallImagesByPath(existingImages);
+        validateNoDuplicateWithOtherHall(normalizedRequested, existingByPath, hall.getId());
+        List<HallImage> imagesToSave = new ArrayList<>();
+        collectImagesToUpsert(hall, normalizedRequested, existingByPath, imagesToSave);
+        collectImagesToSoftDelete(normalizedRequested, existingImages, imagesToSave);
+        if (!imagesToSave.isEmpty()) {
+            hallImageRepository.saveAll(imagesToSave);
+        }
+    }
+
+    private Set<String> normalizeAndValidateRequestedImagePaths(List<String> imagePaths) {
         Set<String> normalizedRequested = new LinkedHashSet<>();
         for (String rawPath : imagePaths) {
             String normalized = normalizeAndValidateImagePath(rawPath);
             if (!normalizedRequested.add(normalized)) {
-                throw new BusinessException(ErrorCode.INVALID_INPUT);
+                throw new BusinessException(ErrorCode.HALL_IMAGE_URL_ALREADY_EXISTS);
             }
         }
+        return normalizedRequested;
+    }
 
-        List<HallImage> existingImages = hallImageRepository.findAllByHall_Id(hall.getId());
+    private Map<String, HallImage> indexHallImagesByPath(List<HallImage> existingImages) {
         Map<String, HallImage> existingByPath = new HashMap<>();
         for (HallImage image : existingImages) {
             existingByPath.put(image.getImagePath(), image);
         }
+        return existingByPath;
+    }
 
-        List<HallImage> imagesToSave = new ArrayList<>();
+    private void validateNoDuplicateWithOtherHall(
+            Set<String> normalizedRequested,
+            Map<String, HallImage> existingByPath,
+            UUID hallId) {
+        for (String path : normalizedRequested) {
+            if (!existingByPath.containsKey(path)
+                    && hallImageRepository.existsByImagePathAndHall_IdNot(path, hallId)) {
+                throw new BusinessException(ErrorCode.HALL_IMAGE_URL_ALREADY_EXISTS);
+            }
+        }
+    }
+
+    private void collectImagesToUpsert(
+            Hall hall,
+            Set<String> normalizedRequested,
+            Map<String, HallImage> existingByPath,
+            List<HallImage> imagesToSave) {
         for (String path : normalizedRequested) {
             HallImage image = existingByPath.get(path);
             if (image == null) {
@@ -231,16 +269,18 @@ public class HallServiceImpl implements HallService {
                 imagesToSave.add(image);
             }
         }
+    }
 
+    private void collectImagesToSoftDelete(
+            Set<String> normalizedRequested,
+            List<HallImage> existingImages,
+            List<HallImage> imagesToSave) {
         for (HallImage existing : existingImages) {
-            if (!normalizedRequested.contains(existing.getImagePath()) && !Boolean.TRUE.equals(existing.getIsDeleted())) {
+            if (!normalizedRequested.contains(existing.getImagePath())
+                    && !Boolean.TRUE.equals(existing.getIsDeleted())) {
                 existing.setIsDeleted(true);
                 imagesToSave.add(existing);
             }
-        }
-
-        if (!imagesToSave.isEmpty()) {
-            hallImageRepository.saveAll(imagesToSave);
         }
     }
 
