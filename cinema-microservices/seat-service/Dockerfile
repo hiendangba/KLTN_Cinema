@@ -1,17 +1,12 @@
-FROM maven:3.9.11-eclipse-temurin-17 AS builder
+# syntax=docker/dockerfile:1.7
+FROM maven:3.9.6-eclipse-temurin-17 AS builder
 WORKDIR /app
 
-COPY pom.xml .
-COPY common-lib ./common-lib
-COPY seat-service ./seat-service
-
+COPY . /app
 RUN --mount=type=cache,target=/root/.m2 mvn -DskipTests -pl seat-service -am package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17
 WORKDIR /app
-
+ENV JAVA_OPTS="-Xms96m -Xmx192m"
 COPY --from=builder /app/seat-service/target/*.jar app.jar
-
-EXPOSE 8099 9199
-
-ENTRYPOINT ["java","-jar","app.jar"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
