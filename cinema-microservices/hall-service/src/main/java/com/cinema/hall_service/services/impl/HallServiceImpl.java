@@ -33,10 +33,14 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -62,12 +66,14 @@ public class HallServiceImpl implements HallService {
     ShowtimeGrpcClient showtimeGrpcClient;
     BookingGrpcClient bookingGrpcClient;
     SeatGrpcClient seatGrpcClient;
+    CacheManager cacheManager;
 
     @Override
     @Transactional
     public ActionMessageResponse createHall(CreateHallRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        validateCinemaOwnership(httpRequest, request.getCinemaId());
+        UUID cinemaId = request.getCinemaId();
         if (hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(cinemaId, request.getName())) {
             throw new BusinessException(ErrorCode.HALL_NAME_EXISTED);
         }
@@ -90,19 +96,44 @@ public class HallServiceImpl implements HallService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = RedisConfig.CACHE_HALLS, key = "#id")
     public HallResponse getHallById(UUID id) {
-        return toHallResponse(getActiveHallOrThrow(id), new HashMap<>());
+        Hall hall = getActiveHallOrThrow(id);
+        authorizeHallReadAccess(hall);
+
+        Cache cache = cacheManager.getCache(RedisConfig.CACHE_HALLS);
+        if (cache == null) {
+            return toHallResponse(hall, new HashMap<>());
+        }
+
+        HallResponse cached = cache.get(id, HallResponse.class);
+        if (cached != null) {
+            return cached;
+        }
+
+        HallResponse response = toHallResponse(hall, new HashMap<>());
+        cache.put(id, response);
+        return response;
     }
 
     @Override
     @Transactional(readOnly = true)
     public PageResponse<HallResponse> searchHalls(PageRequest<HallField> request) {
-        String keyword = request.getNormalizedKeyword();
-        int page = request.getPageOrDefault();
-        int size = request.getSizeOrDefault();
+        HttpServletRequest currentRequest = getCurrentHttpRequest();
+        if (currentRequest != null) {
+            RequestAuthUtils.requireAnyRole(currentRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+        }
 
-        List<SortField<HallField>> sortFields = request.getSortBy();
+        PageRequest<HallField> scopedRequest = scopeHallSearchRequest(request, currentRequest);
+
+        if (scopedRequest == null) {
+            return emptyHallPageResponse(request);
+        }
+
+        String keyword = scopedRequest.getNormalizedKeyword();
+        int page = scopedRequest.getPageOrDefault();
+        int size = scopedRequest.getSizeOrDefault();
+
+        List<SortField<HallField>> sortFields = scopedRequest.getSortBy();
         sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
         boolean hasIdSort = sortFields.stream()
                 .anyMatch(sort -> sort != null && sort.getField() == HallField.ID);
@@ -110,7 +141,7 @@ public class HallServiceImpl implements HallService {
             sortFields.add(new SortField<>(HallField.ID, "ASC"));
         }
 
-        List<FilterField<HallField>> filterFields = request.getFilterBy();
+        List<FilterField<HallField>> filterFields = scopedRequest.getFilterBy();
         long totalElements = hallRepositoryImpl.countWithFilter(keyword, filterFields);
         List<Hall> halls = hallRepositoryImpl.searchWithPageAndSortAndFilter(
                 keyword, page, size, sortFields, filterFields);
@@ -137,8 +168,8 @@ public class HallServiceImpl implements HallService {
     @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        Hall hall = getManagedHallOrThrow(hallId, cinemaId);
+        validateCinemaOwnership(httpRequest, request.getCinemaId());
+        Hall hall = getActiveHallOrThrow(hallId);
 
         if (hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIdNotAndIsDeletedFalse(
                 hall.getCinemaId(), request.getName(), hallId)) {
@@ -170,8 +201,8 @@ public class HallServiceImpl implements HallService {
     @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse deleteHall(UUID hallId, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        Hall hall = getManagedHallOrThrow(hallId, cinemaId);
+        Hall hall = getActiveHallOrThrow(hallId);
+        validateCinemaOwnership(httpRequest, hall.getCinemaId());
         hall.setIsDeleted(true);
         hallRepository.save(hall);
         return ActionMessageResponse.builder()
@@ -182,14 +213,6 @@ public class HallServiceImpl implements HallService {
     private Hall getActiveHallOrThrow(UUID hallId) {
         return hallRepository.findByIdAndIsDeletedFalse(hallId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.HALL_NOT_FOUND));
-    }
-
-    private Hall getManagedHallOrThrow(UUID hallId, UUID cinemaId) {
-        Hall hall = getActiveHallOrThrow(hallId);
-        if (!cinemaId.equals(hall.getCinemaId())) {
-            throw new BusinessException(ErrorCode.HALL_NOT_IN_CINEMA);
-        }
-        return hall;
     }
 
     private HallResponse toHallResponse(Hall hall, Map<UUID, CinemaResponse> cinemaResponseCache) {
@@ -327,10 +350,19 @@ public class HallServiceImpl implements HallService {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
     }
 
-    private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
+    private void validateCinemaOwnership(HttpServletRequest httpRequest, UUID cinemaId) {
+        if (cinemaId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
         try {
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
-            return cinemaGrpcClient.getCinemaIdByUserId(userId);
+            List<UUID> managedCinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId);
+            if (managedCinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            if (!managedCinemaIds.contains(cinemaId)) {
+                throw new BusinessException(ErrorCode.HALL_NOT_IN_CINEMA);
+            }
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.CINEMA_NOT_FOUND
                     || ex.getErrorCode() == ErrorCode.NOT_FOUND
@@ -339,5 +371,90 @@ public class HallServiceImpl implements HallService {
             }
             throw ex;
         }
+    }
+
+    private PageRequest<HallField> scopeHallSearchRequest(PageRequest<HallField> request, HttpServletRequest currentRequest) {
+        if (currentRequest == null) {
+            return request;
+        }
+
+        String role = RequestAuthUtils.requireRoleHeader(currentRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return request;
+        }
+        if (!HeaderNames.ROLE_MANAGER.equals(role) && !HeaderNames.ROLE_STAFF.equals(role)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        UUID userId = RequestAuthUtils.requireUserId(currentRequest);
+        List<UUID> managedCinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
+        if (managedCinemaIds.isEmpty()) {
+            return null;
+        }
+
+        List<FilterField<HallField>> filterFields = request.getFilterBy() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(request.getFilterBy());
+        filterFields.add(FilterField.<HallField>builder()
+                .field(HallField.CINEMA_ID)
+                .operator("IN")
+                .value(managedCinemaIds)
+                .build());
+
+        return PageRequest.<HallField>builder()
+                .page(request.getPage())
+                .size(request.getSize())
+                .keyword(request.getKeyword())
+                .sortBy(request.getSortBy() == null ? null : new ArrayList<>(request.getSortBy()))
+                .filterBy(filterFields)
+                .build();
+    }
+
+    private PageResponse<HallResponse> emptyHallPageResponse(PageRequest<HallField> request) {
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        return PageResponse.<HallResponse>builder()
+                .data(List.of())
+                .currentPage(page)
+                .totalPages(0)
+                .totalElements(0L)
+                .size(size)
+                .hasNext(false)
+                .hasPrevious(false)
+                .build();
+    }
+
+    private void authorizeHallReadAccess(Hall hall) {
+        HttpServletRequest currentRequest = getCurrentHttpRequest();
+        if (currentRequest == null) {
+            return;
+        }
+
+        String role = RequestAuthUtils.requireRoleHeader(currentRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return;
+        }
+        if (!HeaderNames.ROLE_MANAGER.equals(role) && !HeaderNames.ROLE_STAFF.equals(role)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        UUID userId = RequestAuthUtils.requireUserId(currentRequest);
+        List<UUID> managedCinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
+        if (managedCinemaIds.isEmpty()) {
+            throw new BusinessException(HeaderNames.ROLE_STAFF.equals(role)
+                    ? ErrorCode.FORBIDDEN
+                    : ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+        }
+        if (!managedCinemaIds.contains(hall.getCinemaId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private HttpServletRequest getCurrentHttpRequest() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servletRequestAttributes) {
+            return servletRequestAttributes.getRequest();
+        }
+        return null;
     }
 }

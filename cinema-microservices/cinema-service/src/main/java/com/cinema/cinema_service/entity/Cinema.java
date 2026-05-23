@@ -59,7 +59,7 @@ public class Cinema {
     @Column(nullable = false, length = 20)
     private CinemaStatus status;
 
-    @Column(name = "manager_id", columnDefinition = "uuid", unique = true)
+    @Column(name = "manager_id", columnDefinition = "uuid")
     private UUID managerId;
 
     @Column(name = "is_deleted", nullable = false)

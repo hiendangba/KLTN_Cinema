@@ -113,14 +113,16 @@ public class CinemaController extends BaseController {
     }
 
     @GetMapping("/{id}/staffs")
-    public ResponseEntity<APIResponse<List<CinemaStaffResponse>>> getCinemaStaffs(@PathVariable UUID id) {
-        List<CinemaStaffResponse> response = cinemaService.getCinemaStaffs(id);
+    public ResponseEntity<APIResponse<List<CinemaStaffResponse>>> getCinemaStaffs(
+            @PathVariable UUID id,
+            HttpServletRequest httpRequest) {
+        List<CinemaStaffResponse> response = cinemaService.getCinemaStaffs(id, httpRequest);
         return ok(response);
     }
 
     @GetMapping("/me")
-    public ResponseEntity<APIResponse<CinemaResponse>> getMyManagedCinema(HttpServletRequest httpRequest) {
-        CinemaResponse response = cinemaService.getMyManagedCinema(httpRequest);
+    public ResponseEntity<APIResponse<List<CinemaResponse>>> getMyManagedCinema(HttpServletRequest httpRequest) {
+        List<CinemaResponse> response = cinemaService.getMyManagedCinemas(httpRequest);
         return ok(response);
     }
 }

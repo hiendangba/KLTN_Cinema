@@ -13,6 +13,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Data
 @Builder
@@ -29,6 +30,9 @@ public class UpdateHallRequest {
     @Valid
     @NotNull(message = "layoutDefinition is required")
     HallLayoutDefinitionRequest layoutDefinition;
+
+    @NotNull(message = "cinemaId is required")
+    UUID cinemaId;
 
     @NotNull(message = "imagePaths is required")
     @Builder.Default

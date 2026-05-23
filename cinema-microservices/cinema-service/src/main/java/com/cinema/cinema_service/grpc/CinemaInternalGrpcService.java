@@ -10,12 +10,14 @@ import com.cinema.grpc.cinema.GetCinemaByIdReply;
 import com.cinema.grpc.cinema.GetCinemaByIdRequest;
 import com.cinema.grpc.cinema.GetCinemaByUserIdReply;
 import com.cinema.grpc.cinema.GetCinemaByUserIdRequest;
+import com.cinema.grpc.cinema.GetCinemasByUserIdReply;
 import io.grpc.BindableService;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -34,38 +36,51 @@ public class CinemaInternalGrpcService extends CinemaInternalServiceGrpc.CinemaI
         try {
             userId = UUID.fromString(request.getUserId());
         } catch (IllegalArgumentException ex) {
-            responseObserver.onNext(GetCinemaByUserIdReply.newBuilder()
-                    .setSuccess(false)
-                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
-                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
-                    .build());
-            responseObserver.onCompleted();
+            failCinemaByUserId(responseObserver, ErrorCode.INVALID_FORMAT.name(), ErrorCode.INVALID_FORMAT.getMessage());
             return;
         }
 
         try {
-            CinemaResponse cinema = cinemaService.getCinemaByManagerId(userId);
+            List<CinemaResponse> cinemas = cinemaService.getAccessibleCinemasByUserId(userId, request.getRole());
+            CinemaResponse cinema = cinemas.isEmpty() ? null : cinemas.get(0);
             responseObserver.onNext(GetCinemaByUserIdReply.newBuilder()
                     .setSuccess(true)
                     .setMessage("Cinema fetched successfully")
-                    .setCinema(toPayload(cinema))
+                    .setCinema(cinema == null ? CinemaPayload.newBuilder().build() : toPayload(cinema))
                     .build());
             responseObserver.onCompleted();
         } catch (BusinessException ex) {
-            responseObserver.onNext(GetCinemaByUserIdReply.newBuilder()
-                    .setSuccess(false)
-                    .setErrorKey(ex.getErrorCode().name())
-                    .setMessage(ex.getMessage())
-                    .build());
-            responseObserver.onCompleted();
+            failCinemaByUserId(responseObserver, ex.getErrorCode().name(), ex.getMessage());
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching cinema by user id", ex);
-            responseObserver.onNext(GetCinemaByUserIdReply.newBuilder()
-                    .setSuccess(false)
-                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
-                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+            failCinemaByUserId(responseObserver, ErrorCode.INTERNAL_ERROR.name(), ErrorCode.INTERNAL_ERROR.getMessage());
+        }
+    }
+
+    @Override
+    public void getCinemasByUserId(GetCinemaByUserIdRequest request,
+                                   StreamObserver<GetCinemasByUserIdReply> responseObserver) {
+        UUID userId;
+        try {
+            userId = UUID.fromString(request.getUserId());
+        } catch (IllegalArgumentException ex) {
+            failCinemasByUserId(responseObserver, ErrorCode.INVALID_FORMAT.name(), ErrorCode.INVALID_FORMAT.getMessage());
+            return;
+        }
+
+        try {
+            List<CinemaResponse> cinemas = cinemaService.getAccessibleCinemasByUserId(userId, request.getRole());
+            responseObserver.onNext(GetCinemasByUserIdReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Cinemas fetched successfully")
+                    .addAllCinemas(cinemas.stream().map(this::toPayload).toList())
                     .build());
             responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            failCinemasByUserId(responseObserver, ex.getErrorCode().name(), ex.getMessage());
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching cinemas by user id", ex);
+            failCinemasByUserId(responseObserver, ErrorCode.INTERNAL_ERROR.name(), ErrorCode.INTERNAL_ERROR.getMessage());
         }
     }
 
@@ -75,12 +90,7 @@ public class CinemaInternalGrpcService extends CinemaInternalServiceGrpc.CinemaI
         try {
             cinemaId = UUID.fromString(request.getCinemaId());
         } catch (IllegalArgumentException ex) {
-            responseObserver.onNext(GetCinemaByIdReply.newBuilder()
-                    .setSuccess(false)
-                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
-                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
-                    .build());
-            responseObserver.onCompleted();
+            failCinemaById(responseObserver, ErrorCode.INVALID_FORMAT.name(), ErrorCode.INVALID_FORMAT.getMessage());
             return;
         }
 
@@ -93,21 +103,38 @@ public class CinemaInternalGrpcService extends CinemaInternalServiceGrpc.CinemaI
                     .build());
             responseObserver.onCompleted();
         } catch (BusinessException ex) {
-            responseObserver.onNext(GetCinemaByIdReply.newBuilder()
-                    .setSuccess(false)
-                    .setErrorKey(ex.getErrorCode().name())
-                    .setMessage(ex.getMessage())
-                    .build());
-            responseObserver.onCompleted();
+            failCinemaById(responseObserver, ex.getErrorCode().name(), ex.getMessage());
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching cinema by id", ex);
-            responseObserver.onNext(GetCinemaByIdReply.newBuilder()
-                    .setSuccess(false)
-                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
-                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
-                    .build());
-            responseObserver.onCompleted();
+            failCinemaById(responseObserver, ErrorCode.INTERNAL_ERROR.name(), ErrorCode.INTERNAL_ERROR.getMessage());
         }
+    }
+
+    private void failCinemaByUserId(StreamObserver<GetCinemaByUserIdReply> responseObserver, String errorKey, String message) {
+        responseObserver.onNext(GetCinemaByUserIdReply.newBuilder()
+                .setSuccess(false)
+                .setErrorKey(errorKey)
+                .setMessage(message)
+                .build());
+        responseObserver.onCompleted();
+    }
+
+    private void failCinemasByUserId(StreamObserver<GetCinemasByUserIdReply> responseObserver, String errorKey, String message) {
+        responseObserver.onNext(GetCinemasByUserIdReply.newBuilder()
+                .setSuccess(false)
+                .setErrorKey(errorKey)
+                .setMessage(message)
+                .build());
+        responseObserver.onCompleted();
+    }
+
+    private void failCinemaById(StreamObserver<GetCinemaByIdReply> responseObserver, String errorKey, String message) {
+        responseObserver.onNext(GetCinemaByIdReply.newBuilder()
+                .setSuccess(false)
+                .setErrorKey(errorKey)
+                .setMessage(message)
+                .build());
+        responseObserver.onCompleted();
     }
 
     private CinemaPayload toPayload(CinemaResponse cinema) {

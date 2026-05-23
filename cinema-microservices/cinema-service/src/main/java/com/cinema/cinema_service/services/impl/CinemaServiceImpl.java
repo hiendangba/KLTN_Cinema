@@ -31,6 +31,9 @@ import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -58,7 +61,6 @@ public class CinemaServiceImpl implements CinemaService {
         validateCoordinate(request.getLatitude(), request.getLongitude());
         validateOperatingTime(request.getOpenTime(), request.getCloseTime());
         validateCinemaCodeNotExists(request.getCode(), null);
-        validateManagerNotAssigned(request.getManagerId(), null);
 
         Cinema cinema = cinemaMapper.toEntity(request);
         cinema.setCode(normalizeCode(request.getCode()));
@@ -73,6 +75,7 @@ public class CinemaServiceImpl implements CinemaService {
     @Transactional(readOnly = true)
     public CinemaResponse getCinemaById(UUID cinemaId) {
         Cinema cinema = getActiveCinemaOrThrow(cinemaId);
+        authorizeCinemaReadAccess(cinema);
         List<UUID> staffIds = getActiveStaffIdsByCinemaId(cinemaId);
         CinemaResponse response = cinemaMapper.toResponse(cinema, staffIds);
         populateManagerName(response);
@@ -82,11 +85,16 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<CinemaResponse> searchCinemas(PageRequest<CinemaField> request) {
-        String keyword = request.getNormalizedKeyword();
-        int page = request.getPageOrDefault();
-        int size = request.getSizeOrDefault();
+        PageRequest<CinemaField> scopedRequest = scopeCinemaSearchRequest(request);
+        if (scopedRequest == null) {
+            return emptyCinemaPageResponse(request);
+        }
 
-        List<SortField<CinemaField>> sortFields = request.getSortBy();
+        String keyword = scopedRequest.getNormalizedKeyword();
+        int page = scopedRequest.getPageOrDefault();
+        int size = scopedRequest.getSizeOrDefault();
+
+        List<SortField<CinemaField>> sortFields = scopedRequest.getSortBy();
         sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
         boolean hasIdSort = sortFields.stream()
                 .anyMatch(sort -> sort != null && sort.getField() == CinemaField.ID);
@@ -94,7 +102,7 @@ public class CinemaServiceImpl implements CinemaService {
             sortFields.add(new SortField<>(CinemaField.ID, "ASC"));
         }
 
-        List<FilterField<CinemaField>> filterFields = request.getFilterBy();
+        List<FilterField<CinemaField>> filterFields = scopedRequest.getFilterBy();
         long totalElements = cinemaRepositoryImpl.countWithFilter(keyword, filterFields);
         List<Cinema> cinemas = cinemaRepositoryImpl.searchWithPageAndSortAndFilter(
                 keyword, page, size, sortFields, filterFields);
@@ -124,7 +132,6 @@ public class CinemaServiceImpl implements CinemaService {
         validateAdminRole(httpRequest);
         validateCoordinate(request.getLatitude(), request.getLongitude());
         validateOperatingTime(request.getOpenTime(), request.getCloseTime());
-        validateManagerNotAssigned(request.getManagerId(), cinemaId);
 
         Cinema cinema = getActiveCinemaOrThrow(cinemaId);
         cinemaMapper.updateEntity(cinema, request);
@@ -231,8 +238,9 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<CinemaStaffResponse> getCinemaStaffs(UUID cinemaId) {
-        getActiveCinemaOrThrow(cinemaId);
+    public List<CinemaStaffResponse> getCinemaStaffs(UUID cinemaId, HttpServletRequest httpRequest) {
+        validateReadRole(httpRequest);
+        authorizeCinemaReadAccess(getActiveCinemaOrThrow(cinemaId));
         return cinemaStaffRepository.findByCinemaId(cinemaId).stream()
                 .map(cinemaMapper::toResponse)
                 .toList();
@@ -240,26 +248,58 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     @Transactional(readOnly = true)
-    public CinemaResponse getMyManagedCinema(HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
+    public List<CinemaResponse> getMyManagedCinemas(HttpServletRequest httpRequest) {
+        validateSelfReadRole(httpRequest);
         UUID managerId = extractUserId(httpRequest);
-        return getCinemaByManagerId(managerId);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        return getAccessibleCinemasByUserId(managerId, role);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public CinemaResponse getCinemaByManagerId(UUID managerId) {
-        Cinema cinema = cinemaRepository.findByManagerIdAndIsDeletedFalse(managerId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.CINEMA_NOT_FOUND));
-        List<UUID> staffIds = getActiveStaffIdsByCinemaId(cinema.getId());
-        CinemaResponse response = cinemaMapper.toResponse(cinema, staffIds);
-        populateManagerName(response);
-        return response;
+    public List<CinemaResponse> getCinemasByManagerId(UUID managerId) {
+        return mapManagedCinemasToResponses(
+                cinemaRepository.findAllByManagerIdAndIsDeletedFalseOrderByCreatedAtDesc(managerId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CinemaResponse> getAccessibleCinemasByUserId(UUID userId, String role) {
+        String normalizedRole = role == null ? "" : role.trim().toUpperCase();
+        if (HeaderNames.ROLE_STAFF.equals(normalizedRole)) {
+            return getCinemasByStaffId(userId);
+        }
+        return getCinemasByManagerId(userId);
+    }
+
+    private List<CinemaResponse> getCinemasByStaffId(UUID staffId) {
+        return cinemaStaffRepository.findByStaffId(staffId)
+                .filter(CinemaStaff::getActive)
+                .flatMap(staffLink -> cinemaRepository.findByIdAndIsDeletedFalse(staffLink.getCinemaId()).stream())
+                .map(this::mapCinemaToResponse)
+                .toList();
     }
 
     private Cinema getActiveCinemaOrThrow(UUID cinemaId) {
         return cinemaRepository.findByIdAndIsDeletedFalse(cinemaId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.CINEMA_NOT_FOUND));
+    }
+
+    private List<CinemaResponse> mapManagedCinemasToResponses(List<Cinema> cinemas) {
+        Map<UUID, List<UUID>> staffByCinema = mapActiveStaffIdsByCinema(cinemas);
+        List<CinemaResponse> responses = cinemas.stream()
+                .map(cinema -> cinemaMapper.toResponse(cinema,
+                        staffByCinema.getOrDefault(cinema.getId(), List.of())))
+                .toList();
+        populateManagerNames(responses);
+        return responses;
+    }
+
+    private CinemaResponse mapCinemaToResponse(Cinema cinema) {
+        List<UUID> staffIds = getActiveStaffIdsByCinemaId(cinema.getId());
+        CinemaResponse response = cinemaMapper.toResponse(cinema, staffIds);
+        populateManagerName(response);
+        return response;
     }
 
     private List<UUID> getActiveStaffIdsByCinemaId(UUID cinemaId) {
@@ -352,21 +392,6 @@ public class CinemaServiceImpl implements CinemaService {
         }
     }
 
-    private void validateManagerNotAssigned(UUID managerId, UUID cinemaId) {
-        if (managerId == null) {
-            return;
-        }
-        boolean existed;
-        if (cinemaId == null) {
-            existed = cinemaRepository.existsByManagerIdAndIsDeletedFalse(managerId);
-        } else {
-            existed = cinemaRepository.existsByManagerIdAndIdNotAndIsDeletedFalse(managerId, cinemaId);
-        }
-        if (existed) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
-    }
-
     private UUID extractUserId(HttpServletRequest httpRequest) {
         try {
             return RequestAuthUtils.requireUserId(httpRequest);
@@ -391,5 +416,114 @@ public class CinemaServiceImpl implements CinemaService {
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "cinema_manager_action");
+    }
+
+    private void validateReadRole(HttpServletRequest httpRequest) {
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+    }
+
+    private void validateSelfReadRole(HttpServletRequest httpRequest) {
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+    }
+
+    private void authorizeCinemaReadAccess(Cinema cinema) {
+        HttpServletRequest currentRequest = getCurrentHttpRequest();
+        if (currentRequest == null) {
+            return;
+        }
+
+        RequestAuthUtils.requireAnyRole(currentRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+        String role = RequestAuthUtils.requireRoleHeader(currentRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return;
+        }
+
+        UUID userId = RequestAuthUtils.requireUserId(currentRequest);
+        if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            if (!userId.equals(cinema.getManagerId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return;
+        }
+
+        if (HeaderNames.ROLE_STAFF.equals(role)) {
+            CinemaStaff assignedCinema = cinemaStaffRepository.findByStaffId(userId)
+                    .filter(CinemaStaff::getActive)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.FORBIDDEN));
+            if (!cinema.getId().equals(assignedCinema.getCinemaId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return;
+        }
+
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private PageRequest<CinemaField> scopeCinemaSearchRequest(PageRequest<CinemaField> request) {
+        HttpServletRequest currentRequest = getCurrentHttpRequest();
+        if (currentRequest == null) {
+            return request;
+        }
+
+        RequestAuthUtils.requireAnyRole(currentRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+        String role = RequestAuthUtils.requireRoleHeader(currentRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return request;
+        }
+
+        UUID userId = RequestAuthUtils.requireUserId(currentRequest);
+        List<FilterField<CinemaField>> filterFields = request.getFilterBy() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(request.getFilterBy());
+
+        if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            filterFields.add(FilterField.<CinemaField>builder()
+                    .field(CinemaField.MANAGER_ID)
+                    .operator("EQ")
+                    .value(userId)
+                    .build());
+        } else if (HeaderNames.ROLE_STAFF.equals(role)) {
+            CinemaStaff staffLink = cinemaStaffRepository.findByStaffId(userId)
+                    .filter(CinemaStaff::getActive)
+                    .orElse(null);
+            if (staffLink == null) {
+                return null;
+            }
+            filterFields.add(FilterField.<CinemaField>builder()
+                    .field(CinemaField.ID)
+                    .operator("EQ")
+                    .value(staffLink.getCinemaId())
+                    .build());
+        }
+
+        return PageRequest.<CinemaField>builder()
+                .page(request.getPage())
+                .size(request.getSize())
+                .keyword(request.getKeyword())
+                .sortBy(request.getSortBy() == null ? null : new ArrayList<>(request.getSortBy()))
+                .filterBy(filterFields)
+                .build();
+    }
+
+    private PageResponse<CinemaResponse> emptyCinemaPageResponse(PageRequest<CinemaField> request) {
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        return PageResponse.<CinemaResponse>builder()
+                .data(List.of())
+                .currentPage(page)
+                .totalPages(0)
+                .totalElements(0L)
+                .size(size)
+                .hasNext(false)
+                .hasPrevious(false)
+                .build();
+    }
+
+    private HttpServletRequest getCurrentHttpRequest() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes instanceof ServletRequestAttributes servletRequestAttributes) {
+            return servletRequestAttributes.getRequest();
+        }
+        return null;
     }
 }

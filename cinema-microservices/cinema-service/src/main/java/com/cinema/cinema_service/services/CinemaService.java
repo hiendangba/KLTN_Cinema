@@ -37,9 +37,11 @@ public interface CinemaService {
 
     ActionMessageResponse unassignStaff(UUID cinemaId, UUID staffId, HttpServletRequest httpRequest);
 
-    List<CinemaStaffResponse> getCinemaStaffs(UUID cinemaId);
+    List<CinemaStaffResponse> getCinemaStaffs(UUID cinemaId, HttpServletRequest httpRequest);
 
-    CinemaResponse getMyManagedCinema(HttpServletRequest httpRequest);
+    List<CinemaResponse> getMyManagedCinemas(HttpServletRequest httpRequest);
 
-    CinemaResponse getCinemaByManagerId(UUID managerId);
+    List<CinemaResponse> getCinemasByManagerId(UUID managerId);
+
+    List<CinemaResponse> getAccessibleCinemasByUserId(UUID userId, String role);
 }

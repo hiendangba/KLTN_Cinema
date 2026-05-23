@@ -36,15 +36,15 @@ public class HallLayoutDefinitionRequest {
     }
 
     public enum CellInputType {
-        SEAT,
-        AISLE,
-        BLOCKED
+        SEAT, // Ghế ngồi
+        AISLE, // Lối đi
+        BLOCKED // Khu vực không sử dụng
     }
 
     public enum SeatType {
-        STANDARD,
-        VIP,
-        COUPLE
+        STANDARD, // Ghế tiêu chuẩn
+        VIP, // Ghế VIP
+        COUPLE // Ghế đôi
     }
 
     @Getter
