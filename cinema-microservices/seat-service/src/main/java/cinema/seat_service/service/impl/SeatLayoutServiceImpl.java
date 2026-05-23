@@ -9,6 +9,7 @@ import cinema.seat_service.entity.HallLayoutProfile;
 import cinema.seat_service.entity.OutboxEvent;
 import cinema.seat_service.entity.Seat;
 import cinema.seat_service.enums.LayoutCellType;
+import cinema.seat_service.enums.SeatType;
 import cinema.seat_service.repository.HallLayoutCellRepository;
 import cinema.seat_service.repository.HallLayoutProfileRepository;
 import cinema.seat_service.repository.OutboxEventRepository;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -214,6 +216,7 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
         }
 
         Set<String> occupied = new HashSet<>();
+        Map<Integer, List<HallLayoutDefinitionRequest.CellInput>> seatsByRow = new LinkedHashMap<>();
         for (HallLayoutDefinitionRequest.CellInput cell : request.getCells()) {
             if (cell.getRow() == null || cell.getRow() <= 0
                     || cell.getCol() == null || cell.getCol() <= 0
@@ -230,8 +233,37 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
                 if (cell.getSeatType() == null) {
                     throw new BusinessException(ErrorCode.INVALID_INPUT);
                 }
+                seatsByRow.computeIfAbsent(cell.getRow(), row -> new ArrayList<>()).add(cell);
             } else if (cell.getSeatType() != null) {
                 throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+        }
+        validateCoupleSeatPairs(seatsByRow);
+    }
+
+    private void validateCoupleSeatPairs(Map<Integer, List<HallLayoutDefinitionRequest.CellInput>> seatsByRow) {
+        for (List<HallLayoutDefinitionRequest.CellInput> rowSeats : seatsByRow.values()) {
+            rowSeats.sort(Comparator.comparingInt(HallLayoutDefinitionRequest.CellInput::getCol));
+
+            for (int i = 0; i < rowSeats.size(); ) {
+                HallLayoutDefinitionRequest.CellInput current = rowSeats.get(i);
+                if (current.getSeatType() != SeatType.COUPLE) {
+                    i++;
+                    continue;
+                }
+
+                if (i + 1 >= rowSeats.size()) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT);
+                }
+
+                HallLayoutDefinitionRequest.CellInput partner = rowSeats.get(i + 1);
+                if (partner.getSeatType() != SeatType.COUPLE
+                        || !current.getRow().equals(partner.getRow())
+                        || !partner.getCol().equals(current.getCol() + 1)) {
+                    throw new BusinessException(ErrorCode.INVALID_INPUT);
+                }
+
+                i += 2;
             }
         }
     }
