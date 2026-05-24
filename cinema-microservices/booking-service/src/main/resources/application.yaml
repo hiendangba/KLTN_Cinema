@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: optional:file:src/main/resources/.env[.properties]
   application:
     name: ${APP_NAME:booking-service}
   datasource:
@@ -56,3 +58,4 @@ server:
 
 booking:
   seat-lock-minutes: ${BOOKING_SEAT_LOCK_MINUTES:5}
+  expiration-scheduler-delay-ms: ${BOOKING_EXPIRATION_SCHEDULER_DELAY_MS:60000}

@@ -1,0 +1,96 @@
+package com.cinema.payment_service.entity;
+
+import com.cinema.payment_service.enums.PaymentTransactionStatus;
+import com.github.f4b6a3.uuid.UuidCreator;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "payment_transaction")
+@Getter
+@Setter
+public class PaymentTransaction {
+
+    @Id
+    @Column(columnDefinition = "uuid")
+    private UUID id;
+
+    @Column(name = "booking_id", columnDefinition = "uuid", nullable = false)
+    private UUID bookingId;
+
+    @Column(name = "showtime_id", columnDefinition = "uuid", nullable = false)
+    private UUID showtimeId;
+
+    @Column(name = "amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal amount;
+
+    @Column(name = "currency", nullable = false, length = 8)
+    private String currency;
+
+    @Column(name = "payment_method", nullable = false, length = 40)
+    private String paymentMethod;
+
+    @Column(name = "order_invoice_number", nullable = false, unique = true, length = 120)
+    private String orderInvoiceNumber;
+
+    @Column(name = "provider_ref", length = 120)
+    private String providerRef;
+
+    @Column(name = "checkout_url", nullable = false, length = 255)
+    private String checkoutUrl;
+
+    @Column(name = "checkout_payload_json", columnDefinition = "text")
+    private String checkoutPayloadJson;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private PaymentTransactionStatus status;
+
+    @Column(name = "expires_at", nullable = false)
+    private LocalDateTime expiresAt;
+
+    @Column(name = "paid_at")
+    private LocalDateTime paidAt;
+
+    @Column(name = "expired_at")
+    private LocalDateTime expiredAt;
+
+    @Column(name = "failure_reason", columnDefinition = "text")
+    private String failureReason;
+
+    @Column(name = "time_created", nullable = false, updatable = false)
+    private LocalDateTime timeCreated;
+
+    @Column(name = "time_updated", nullable = false)
+    private LocalDateTime timeUpdated;
+
+    @PrePersist
+    public void prePersist() {
+        if (id == null) {
+            id = UuidCreator.getTimeOrderedEpoch();
+        }
+        if (status == null) {
+            status = PaymentTransactionStatus.PENDING;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        timeCreated = now;
+        timeUpdated = now;
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        timeUpdated = LocalDateTime.now();
+    }
+}

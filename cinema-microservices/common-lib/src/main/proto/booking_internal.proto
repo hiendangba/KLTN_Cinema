@@ -10,6 +10,8 @@ service BookingInternalService {
   rpc CheckShowtimeBooked(CheckShowtimeBookedRequest) returns (CheckShowtimeBookedReply);
   rpc GetSeatRuntimeStates(GetSeatRuntimeStatesRequest) returns (GetSeatRuntimeStatesReply);
   rpc HasActiveBookingByShowtimeIds(HasActiveBookingByShowtimeIdsRequest) returns (HasActiveBookingByShowtimeIdsReply);
+  rpc GetBookingPaymentContext(GetBookingPaymentContextRequest) returns (GetBookingPaymentContextReply);
+  rpc ConfirmBookingPayment(ConfirmBookingPaymentRequest) returns (ConfirmBookingPaymentReply);
 }
 
 message CheckShowtimeBookedRequest {
@@ -49,4 +51,41 @@ message HasActiveBookingByShowtimeIdsReply {
   string error_key = 2;
   string message = 3;
   bool has_active_booking = 4;
+}
+
+message GetBookingPaymentContextRequest {
+  string booking_id = 1;
+}
+
+message BookingPaymentContextPayload {
+  string booking_id = 1;
+  string showtime_id = 2;
+  string cinema_id = 3;
+  string user_id = 4;
+  string final_amount = 5;
+  string reserved_until = 6;
+  string booking_status = 7;
+  string payment_status = 8;
+}
+
+message GetBookingPaymentContextReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  BookingPaymentContextPayload booking = 4;
+}
+
+message ConfirmBookingPaymentRequest {
+  string booking_id = 1;
+  string provider_ref = 2;
+  string payment_method = 3;
+  string order_invoice_number = 4;
+  string transaction_amount = 5;
+}
+
+message ConfirmBookingPaymentReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  BookingPaymentContextPayload booking = 4;
 }

@@ -17,6 +17,11 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
+  grpc:
+    client:
+      channels:
+        booking:
+          address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
 
 server:
   port: ${SERVER_PORT:8096}
@@ -27,3 +32,14 @@ vietqr:
   api-key: ${VIETQR_API_KEY}
   secret-key: ${VIETQR_SECRET_KEY}
   sync-cron: ${VIETQR_SYNC_CRON:0 0 3 1 * *}
+
+sepay:
+  base-url: ${SEPAY_BASE_URL:https://pgapi-sandbox.sepay.vn}
+  merchant-id: ${SEPAY_MERCHANT_ID:replace_me_merchant_id}
+  secret-key: ${SEPAY_SECRET_KEY:replace_me_secret_key}
+  payment-method: ${SEPAY_PAYMENT_METHOD:QR_DONG_THEO_DON_HANG}
+  return-url: ${SEPAY_RETURN_URL:http://localhost:3000/payment/result}
+  ipn-url: ${SEPAY_IPN_URL:http://localhost:8096/api/payments/webhooks/sepay}
+
+payment:
+  expiration-scheduler-delay-ms: ${PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS:60000}

@@ -18,6 +18,16 @@ import jakarta.persistence.LockModeType;
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findByIdAndIsDeletedFalse(UUID id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "seatItems")
+    @Query("""
+            SELECT b
+            FROM Booking b
+            WHERE b.id = :id
+              AND b.isDeleted = false
+            """)
+    Optional<Booking> findLockedByIdAndIsDeletedFalse(@Param("id") UUID id);
+
     List<Booking> findAllByUserIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID userId);
 
     List<Booking> findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID cinemaId);

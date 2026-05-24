@@ -78,6 +78,7 @@ public enum ErrorCode {
         FILM_SERVICE_ERROR("9101", "Lỗi khi gọi Film Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         HALL_SERVICE_ERROR("9102", "Lỗi khi gọi Hall Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         BOOKING_TICKET_LIMIT_EXCEEDED("4401", "One booking can include at most 5 tickets.", HttpStatus.BAD_REQUEST),
+        BOOKING_EXPIRED("4402", "Booking đã hết hạn thanh toán", HttpStatus.CONFLICT),
         BOOKING_SERVICE_ERROR("9104", "Lỗi khi gọi Booking Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         CINEMA_SERVICE_ERROR("9105", "Lỗi khi gọi Cinema Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         SHOWTIME_SERVICE_ERROR("9106", "Lỗi khi gọi Showtime Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),

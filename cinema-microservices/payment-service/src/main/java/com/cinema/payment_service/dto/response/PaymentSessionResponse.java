@@ -1,0 +1,30 @@
+package com.cinema.payment_service.dto.response;
+
+import com.cinema.payment_service.enums.PaymentTransactionStatus;
+import lombok.Builder;
+import lombok.Data;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
+
+@Data
+@Builder
+public class PaymentSessionResponse {
+    private UUID id;
+    private UUID bookingId;
+    private UUID showtimeId;
+    private BigDecimal amount;
+    private String currency;
+    private String paymentMethod;
+    private String orderInvoiceNumber;
+    private String providerRef;
+    private String checkoutUrl;
+    private Map<String, String> checkoutFields;
+    private PaymentTransactionStatus status;
+    private LocalDateTime expiresAt;
+    private LocalDateTime paidAt;
+    private LocalDateTime expiredAt;
+    private String failureReason;
+}
