@@ -133,6 +133,34 @@ static_resources:
                           route:
                             cluster: booking-service
                             timeout: 30s
+                        - match:
+                            path: /api/payments/vietqr/banks
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /api/payments/vietqr/banks/
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            path: /api/payments
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/payments/
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
 
   clusters:
     - name: identity-service

@@ -36,7 +36,7 @@ public class VietQrServiceImpl implements VietQrService {
 
     @Override
     @Transactional
-    public VietQrBanksApiResponse getBanks() {
+    public List<VietQrBankResponse> getBanks() {
         if (bankCatalogRepository.count() == 0) {
             synchronized (this) {
                 if (bankCatalogRepository.count() == 0) {
@@ -45,15 +45,9 @@ public class VietQrServiceImpl implements VietQrService {
             }
         }
 
-        List<VietQrBankResponse> banks = bankCatalogRepository.findAllByOrderByIdAsc().stream()
+        return bankCatalogRepository.findAllByOrderByIdAsc().stream()
                 .map(this::toBankResponse)
                 .toList();
-
-        VietQrBanksApiResponse response = new VietQrBanksApiResponse();
-        response.setCode("00");
-        response.setDesc("Bank list loaded from local catalog. Total " + banks.size() + " banks");
-        response.setData(banks);
-        return response;
     }
 
     @Override

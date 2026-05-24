@@ -1,5 +1,7 @@
 package com.cinema.payment_service.entity;
 
+import lombok.Getter;
+import lombok.Setter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -7,6 +9,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+@Getter
+@Setter
 @Entity
 @Table(name = "bank_catalog")
 public class BankCatalog {
@@ -38,76 +42,4 @@ public class BankCatalog {
 
     @Column(name = "lookup_supported", nullable = false)
     private Integer lookupSupported;
-
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public Integer getVietQrBankId() {
-        return vietQrBankId;
-    }
-
-    public void setVietQrBankId(Integer vietQrBankId) {
-        this.vietQrBankId = vietQrBankId;
-    }
-
-    public String getCode() {
-        return code;
-    }
-
-    public void setCode(String code) {
-        this.code = code;
-    }
-
-    public String getBin() {
-        return bin;
-    }
-
-    public void setBin(String bin) {
-        this.bin = bin;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getShortName() {
-        return shortName;
-    }
-
-    public void setShortName(String shortName) {
-        this.shortName = shortName;
-    }
-
-    public String getLogo() {
-        return logo;
-    }
-
-    public void setLogo(String logo) {
-        this.logo = logo;
-    }
-
-    public Integer getTransferSupported() {
-        return transferSupported;
-    }
-
-    public void setTransferSupported(Integer transferSupported) {
-        this.transferSupported = transferSupported;
-    }
-
-    public Integer getLookupSupported() {
-        return lookupSupported;
-    }
-
-    public void setLookupSupported(Integer lookupSupported) {
-        this.lookupSupported = lookupSupported;
-    }
 }

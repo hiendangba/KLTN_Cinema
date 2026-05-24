@@ -9,11 +9,11 @@ import org.springframework.web.client.RestClient;
 public class VietQrClientConfig {
 
     @Bean
-    RestClient vietQrRestClient(RestClient.Builder restClientBuilder, VietQrProperties vietQrProperties) {
+    RestClient vietQrRestClient(VietQrProperties vietQrProperties) {
         if (!StringUtils.hasText(vietQrProperties.getBaseUrl())) {
             throw new IllegalStateException("Missing VIETQR_BASE_URL environment variable");
         }
-        return restClientBuilder
+        return RestClient.builder()
                 .baseUrl(vietQrProperties.getBaseUrl())
                 .build();
     }

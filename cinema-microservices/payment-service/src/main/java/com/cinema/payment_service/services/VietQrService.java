@@ -1,9 +1,11 @@
 package com.cinema.payment_service.services;
 
-import com.cinema.payment_service.dto.response.VietQrBanksApiResponse;
+import com.cinema.payment_service.dto.response.VietQrBankResponse;
+
+import java.util.List;
 
 public interface VietQrService {
-    VietQrBanksApiResponse getBanks();
+    List<VietQrBankResponse> getBanks();
 
     int syncBanksMonthly();
 }

@@ -261,6 +261,7 @@ Kho báu nội dung hệ thống.
   - Script migration: `scripts/sql/2026-05-17-film-active-unique-index.sql`.
 - **Soft Delete**: Mọi hành vi `DELETE` chỉ đổi cờ status DB `IsDeleted` sang True. Toàn vẹn dữ liệu cho các truy vấn báo cáo bán hàng lịch sử vẫn được bảo đảm tuyệt đối.
 - **Complex Querying**: Tìm phim bằng từ khóa, lọc theo độ tuổi `AgeRating`, hoặc tình trạng hiện hành phim `FilmStatus`.
+- **Future extension**: xem `FILM_REQUEST_FUTURE_NOTE.md` nếu sau này cần mở rộng luồng manager đề xuất phim chưa có trong catalog. Rule hiện tại vẫn giữ `ADMIN only` cho việc tạo phim.
 
 ### 5. `showtime-service` 
 Bộ não hệ thống lập lịch chiếu phim hằng ngày.
