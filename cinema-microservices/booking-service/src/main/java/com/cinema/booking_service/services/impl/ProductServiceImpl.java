@@ -25,7 +25,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -40,16 +42,17 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ActionMessageResponse createProduct(CreateProductRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds);
 
         if (productRepository.existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(
-                cinemaId, request.getName())) {
+                request.getCinemaId(), request.getName())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
 
         Product product = productMapper.toEntity(request);
         product.setName(request.getName().trim());
-        product.setCinemaId(cinemaId);
+        product.setCinemaId(request.getCinemaId());
         product.setStatus(request.getStatus() == null ? ProductStatus.ACTIVE : request.getStatus());
 
         productRepository.save(product);
@@ -62,9 +65,10 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ActionMessageResponse updateProduct(UUID id, UpdateProductRequest request, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds);
 
-        Product product = getManagedProductOrThrow(id, cinemaId);
+        Product product = getManagedProductOrThrow(id, request.getCinemaId(), accessibleCinemaIds);
 
         if (productRepository.existsByCinemaIdAndNameIgnoreCaseAndIdNotAndIsDeletedFalse(
                 product.getCinemaId(), request.getName(), id)) {
@@ -73,6 +77,7 @@ public class ProductServiceImpl implements ProductService {
 
         productMapper.updateEntityFromRequest(product, request);
         product.setName(request.getName().trim());
+        product.setCinemaId(request.getCinemaId());
         productRepository.save(product);
 
         return ActionMessageResponse.builder()
@@ -84,8 +89,8 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ActionMessageResponse deleteProduct(UUID id, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        Product product = getManagedProductOrThrow(id, cinemaId);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        Product product = getManagedProductOrThrow(id, null, accessibleCinemaIds);
         product.setIsDeleted(true);
         productRepository.save(product);
 
@@ -96,8 +101,10 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public ProductResponse getProductById(UUID id) {
-        return productMapper.toResponse(getActiveProductOrThrow(id));
+    public ProductResponse getProductById(UUID id, HttpServletRequest httpRequest) {
+        Product product = getActiveProductOrThrow(id);
+        authorizeProductRead(product, httpRequest);
+        return productMapper.toResponse(product);
     }
 
     @Override
@@ -105,9 +112,14 @@ public class ProductServiceImpl implements ProductService {
     public PageResponse<ProductResponse> getProductsByOperatorCinema(
             PageRequest<ProductField> request,
             HttpServletRequest httpRequest) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return getPagedProductsByAllCinemas(request);
+        }
+
         validateOperatorRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        return getPagedProductsByCinemaId(cinemaId, request);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        return getPagedProductsByCinemaIds(accessibleCinemaIds, request);
     }
 
     @Override
@@ -125,6 +137,34 @@ public class ProductServiceImpl implements ProductService {
                 Sort.by(Sort.Direction.DESC, "timeCreated"));
 
         Page<Product> productPage = productRepository.findAllByCinemaIdAndIsDeletedFalse(cinemaId, pageable);
+        return buildProductPageResponse(productPage, page, size);
+    }
+
+    private PageResponse<ProductResponse> getPagedProductsByCinemaIds(Set<UUID> cinemaIds, PageRequest<ProductField> request) {
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                page - 1,
+                size,
+                Sort.by(Sort.Direction.DESC, "timeCreated"));
+
+        Page<Product> productPage = productRepository.findAllByCinemaIdInAndIsDeletedFalse(cinemaIds, pageable);
+        return buildProductPageResponse(productPage, page, size);
+    }
+
+    private PageResponse<ProductResponse> getPagedProductsByAllCinemas(PageRequest<ProductField> request) {
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                page - 1,
+                size,
+                Sort.by(Sort.Direction.DESC, "timeCreated"));
+
+        Page<Product> productPage = productRepository.findAllByIsDeletedFalse(pageable);
+        return buildProductPageResponse(productPage, page, size);
+    }
+
+    private PageResponse<ProductResponse> buildProductPageResponse(Page<Product> productPage, int page, int size) {
         List<ProductResponse> data = productPage.getContent().stream()
                 .map(productMapper::toResponse)
                 .toList();
@@ -145,12 +185,31 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    private Product getManagedProductOrThrow(UUID id, UUID cinemaId) {
+    private Product getManagedProductOrThrow(UUID id, UUID requestCinemaId, Set<UUID> accessibleCinemaIds) {
         Product product = getActiveProductOrThrow(id);
-        if (!cinemaId.equals(product.getCinemaId())) {
+        if (!accessibleCinemaIds.contains(product.getCinemaId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (requestCinemaId != null && !requestCinemaId.equals(product.getCinemaId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         return product;
+    }
+
+    private void authorizeProductRead(Product product, HttpServletRequest httpRequest) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return;
+        }
+
+        if (!HeaderNames.ROLE_MANAGER.equals(role) && !HeaderNames.ROLE_STAFF.equals(role)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        if (!accessibleCinemaIds.contains(product.getCinemaId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
@@ -158,13 +217,24 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private void validateOperatorRole(HttpServletRequest httpRequest) {
-        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
     }
 
-    private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
+    private void validateCinemaAccess(UUID cinemaId, Set<UUID> accessibleCinemaIds) {
+        if (cinemaId == null || !accessibleCinemaIds.contains(cinemaId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private Set<UUID> resolveAccessibleCinemaIdsByUser(HttpServletRequest httpRequest) {
         try {
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
-            return cinemaGrpcClient.getCinemaIdByUserId(userId);
+            String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+            List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
+            if (cinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            return new HashSet<>(cinemaIds);
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.CINEMA_NOT_FOUND
                     || ex.getErrorCode() == ErrorCode.NOT_FOUND

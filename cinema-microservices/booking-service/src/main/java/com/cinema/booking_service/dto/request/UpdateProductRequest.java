@@ -10,10 +10,14 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Getter
 @Setter
 public class UpdateProductRequest {
+    @NotNull(message = "cinemaId is required")
+    private UUID cinemaId;
+
     @NotBlank(message = "name is required")
     @Size(max = 150, message = "name must be at most 150 characters")
     private String name;
@@ -34,4 +38,3 @@ public class UpdateProductRequest {
     @NotNull(message = "status is required")
     private ProductStatus status;
 }
-

@@ -10,24 +10,29 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.FieldDefaults;
 
+import java.util.UUID;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PricingPolicyCreateRequest {
-    @NotBlank(message = "Tên chính sách giá không được để trống")
+    @NotNull(message = "cinemaId khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng")
+    UUID cinemaId;
+
+    @NotBlank(message = "TÃªn chÃ­nh sÃ¡ch giÃ¡ khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng")
     String name;
 
-    @NotNull(message = "Giá STANDARD không được để trống")
-    @PositiveOrZero(message = "Giá STANDARD phải lớn hơn hoặc bằng 0")
+    @NotNull(message = "GiÃ¡ STANDARD khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng")
+    @PositiveOrZero(message = "GiÃ¡ STANDARD pháº£i lá»›n hÆ¡n hoáº·c báº±ng 0")
     Long standardPrice;
 
-    @NotNull(message = "Giá VIP không được để trống")
-    @PositiveOrZero(message = "Giá VIP phải lớn hơn hoặc bằng 0")
+    @NotNull(message = "GiÃ¡ VIP khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng")
+    @PositiveOrZero(message = "GiÃ¡ VIP pháº£i lá»›n hÆ¡n hoáº·c báº±ng 0")
     Long vipPrice;
 
-    @NotNull(message = "Giá COUPLE không được để trống")
-    @PositiveOrZero(message = "Giá COUPLE phải lớn hơn hoặc bằng 0")
+    @NotNull(message = "GiÃ¡ COUPLE khÃ´ng Ä‘Æ°á»£c Ä‘á»ƒ trá»‘ng")
+    @PositiveOrZero(message = "GiÃ¡ COUPLE pháº£i lá»›n hÆ¡n hoáº·c báº±ng 0")
     Long couplePrice;
 }

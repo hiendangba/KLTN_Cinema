@@ -13,7 +13,6 @@ public interface PricingPolicyMapper {
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
     @Mapping(target = "timeUpdated", ignore = true)
-    @Mapping(target = "cinemaId", ignore = true)
     PricingPolicy toEntity(PricingPolicyCreateRequest request);
 
     PricingPolicyResponse toResponse(PricingPolicy pricingPolicy);

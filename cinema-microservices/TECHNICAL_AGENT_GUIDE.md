@@ -729,6 +729,9 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
     - TTL mặc định `5` phút (`booking.seat-lock-minutes`).
     - Khi lock thất bại giữa chừng, rollback lock đã set trước đó.
     - Khi `cancel` hoặc status chuyển terminal (`CANCELLED`, `EXPIRED`, `CONFIRMED`) thì release lock.
+  - Auto-expire booking:
+    - Scheduler quét booking quá `reservedUntil` và tự chuyển sang `EXPIRED`.
+    - Khi expire sẽ release lại Redis seat lock tương ứng.
   - Rule nghiệp vụ booking đã áp:
     - Tối đa `5` ghế mỗi booking.
     - Không cho seat trùng trong cùng request.
@@ -763,14 +766,13 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - Lý do: đúng flow checkout thực tế (khách chọn ghế + bắp nước xong mới submit 1 lần).
 - Quyết định 7: dùng Redis lock ghế TTL 5 phút trong lúc chờ thanh toán.
   - Lý do: chặn tranh chấp ghế theo thời gian thực, đồng thời tự giải phóng lock khi hết hạn.
-- Rule chốt hiện tại:
+  - Rule chốt hiện tại:
   - Soft delete (`isDeleted`) cho product.
   - Unique tên product trong cùng `cinemaId` trên tập chưa xóa.
   - Trạng thái mặc định khi tạo nếu request không truyền: `ACTIVE`.
-- Các điểm chưa làm ở phase này:
+  - Các điểm chưa làm ở phase này:
   - Chưa tách `payment-service`/`product-service` ở mức production scale.
   - Chưa triển khai flow thanh toán hoàn chỉnh (capture/refund/webhook callback).
-  - Chưa có job cleanup tự động để mark `EXPIRED` cho booking quá hạn `reservedUntil` ở background scheduler.
 ---
 > Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **08/05/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
 

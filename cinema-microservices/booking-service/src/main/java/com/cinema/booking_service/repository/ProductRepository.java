@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -16,7 +17,15 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     List<Product> findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID cinemaId);
 
+    List<Product> findAllByCinemaIdInAndIsDeletedFalseOrderByTimeCreatedDesc(Collection<UUID> cinemaIds);
+
     Page<Product> findAllByCinemaIdAndIsDeletedFalse(UUID cinemaId, Pageable pageable);
+
+    Page<Product> findAllByCinemaIdInAndIsDeletedFalse(Collection<UUID> cinemaIds, Pageable pageable);
+
+    Page<Product> findAllByIsDeletedFalse(Pageable pageable);
+
+    List<Product> findAllByIsDeletedFalseOrderByTimeCreatedDesc();
 
     List<Product> findAllByIdInAndIsDeletedFalse(Set<UUID> ids);
 

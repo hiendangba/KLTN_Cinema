@@ -160,8 +160,16 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByOperatorCinema(HttpServletRequest httpRequest) {
         validateOperatorRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        return bookingRepository.findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(cinemaId)
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return bookingRepository.findAllByIsDeletedFalseOrderByTimeCreatedDesc()
+                    .stream()
+                    .map(bookingMapper::toResponse)
+                    .toList();
+        }
+
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest, role);
+        return bookingRepository.findAllByCinemaIdInAndIsDeletedFalseOrderByTimeCreatedDesc(accessibleCinemaIds)
                 .stream()
                 .map(bookingMapper::toResponse)
                 .toList();
@@ -171,11 +179,18 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public ActionMessageResponse updateBookingStatus(UUID id, UpdateBookingStatusRequest request, HttpServletRequest httpRequest) {
         validateOperatorRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
 
         Booking booking = getActiveBookingOrThrow(id);
-        if (!cinemaId.equals(booking.getCinemaId())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
+            Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest, role);
+            if (!accessibleCinemaIds.contains(booking.getCinemaId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+        }
+
+        if (request.getBookingStatus() == BookingStatus.EXPIRED) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
 
         booking.setBookingStatus(request.getBookingStatus());
@@ -223,6 +238,9 @@ public class BookingServiceImpl implements BookingService {
 
     private void authorizeBookingRead(Booking booking, HttpServletRequest httpRequest) {
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return;
+        }
         if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
             UUID userId = resolveUserId(httpRequest);
             if (!userId.equals(booking.getUserId())) {
@@ -232,11 +250,14 @@ public class BookingServiceImpl implements BookingService {
         }
 
         if (HeaderNames.ROLE_MANAGER.equals(role) || HeaderNames.ROLE_STAFF.equals(role)) {
-            UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-            if (!cinemaId.equals(booking.getCinemaId())) {
+            Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest, role);
+            if (!accessibleCinemaIds.contains(booking.getCinemaId())) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
+            return;
         }
+
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
     private List<BookingSeatItem> buildSeatItems(
@@ -371,17 +392,21 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void validateOperatorRole(HttpServletRequest httpRequest) {
-        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
     }
 
     private UUID resolveUserId(HttpServletRequest httpRequest) {
         return RequestAuthUtils.requireUserId(httpRequest);
     }
 
-    private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
-        UUID userId = resolveUserId(httpRequest);
+    private Set<UUID> resolveAccessibleCinemaIdsByUser(HttpServletRequest httpRequest, String role) {
         try {
-            return cinemaGrpcClient.getCinemaIdByUserId(userId);
+            UUID userId = resolveUserId(httpRequest);
+            List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
+            if (cinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            return new java.util.HashSet<>(cinemaIds);
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.CINEMA_NOT_FOUND
                     || ex.getErrorCode() == ErrorCode.NOT_FOUND
@@ -392,3 +417,5 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 }
+
+

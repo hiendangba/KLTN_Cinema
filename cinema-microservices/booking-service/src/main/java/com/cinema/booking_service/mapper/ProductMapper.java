@@ -13,7 +13,6 @@ import org.mapstruct.ReportingPolicy;
 public interface ProductMapper {
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "cinemaId", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
     @Mapping(target = "timeUpdated", ignore = true)
@@ -22,10 +21,8 @@ public interface ProductMapper {
     ProductResponse toResponse(Product product);
 
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "cinemaId", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "timeCreated", ignore = true)
     @Mapping(target = "timeUpdated", ignore = true)
     void updateEntityFromRequest(@MappingTarget Product product, UpdateProductRequest request);
 }
-

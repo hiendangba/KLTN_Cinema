@@ -2,12 +2,18 @@ package com.cinema.booking_service.repository;
 
 import com.cinema.booking_service.entity.Booking;
 import com.cinema.booking_service.enums.BookingStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.LocalDateTime;
+import jakarta.persistence.LockModeType;
 
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findByIdAndIsDeletedFalse(UUID id);
@@ -15,6 +21,24 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     List<Booking> findAllByUserIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID userId);
 
     List<Booking> findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID cinemaId);
+
+    List<Booking> findAllByCinemaIdInAndIsDeletedFalseOrderByTimeCreatedDesc(Collection<UUID> cinemaIds);
+
+    List<Booking> findAllByIsDeletedFalseOrderByTimeCreatedDesc();
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @EntityGraph(attributePaths = "seatItems")
+    @Query("""
+            SELECT DISTINCT b
+            FROM Booking b
+            WHERE b.isDeleted = false
+              AND b.bookingStatus IN :statuses
+              AND b.reservedUntil <= :now
+            ORDER BY b.reservedUntil ASC
+            """)
+    List<Booking> findDueBookingsForExpiration(
+            @Param("now") LocalDateTime now,
+            @Param("statuses") Collection<BookingStatus> statuses);
 
     boolean existsByShowtimeIdAndIsDeletedFalseAndBookingStatusIn(UUID showtimeId, Collection<BookingStatus> statuses);
 

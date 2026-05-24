@@ -58,8 +58,10 @@ public class ProductController extends BaseController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<APIResponse<ProductResponse>> getProductById(@PathVariable UUID id) {
-        ProductResponse response = productService.getProductById(id);
+    public ResponseEntity<APIResponse<ProductResponse>> getProductById(
+            @PathVariable UUID id,
+            HttpServletRequest httpRequest) {
+        ProductResponse response = productService.getProductById(id, httpRequest);
         return ok(response);
     }
 

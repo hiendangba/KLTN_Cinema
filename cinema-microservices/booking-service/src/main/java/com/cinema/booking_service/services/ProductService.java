@@ -18,7 +18,7 @@ public interface ProductService {
 
     ActionMessageResponse deleteProduct(UUID id, HttpServletRequest httpRequest);
 
-    ProductResponse getProductById(UUID id);
+    ProductResponse getProductById(UUID id, HttpServletRequest httpRequest);
 
     PageResponse<ProductResponse> getProductsByOperatorCinema(
             PageRequest<ProductField> request,

@@ -46,11 +46,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -203,9 +205,9 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             ShowTimeCreateRequest showTimeCreateRequest,
             HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        validateHallInCinema(showTimeCreateRequest.getHallId(), cinemaId);
-        validatePricingPolicy(showTimeCreateRequest.getPricingPolicyId(), cinemaId);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        UUID hallCinemaId = validateHallInCinema(showTimeCreateRequest.getHallId(), accessibleCinemaIds);
+        validatePricingPolicy(showTimeCreateRequest.getPricingPolicyId(), hallCinemaId, accessibleCinemaIds);
 
         FilmResponse filmResponse = filmGrpcClient.getFilmById(showTimeCreateRequest.getFilmId());
 
@@ -263,9 +265,10 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         validateManagerRole(httpRequest);
 
         ShowTime showTime = getEditableShowTime(id);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        validateHallInCinema(showTime.getHallId(), cinemaId);
-        validatePricingPolicy(updateShowTimeRequest.getPricingPolicyId(), cinemaId);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateShowtimeAccess(showTime, accessibleCinemaIds);
+        UUID hallCinemaId = validateHallInCinema(showTime.getHallId(), accessibleCinemaIds);
+        validatePricingPolicy(updateShowTimeRequest.getPricingPolicyId(), hallCinemaId, accessibleCinemaIds);
 
         FilmResponse filmResponse = filmGrpcClient.getFilmById(showTime.getFilmId());
         long duration = (long) filmResponse.getDuration() + 30;
@@ -292,7 +295,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         showTime.setStatus(updateShowTimeRequest.getStatus());
         showTimeRepository.save(showTime);
         return ActionMessageResponse.builder()
-                .message("Cập nhật suất chiếu thành công")
+                .message("Cáº­p nháº­t suáº¥t chiáº¿u thÃ nh cÃ´ng")
                 .build();
     }
 
@@ -305,10 +308,11 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         validateManagerRole(httpRequest);
 
         ShowTime showTime = getEditableShowTime(id);
+        validateShowtimeAccess(showTime, resolveAccessibleCinemaIdsByUser(httpRequest));
         showTime.setStatus(updateShowTimeStatusRequest.getStatus());
         showTimeRepository.save(showTime);
         return ActionMessageResponse.builder()
-                .message("Cập nhật trạng thái suất chiếu thành công")
+                .message("Cáº­p nháº­t tráº¡ng thÃ¡i suáº¥t chiáº¿u thÃ nh cÃ´ng")
                 .build();
     }
 
@@ -319,6 +323,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
+        validateShowtimeAccess(showTime, resolveAccessibleCinemaIdsByUser(httpRequest));
 
         if (bookingGrpcClient.isShowtimeBooked(id)) {
             throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
@@ -331,7 +336,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         showTime.setIsDeleted(true);
         showTimeRepository.save(showTime);
         return ActionMessageResponse.builder()
-                .message("Xóa suất chiếu thành công")
+                .message("XÃ³a suáº¥t chiáº¿u thÃ nh cÃ´ng")
                 .build();
     }
 
@@ -366,18 +371,29 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "showtime_manager_action");
     }
 
-    private void validatePricingPolicy(UUID pricingPolicyId, UUID cinemaId) {
+    private void validatePricingPolicy(UUID pricingPolicyId, UUID cinemaId, Set<UUID> accessibleCinemaIds) {
         PricingPolicy pricingPolicy = pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
 
         if (!cinemaId.equals(pricingPolicy.getCinemaId())) {
             throw new BusinessException(ErrorCode.PRICING_POLICY_NOT_IN_CINEMA);
         }
+        if (!accessibleCinemaIds.contains(pricingPolicy.getCinemaId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
-    private void validateHallInCinema(UUID hallId, UUID cinemaId) {
+    private UUID validateHallInCinema(UUID hallId, Set<UUID> accessibleCinemaIds) {
         UUID hallCinemaId = hallGrpcClient.getCinemaIdByHallId(hallId);
-        if (!cinemaId.equals(hallCinemaId)) {
+        if (!accessibleCinemaIds.contains(hallCinemaId)) {
+            throw new BusinessException(ErrorCode.HALL_NOT_IN_CINEMA);
+        }
+        return hallCinemaId;
+    }
+
+    private void validateShowtimeAccess(ShowTime showTime, Set<UUID> accessibleCinemaIds) {
+        UUID hallCinemaId = hallGrpcClient.getCinemaIdByHallId(showTime.getHallId());
+        if (!accessibleCinemaIds.contains(hallCinemaId)) {
             throw new BusinessException(ErrorCode.HALL_NOT_IN_CINEMA);
         }
     }
@@ -408,10 +424,14 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         return hallMap;
     }
 
-    private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
+    private Set<UUID> resolveAccessibleCinemaIdsByUser(HttpServletRequest httpRequest) {
         try {
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
-            return cinemaGrpcClient.getCinemaIdByUserId(userId);
+            List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER);
+            if (cinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            return new HashSet<>(cinemaIds);
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.UNAUTHORIZED || ex.getErrorCode() == ErrorCode.INVALID_FORMAT) {
                 log.warn("Invalid auth headers method={} path={}", httpRequest.getMethod(), httpRequest.getRequestURI());
@@ -431,3 +451,4 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         };
     }
 }
+

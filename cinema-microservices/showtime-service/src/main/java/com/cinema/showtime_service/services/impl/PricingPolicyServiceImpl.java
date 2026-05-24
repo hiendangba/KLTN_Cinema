@@ -22,7 +22,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -41,13 +43,15 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
     public ActionMessageResponse createPricingPolicy(PricingPolicyCreateRequest request,
                                                      HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds);
         validatePricingOrder(request.getStandardPrice(), request.getVipPrice(), request.getCouplePrice());
+
         PricingPolicy pricingPolicy = pricingPolicyMapper.toEntity(request);
-        pricingPolicy.setCinemaId(cinemaId);
+        pricingPolicy.setCinemaId(request.getCinemaId());
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("Tạo chính sách giá thành công")
+                .message("Táº¡o chÃ­nh sÃ¡ch giÃ¡ thÃ nh cÃ´ng")
                 .build();
     }
 
@@ -56,18 +60,21 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
     public ActionMessageResponse updatePricingPolicy(UUID id, PricingPolicyUpdateRequest request,
                                                      HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        PricingPolicy pricingPolicy = getActivePricingPolicy(id, cinemaId);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds);
+
+        PricingPolicy pricingPolicy = getActivePricingPolicy(id);
+        validatePolicyOwnership(pricingPolicy, request.getCinemaId(), accessibleCinemaIds);
         validatePricingPolicyNotUsed(id);
         validatePricingOrder(request.getStandardPrice(), request.getVipPrice(), request.getCouplePrice());
+
         pricingPolicy.setName(request.getName());
         pricingPolicy.setStandardPrice(request.getStandardPrice());
         pricingPolicy.setVipPrice(request.getVipPrice());
         pricingPolicy.setCouplePrice(request.getCouplePrice());
-
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("Cập nhật chính sách giá thành công")
+                .message("Cáº­p nháº­t chÃ­nh sÃ¡ch giÃ¡ thÃ nh cÃ´ng")
                 .build();
     }
 
@@ -75,37 +82,78 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
     @Transactional
     public ActionMessageResponse deletePricingPolicy(UUID id, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        PricingPolicy pricingPolicy = getActivePricingPolicy(id, cinemaId);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+
+        PricingPolicy pricingPolicy = getActivePricingPolicy(id);
+        validatePolicyAccess(pricingPolicy, accessibleCinemaIds);
         validatePricingPolicyNotUsed(id);
         pricingPolicy.setIsDeleted(true);
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("Xóa chính sách giá thành công")
+                .message("XÃ³a chÃ­nh sÃ¡ch giÃ¡ thÃ nh cÃ´ng")
                 .build();
     }
 
     @Override
     @Transactional(readOnly = true)
     public PricingPolicyResponse getPricingPolicyById(UUID id, HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        return pricingPolicyMapper.toResponse(getActivePricingPolicy(id, cinemaId));
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        PricingPolicy pricingPolicy = getActivePricingPolicy(id);
+
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return pricingPolicyMapper.toResponse(pricingPolicy);
+        }
+
+        RequestAuthUtils.requireAnyRole(
+                httpRequest,
+                log,
+                "pricing_policy_read_action",
+                HeaderNames.ROLE_MANAGER,
+                HeaderNames.ROLE_STAFF);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        validatePolicyAccess(pricingPolicy, accessibleCinemaIds);
+        return pricingPolicyMapper.toResponse(pricingPolicy);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PricingPolicyResponse> getAllPricingPolicies(HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
-        UUID cinemaId = resolveCinemaIdByUser(httpRequest);
-        return pricingPolicyRepository.findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(cinemaId).stream()
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return pricingPolicyRepository.findAllByIsDeletedFalseOrderByTimeCreatedDesc().stream()
+                    .map(pricingPolicyMapper::toResponse)
+                    .toList();
+        }
+
+        RequestAuthUtils.requireAnyRole(
+                httpRequest,
+                log,
+                "pricing_policy_read_action",
+                HeaderNames.ROLE_MANAGER,
+                HeaderNames.ROLE_STAFF);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        return pricingPolicyRepository.findAllByCinemaIdInAndIsDeletedFalseOrderByTimeCreatedDesc(accessibleCinemaIds)
+                .stream()
                 .map(pricingPolicyMapper::toResponse)
                 .toList();
     }
 
-    private PricingPolicy getActivePricingPolicy(UUID id, UUID cinemaId) {
-        return pricingPolicyRepository.findByIdAndCinemaIdAndIsDeletedFalse(id, cinemaId)
+    private PricingPolicy getActivePricingPolicy(UUID id) {
+        return pricingPolicyRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    private void validatePolicyAccess(PricingPolicy pricingPolicy, Set<UUID> accessibleCinemaIds) {
+        if (!accessibleCinemaIds.contains(pricingPolicy.getCinemaId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private void validatePolicyOwnership(PricingPolicy pricingPolicy, UUID requestCinemaId, Set<UUID> accessibleCinemaIds) {
+        if (!requestCinemaId.equals(pricingPolicy.getCinemaId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        validatePolicyAccess(pricingPolicy, accessibleCinemaIds);
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
@@ -124,10 +172,21 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         }
     }
 
-    private UUID resolveCinemaIdByUser(HttpServletRequest httpRequest) {
+    private void validateCinemaAccess(UUID cinemaId, Set<UUID> accessibleCinemaIds) {
+        if (cinemaId == null || !accessibleCinemaIds.contains(cinemaId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private Set<UUID> resolveAccessibleCinemaIdsByUser(HttpServletRequest httpRequest) {
         try {
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
-            return cinemaGrpcClient.getCinemaIdByUserId(userId);
+            String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+            List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
+            if (cinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            return new HashSet<>(cinemaIds);
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.UNAUTHORIZED || ex.getErrorCode() == ErrorCode.INVALID_FORMAT) {
                 log.warn("Invalid auth headers method={} path={}", httpRequest.getMethod(), httpRequest.getRequestURI());

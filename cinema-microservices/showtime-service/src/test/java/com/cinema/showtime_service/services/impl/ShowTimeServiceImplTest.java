@@ -99,7 +99,7 @@ class ShowTimeServiceImplTest {
                 .duration(90)
                 .build();
 
-        when(cinemaGrpcClient.getCinemaIdByUserId(userId)).thenReturn(cinemaId);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
         when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
         when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
         when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
@@ -165,7 +165,7 @@ class ShowTimeServiceImplTest {
                 .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
                 .build();
 
-        when(cinemaGrpcClient.getCinemaIdByUserId(userId)).thenReturn(cinemaId);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
         when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(otherCinemaId);
 
         BusinessException ex = assertThrows(BusinessException.class,
@@ -205,7 +205,7 @@ class ShowTimeServiceImplTest {
 
         when(showTimeRepository.findById(showTimeId)).thenReturn(Optional.of(existing));
         when(bookingGrpcClient.isShowtimeBooked(showTimeId)).thenReturn(false);
-        when(cinemaGrpcClient.getCinemaIdByUserId(userId)).thenReturn(cinemaId);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
         when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
         when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
 
