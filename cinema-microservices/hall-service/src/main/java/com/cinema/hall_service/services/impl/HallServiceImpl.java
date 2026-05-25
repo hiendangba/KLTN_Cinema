@@ -197,12 +197,23 @@ public class HallServiceImpl implements HallService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<UUID> listActiveHallIdsByCinema(UUID cinemaId) {
+        return hallRepository.findAllByCinemaIdAndIsDeletedFalse(cinemaId).stream()
+                .map(Hall::getId)
+                .toList();
+    }
+
+    @Override
     @Transactional
     @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse deleteHall(UUID hallId, HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
         Hall hall = getActiveHallOrThrow(hallId);
         validateCinemaOwnership(httpRequest, hall.getCinemaId());
+        if (hallHasActiveBookingOnActiveShowtime(hallId)) {
+            throw new BusinessException(ErrorCode.HALL_LAYOUT_IN_USE);
+        }
         hall.setIsDeleted(true);
         hallRepository.save(hall);
         return ActionMessageResponse.builder()

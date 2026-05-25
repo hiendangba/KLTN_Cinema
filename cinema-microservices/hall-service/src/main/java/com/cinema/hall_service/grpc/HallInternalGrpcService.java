@@ -6,6 +6,8 @@ import com.cinema.grpc.hall.GetHallByIdReply;
 import com.cinema.grpc.hall.GetHallByIdRequest;
 import com.cinema.grpc.hall.HallInternalServiceGrpc;
 import com.cinema.grpc.hall.HallPayload;
+import com.cinema.grpc.hall.ListActiveHallIdsByCinemaReply;
+import com.cinema.grpc.hall.ListActiveHallIdsByCinemaRequest;
 import com.cinema.hall_service.dto.response.HallResponse;
 import com.cinema.hall_service.services.HallService;
 import io.grpc.stub.StreamObserver;
@@ -70,5 +72,49 @@ public class HallInternalGrpcService extends HallInternalServiceGrpc.HallInterna
                 .setCinemaId(hall.getCinemaId().toString())
                 .setName(Objects.toString(hall.getName(), ""))
                 .build();
+    }
+
+    @Override
+    public void listActiveHallIdsByCinema(
+            ListActiveHallIdsByCinemaRequest request,
+            StreamObserver<ListActiveHallIdsByCinemaReply> responseObserver) {
+        UUID cinemaId;
+        try {
+            cinemaId = UUID.fromString(request.getCinemaId());
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(ListActiveHallIdsByCinemaReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+            return;
+        }
+
+        try {
+            responseObserver.onNext(ListActiveHallIdsByCinemaReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Hall ids fetched successfully")
+                    .addAllHallIds(hallService.listActiveHallIdsByCinema(cinemaId).stream()
+                            .map(UUID::toString)
+                            .toList())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(ListActiveHallIdsByCinemaReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while listing hall ids by cinema", ex);
+            responseObserver.onNext(ListActiveHallIdsByCinemaReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
     }
 }

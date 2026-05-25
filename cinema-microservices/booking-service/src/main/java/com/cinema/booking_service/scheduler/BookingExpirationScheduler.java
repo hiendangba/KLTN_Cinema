@@ -17,7 +17,7 @@ public class BookingExpirationScheduler {
     private final BookingExpirationService bookingExpirationService;
     private final SeatLockService seatLockService;
 
-    @Scheduled(fixedDelayString = "${booking.expiration-scheduler-delay-ms:60000}")
+    @Scheduled(fixedDelayString = "${booking.expiration-scheduler-delay-ms:1800000}")
     public void expireBookings() {
         try {
             bookingExpirationService.expireDueBookings(LocalDateTime.now())

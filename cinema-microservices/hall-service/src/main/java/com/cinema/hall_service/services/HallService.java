@@ -9,6 +9,7 @@ import com.cinema.hall_service.dto.request.UpdateHallRequest;
 import com.cinema.hall_service.dto.response.HallResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface HallService {
@@ -17,6 +18,7 @@ public interface HallService {
     HallResponse getHallById(UUID id);
 
     PageResponse<HallResponse> searchHalls(PageRequest<HallField> request);
+    List<UUID> listActiveHallIdsByCinema(UUID cinemaId);
 
     ActionMessageResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest);
 

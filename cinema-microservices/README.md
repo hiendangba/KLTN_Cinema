@@ -148,6 +148,9 @@ Kiểm tra email spam/rác, sau đó gửi lại OTP. Hệ thống có giới h�
 ### 4. Vì sao có lúc API trả về lỗi business dù request đúng format?
 Do request có thể vi phạm rule nghiệp vụ thực tế, ví dụ xung đột lịch chiếu hoặc dữ liệu không thuộc phạm vi rạp hiện tại.
 
+### 6. Có booking active thì có được hủy/sửa hall, cinema, showtime không?
+Không. Nếu tồn tại booking active (`PENDING`, `RESERVED`, `CONFIRMED`) thì hệ thống chặn toàn bộ thao tác đổi trạng thái hoặc xóa ở `showtime`, `hall`, `cinema`.
+
 ### 5. Có thể dùng backend này cho mobile app không?
 Có. Backend cung cấp API theo domain và có thể dùng cho web/mobile tùy frontend tích hợp.
 

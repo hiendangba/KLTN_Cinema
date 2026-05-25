@@ -270,6 +270,16 @@ Bộ não hệ thống lập lịch chiếu phim hằng ngày.
 - Quản lý **Pricing Policy** ngay trong `showtime-service` để giá vé đi cùng ngữ cảnh suất chiếu thay vì gắn cố định vào hall.
 - Mỗi `showtime` hiện giữ `pricingPolicyId`, còn response showtime trả kèm object `pricingPolicy` để Frontend đọc giá trực tiếp.
 - Pricing policy được scope theo `cinemaId`; service lấy `cinemaId` từ `cinema-service` qua gRPC `GetCinemaByUserId` dựa trên `X-User-ID`.
+- Booking lock rule: nếu showtime có booking active (`PENDING`, `RESERVED`, `CONFIRMED`) thì chặn update status/update/delete.
+
+### Booking Lock Rule (Global cho showtime/hall/cinema)
+
+- Primitive dùng chung: `booking-service` gRPC `HasActiveBookingByShowtimeIds`.
+- `showtime`: check trực tiếp theo `showtimeId`.
+- `hall`: lấy danh sách showtime active theo hall, nếu có booking active thì chặn update/delete.
+- `cinema`: lấy toàn bộ hall active theo cinema, gom showtime active của các hall, nếu có booking active thì chặn update/update-status/delete.
+- Chỉ các trạng thái booking active mới chặn: `PENDING`, `RESERVED`, `CONFIRMED`.
+- Booking terminal (`CANCELLED`, `EXPIRED`) không chặn.
 
 ### 6. `email-service`
 Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải request đồng bộ.
@@ -752,6 +762,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
     - Khi `cancel` hoặc status chuyển terminal (`CANCELLED`, `EXPIRED`, `CONFIRMED`) thì release lock.
   - Auto-expire booking:
     - Scheduler quét booking quá `reservedUntil` và tự chuyển sang `EXPIRED`.
+    - Nhịp quét cấu hình bằng env `BOOKING_EXPIRATION_SCHEDULER_DELAY_MS` (mặc định 30 phút).
     - Khi expire sẽ release lại Redis seat lock tương ứng.
   - Rule nghiệp vụ booking đã áp:
     - Tối đa `5` ghế mỗi booking.

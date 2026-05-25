@@ -9,6 +9,9 @@ import com.cinema.cinema_service.dto.response.CinemaResponse;
 import com.cinema.cinema_service.dto.response.CinemaStaffResponse;
 import com.cinema.cinema_service.entity.Cinema;
 import com.cinema.cinema_service.entity.CinemaStaff;
+import com.cinema.cinema_service.grpc.BookingGrpcClient;
+import com.cinema.cinema_service.grpc.HallGrpcClient;
+import com.cinema.cinema_service.grpc.ShowtimeGrpcClient;
 import com.cinema.cinema_service.grpc.UserGrpcClient;
 import com.cinema.cinema_service.mapper.CinemaMapper;
 import com.cinema.cinema_service.repository.CinemaRepository;
@@ -53,6 +56,9 @@ public class CinemaServiceImpl implements CinemaService {
     CinemaStaffRepository cinemaStaffRepository;
     CinemaMapper cinemaMapper;
     UserGrpcClient userGrpcClient;
+    HallGrpcClient hallGrpcClient;
+    ShowtimeGrpcClient showtimeGrpcClient;
+    BookingGrpcClient bookingGrpcClient;
 
     // CRUD rap phim
     @Override
@@ -139,6 +145,7 @@ public class CinemaServiceImpl implements CinemaService {
         validateOperatingTime(request.getOpenTime(), request.getCloseTime());
 
         Cinema cinema = getActiveCinemaOrThrow(cinemaId);
+        validateNoActiveBookingForCinema(cinemaId);
         cinemaMapper.updateEntity(cinema, request);
         cinemaRepository.save(cinema);
 
@@ -156,6 +163,7 @@ public class CinemaServiceImpl implements CinemaService {
             HttpServletRequest httpRequest) {
         validateAdminRole(httpRequest);
         Cinema cinema = getActiveCinemaOrThrow(cinemaId);
+        validateNoActiveBookingForCinema(cinemaId);
         cinema.setStatus(request.getStatus());
         cinemaRepository.save(cinema);
 
@@ -170,6 +178,7 @@ public class CinemaServiceImpl implements CinemaService {
     public ActionMessageResponse deleteCinema(UUID cinemaId, HttpServletRequest httpRequest) {
         validateAdminRole(httpRequest);
         Cinema cinema = getActiveCinemaOrThrow(cinemaId);
+        validateNoActiveBookingForCinema(cinemaId);
         cinema.setIsDeleted(true);
         cinemaRepository.save(cinema);
 
@@ -403,6 +412,25 @@ public class CinemaServiceImpl implements CinemaService {
                 || longitude.compareTo(BigDecimal.valueOf(-180)) < 0
                 || longitude.compareTo(BigDecimal.valueOf(180)) > 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+    }
+
+    private void validateNoActiveBookingForCinema(UUID cinemaId) {
+        List<UUID> hallIds = hallGrpcClient.listActiveHallIdsByCinema(cinemaId);
+        if (hallIds.isEmpty()) {
+            return;
+        }
+
+        List<UUID> activeShowtimeIds = new ArrayList<>();
+        for (UUID hallId : hallIds) {
+            activeShowtimeIds.addAll(showtimeGrpcClient.listActiveShowtimeIdsByHall(hallId));
+        }
+        if (activeShowtimeIds.isEmpty()) {
+            return;
+        }
+
+        if (bookingGrpcClient.hasActiveBookingByShowtimeIds(activeShowtimeIds)) {
+            throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
         }
     }
 
