@@ -214,8 +214,8 @@ cinema-microservices/
 │   └── src/main/java/.../
 │       └── services/              # Xử lý gửi email bất đồng bộ qua Gmail SMTP (@EnableAsync)
 │
-├── booking-service/               # 🧪 Skeleton service (chưa nối parent multi-module)
-├── payment-service/               # 🧪 Skeleton service (chưa nối parent multi-module)
+├── booking-service/               # 🎟️ Booking core service (seat lock + booking/product APIs + internal gRPC)
+├── payment-service/               # 💳 Payment service (session + SePay webhook + VietQR bank catalog)
 │
 ├── envoy/
 │   ├── envoy.local.yaml           # 🔀 Envoy local (route tới host.docker.internal)
@@ -251,7 +251,7 @@ Mọi service đều import thư viện này. Nó giải quyết triệt để s
 ### 3. `user-service`
 Đóng gói chuyên biệt cho thông tin cá nhân.
 - Cô lập riêng `Identity` và `Profile` để hạn chế vector tấn công lộ mật khẩu.
-- Hỗ trợ lưu cấu hình Ngân hàng (`bankCode`, `accountNumber`) dành riêng cho chức năng hoàn tiền/đối soát trong tương lai.
+- Hỗ trợ lưu cấu hình Ngân hàng (`bankCode`, `accountNumber`) dành riêng cho chức năng hoàn tiền/đối soát.
 
 ### 4. `film-service`
 Kho báu nội dung hệ thống.
@@ -337,7 +337,19 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `GET` | `/api/showtimes/pricing-policies/{id}` | ✅ MGMT | Lấy chi tiết một policy giá trong cinema hiện tại của user. |
 | `GET` | `/api/showtimes/pricing-policies` | ✅ MGMT | Lấy danh sách policy giá của cinema hiện tại. |
 
-### 5. Hall Service (`/api/halls`)
+### 5. Payment Service (`/api/payments`)
+
+| Method | Endpoint | Auth | Mô tả |
+|---|---|---|---|
+| `GET` | `/api/payments/vietqr/banks` | ❌ Public | Lấy danh mục ngân hàng từ local catalog đã sync từ VietQR. |
+| `POST` | `/api/payments/sessions` | ✅ Authenticated | Tạo phiên thanh toán cho booking hiện tại (có ownership check theo `X-User-ID`). |
+| `GET` | `/api/payments/sessions/{bookingId}` | ✅ Authenticated | Lấy phiên thanh toán mới nhất theo booking (scope theo user). |
+| `POST` | `/api/payments/sessions/{bookingId}/refund` | ✅ Authenticated | Tạo yêu cầu hoàn tiền nội bộ (trạng thái `REFUND_PENDING`). |
+| `GET` | `/api/payments/reconciliation` | ✅ Authenticated | Tổng hợp đối soát theo khoảng thời gian (`from`, `to`). |
+| `POST` | `/api/payments/promotions/preview` | ✅ Authenticated | Ước tính giảm giá từ promo code trước checkout. |
+| `POST` | `/api/payments/webhooks/sepay` | ❌ Public (secret header) | Nhận webhook từ SePay, idempotent theo event key. |
+
+### 6. Hall Service (`/api/halls`)
 
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
@@ -346,7 +358,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `POST` | `/api/halls/search` | ❌ Public | Tìm hall bằng `PageRequest/PageResponse`. |
 | `PATCH` | `/api/halls/{id}/layout` | ✅ MGMT | Cập nhật toàn bộ `layoutJson` của hall. |
 
-### 6. Cinema Service (`/api/cinemas`)
+### 7. Cinema Service (`/api/cinemas`)
 
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
@@ -373,7 +385,7 @@ Ghi chú gateway:
 Tránh điểm chết thắt cổ chai của dạng cơ sở dữ liệu liền khối (Monolithic Database) truyền thống. Khóa liên kết ngoài (Foreign Key Constraints) bị loại bỏ có tính toán, các ID liên kết bằng chuẩn phân tán UUID.
 Với việc Envoy điều phối và routing tải chia, khi có nhu cầu thì Postgresql có thể tự được dời cụm cluster riêng ra.
 
-Năm cơ sở dữ liệu gồm: `identity_db`, `user_db`, `film_db`, `showtime_db`, `hall_db` được nhúng tự động thông qua khối lệnh của `/postgres-init/create-databases.sql`.
+Chín cơ sở dữ liệu gồm: `identity_db`, `user_db`, `film_db`, `showtime_db`, `hall_db`, `cinema_db`, `booking_db`, `payment_db`, `seat_db` được nhúng tự động thông qua khối lệnh của `/postgres-init/create-databases.sql`.
 
 ### Chiến Lược Redis
 Áp dụng kho Redis v7 cung cấp băng thông nghìn Request/sec:
@@ -561,6 +573,14 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ---
 
+## 🗺️ Trạng Thái Lộ Trình Hiện Tại (25/05/2026)
+
+- Core đã hoàn thành: identity, user, film, showtime, cinema, hall, booking, payment, gateway, gRPC nội bộ, DB bootstrap.
+- Còn mở rộng: tách `product-service` riêng, tích hợp refund với cổng thanh toán thực tế, loyalty và khuyến mãi nâng cao.
+- Các mục ở phần lịch sử phía dưới là nhật ký triển khai, không phải backlog chưa làm.
+
+---
+
 ## 🗺️ Lịch Sử Phát Triển
 
 ### 🗓️ 01/04/2026 — Rà soát Tái Cấu Trúc Toàn Diện
@@ -576,13 +596,13 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 6. Centralized Auto DB Script Configuration cho Container Init.
 7. Áp mã UUID v7 thay cho v4 vào Primary Key.
 
-⚠️ **Kế Hoạch & Lộ Trình Sắp Thi Hành:**
+⚠️ **Các Hạng Mục Đã Hoàn Thành / Còn Mở Rộng:**
 
-| Hạng Mục Tương Lai Mở Rộng | Mức Phân Quyền | Diễn Giải Nhiệm Vụ |
+| Hạng Mục | Trạng Thái | Diễn Giải Nhiệm Vụ |
 |---|---|---|
-| **Hall Service (Rạp & Ghế)** | 🔴 Cao | Xây dựng sơ đồ rạp, phòng chiếu, ghế; chuẩn hóa map ghế để liên kết lịch chiếu. |
-| **Booking Core Service** | 🔴 Cao | Xương sống kinh doanh (Bán Vé Core, Giữ Chỗ Redis Locking). Tương thích Gateway sẵn. Rule cứng: mỗi lượt booking tối đa 5 vé, vượt quá phải trả lỗi business. |
-| **Payment Integration** | 🟡 Trung | VNPay/MoMo IPN, cập nhật trạng thái vé và giao dịch thanh toán. |
+| **Hall Service (Rạp & Ghế)** | ✅ Hoàn thành | Đã có sơ đồ rạp, phòng chiếu, layout ghế và route gateway đồng bộ. |
+| **Booking Core Service** | ✅ Hoàn thành | Xương sống đặt vé, giữ ghế Redis, booking/product APIs, gRPC nội bộ và rule tối đa 5 vé. |
+| **Payment Integration** | ✅ Hoàn thành core | Đã có session thanh toán, webhook SePay, confirm booking qua gRPC, refund/reconciliation/promotion preview. |
 
 ### 🗓️ 02/04/2026 — Nâng cấp Phân trang (Offset Pagination)
 **Nội dung cập nhật:**
@@ -608,7 +628,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - `identity-service` -> `user-service`
   - Email được đẩy vào RabbitMQ để `email-service` xử lý bất đồng bộ.
   - `showtime-service` -> `film-service`
-  - `showtime-service` -> `booking-service` (theo contract gRPC thống nhất cho service tương lai)
+- `showtime-service` -> `booking-service` (theo contract gRPC thống nhất)
 - Bổ sung thư mục `common-lib/src/main/proto` chứa các contract:
   - `user_internal.proto`
   - `email_internal.proto`
@@ -772,10 +792,10 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - Unique tên product trong cùng `cinemaId` trên tập chưa xóa.
   - Trạng thái mặc định khi tạo nếu request không truyền: `ACTIVE`.
   - Các điểm chưa làm ở phase này:
-  - Chưa tách `payment-service`/`product-service` ở mức production scale.
-  - Chưa triển khai flow thanh toán hoàn chỉnh (capture/refund/webhook callback).
+  - Chưa tách `product-service` riêng khỏi `booking-service`.
+  - Payment đã có session + webhook callback + refund nội bộ + reconciliation/promotion preview, nhưng chưa tích hợp gọi API refund thực tế với cổng thanh toán.
 ---
-> Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **08/05/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
+> Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **25/05/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
 
 ---
 

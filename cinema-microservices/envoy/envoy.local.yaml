@@ -293,6 +293,20 @@ static_resources:
                     socket_address:
                       address: host.docker.internal
                       port_value: 8095
+    - name: payment-service
+      connect_timeout: 1s
+      type: LOGICAL_DNS
+      dns_lookup_family: ALL
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: payment-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: host.docker.internal
+                      port_value: 8098
     - name: seat-service
       connect_timeout: 1s
       type: LOGICAL_DNS

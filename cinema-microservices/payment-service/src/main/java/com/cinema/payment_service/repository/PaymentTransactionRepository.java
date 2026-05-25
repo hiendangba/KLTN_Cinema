@@ -13,6 +13,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     Optional<PaymentTransaction> findFirstByBookingIdOrderByTimeCreatedDesc(UUID bookingId);
 
+    Optional<PaymentTransaction> findFirstByBookingIdAndUserIdOrderByTimeCreatedDesc(UUID bookingId, UUID userId);
+
     Optional<PaymentTransaction> findFirstByBookingIdAndStatusOrderByTimeCreatedDesc(UUID bookingId,
                                                                                       PaymentTransactionStatus status);
 
@@ -20,4 +22,6 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     List<PaymentTransaction> findAllByStatusAndExpiresAtBefore(PaymentTransactionStatus status,
                                                                LocalDateTime now);
+
+    List<PaymentTransaction> findAllByTimeCreatedBetween(LocalDateTime from, LocalDateTime to);
 }

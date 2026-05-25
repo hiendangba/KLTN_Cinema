@@ -33,6 +33,9 @@ public class PaymentTransaction {
     @Column(name = "showtime_id", columnDefinition = "uuid", nullable = false)
     private UUID showtimeId;
 
+    @Column(name = "user_id", columnDefinition = "uuid")
+    private UUID userId;
+
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
@@ -69,6 +72,27 @@ public class PaymentTransaction {
 
     @Column(name = "failure_reason", columnDefinition = "text")
     private String failureReason;
+
+    @Column(name = "refund_amount", precision = 12, scale = 2)
+    private BigDecimal refundAmount;
+
+    @Column(name = "refund_reason", columnDefinition = "text")
+    private String refundReason;
+
+    @Column(name = "refunded_at")
+    private LocalDateTime refundedAt;
+
+    @Column(name = "promotion_code", length = 80)
+    private String promotionCode;
+
+    @Column(name = "promotion_discount_amount", precision = 12, scale = 2)
+    private BigDecimal promotionDiscountAmount;
+
+    @Column(name = "webhook_event_key", length = 255)
+    private String webhookEventKey;
+
+    @Column(name = "last_webhook_at")
+    private LocalDateTime lastWebhookAt;
 
     @Column(name = "time_created", nullable = false, updatable = false)
     private LocalDateTime timeCreated;

@@ -15,6 +15,7 @@ public class PaymentSessionResponse {
     private UUID id;
     private UUID bookingId;
     private UUID showtimeId;
+    private UUID userId;
     private BigDecimal amount;
     private String currency;
     private String paymentMethod;
@@ -27,4 +28,9 @@ public class PaymentSessionResponse {
     private LocalDateTime paidAt;
     private LocalDateTime expiredAt;
     private String failureReason;
+    private BigDecimal refundAmount;
+    private String refundReason;
+    private LocalDateTime refundedAt;
+    private String promotionCode;
+    private BigDecimal promotionDiscountAmount;
 }

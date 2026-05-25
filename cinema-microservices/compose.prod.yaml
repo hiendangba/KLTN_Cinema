@@ -199,16 +199,26 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/payment_db
       DB_USERNAME: payment_user
       DB_PASSWORD: payment_pass
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
       VIETQR_BASE_URL: https://api.vietqr.io
       VIETQR_BANKS_PATH: /v2/banks
       VIETQR_API_KEY: ${VIETQR_API_KEY:?VIETQR_API_KEY is required}
       VIETQR_SECRET_KEY: ${VIETQR_SECRET_KEY:?VIETQR_SECRET_KEY is required}
       VIETQR_SYNC_CRON: ${VIETQR_SYNC_CRON:-0 0 3 1 * *}
+      SEPAY_BASE_URL: ${SEPAY_BASE_URL:-https://pgapi-sandbox.sepay.vn}
+      SEPAY_MERCHANT_ID: ${SEPAY_MERCHANT_ID:?SEPAY_MERCHANT_ID is required}
+      SEPAY_SECRET_KEY: ${SEPAY_SECRET_KEY:?SEPAY_SECRET_KEY is required}
+      SEPAY_PAYMENT_METHOD: ${SEPAY_PAYMENT_METHOD:-QR_DONG_THEO_DON_HANG}
+      SEPAY_RETURN_URL: ${SEPAY_RETURN_URL:?SEPAY_RETURN_URL is required}
+      SEPAY_IPN_URL: ${SEPAY_IPN_URL:?SEPAY_IPN_URL is required}
+      PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS: ${PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS:-60000}
       SERVER_PORT: 8098
     expose:
       - "8098"
     depends_on:
       - postgres
+      - booking-service
     mem_limit: 224m
 
   hall-services:

@@ -81,15 +81,16 @@ CinemaStar tập trung giải quyết các điểm này bằng một nền tản
 - Nhanh: dữ liệu được xử lý theo kiến trúc dịch vụ chuyên biệt, phản hồi ổn định.
 - An toàn: xác thực tập trung, phân quyền theo vai trò.
 - Rõ ràng: lỗi nghiệp vụ được trả về nhất quán, dễ hiểu.
-- Linh hoạt: có thể mở rộng thêm payment, khuyến mãi, loyalty trong tương lai.
+- Linh hoạt: core payment flow đã có sẵn (session + webhook + đối soát), còn mở rộng thêm khuyến mãi, loyalty và refund provider.
 - Dễ tích hợp: API được tổ chức theo nhóm nghiệp vụ rõ ràng.
 
 ## Tình Trạng Dự Án
 
 - Đây là backend microservices cho hệ thống CinemaStar.
 - Frontend không nằm trong repository này.
-- Trạng thái hiện tại: phù hợp cho môi trường dev/test/UAT.
-- Thời điểm cập nhật README: 22/04/2026.
+- Trạng thái hiện tại: core lộ trình gần hoàn tất, phù hợp cho môi trường dev/test/UAT.
+- Phần còn mở rộng: tách `product-service` riêng, tích hợp refund với cổng thanh toán thực tế, và các module loyalty/khuyến mãi nâng cao.
+- Thời điểm cập nhật README: 25/05/2026.
 
 ## Dùng Thử Nhanh (QA/Tester)
 
@@ -129,6 +130,8 @@ docker compose -f compose.prod.yaml down -v
 - `Showtime`: quản lý suất chiếu và chính sách giá.
 - `Cinema`: quản lý rạp, tọa độ, giờ mở/đóng cửa và staff mapping theo rạp.
 - `Hall`: quản lý phòng chiếu và sơ đồ ghế.
+- `Booking`: giữ chỗ ghế, booking và sản phẩm đi kèm.
+- `Payment`: tạo session thanh toán, xử lý webhook SePay, đối soát cơ bản.
 - `Email`: gửi thông báo bất đồng bộ.
 
 ## Câu Hỏi Thường Gặp
