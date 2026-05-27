@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -87,6 +88,15 @@ public class ShowTimeController extends BaseController {
     @GetMapping("/{id}/seat-map")
     public ResponseEntity<APIResponse<SeatMapResponse>> getSeatMap(@PathVariable UUID id) {
         SeatMapResponse response = showTimeService.getSeatMapByShowtimeId(id);
+        return ok(response);
+    }
+
+    @GetMapping("/films/{filmId}/active")
+    public ResponseEntity<APIResponse<PageResponse<ShowTimeResponse>>> getActiveShowtimesByFilmId(
+            @PathVariable UUID filmId,
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer size) {
+        PageResponse<ShowTimeResponse> response = showTimeService.getActiveShowtimesByFilmId(filmId, page, size);
         return ok(response);
     }
 }

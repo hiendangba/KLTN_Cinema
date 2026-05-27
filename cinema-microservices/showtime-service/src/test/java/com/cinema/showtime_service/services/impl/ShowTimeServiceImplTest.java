@@ -7,6 +7,7 @@ import com.cinema.http.HeaderNames;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
+import com.cinema.showtime_service.dto.response.HallResponse;
 import com.cinema.showtime_service.dto.response.PricingPolicyResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import com.cinema.showtime_service.entity.PricingPolicy;
@@ -15,6 +16,7 @@ import com.cinema.showtime_service.grpc.BookingGrpcClient;
 import com.cinema.showtime_service.grpc.CinemaGrpcClient;
 import com.cinema.showtime_service.grpc.FilmGrpcClient;
 import com.cinema.showtime_service.grpc.HallGrpcClient;
+import com.cinema.showtime_service.grpc.SeatGrpcClient;
 import com.cinema.showtime_service.mapper.PricingPolicyMapper;
 import com.cinema.showtime_service.mapper.ShowTimeMapper;
 import com.cinema.showtime_service.repository.PricingPolicyRepository;
@@ -36,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +61,8 @@ class ShowTimeServiceImplTest {
     private CinemaGrpcClient cinemaGrpcClient;
     @Mock
     private HallGrpcClient hallGrpcClient;
+    @Mock
+    private SeatGrpcClient seatGrpcClient;
     @Mock
     private PricingPolicyRepository pricingPolicyRepository;
 
@@ -213,6 +218,58 @@ class ShowTimeServiceImplTest {
                 () -> showTimeService.updateShowTime(showTimeId, updateRequest, request));
 
         assertEquals(ErrorCode.PRICING_POLICY_NOT_IN_CINEMA, ex.getErrorCode());
+    }
+
+    @Test
+    void getActiveShowtimesByFilmId_shouldReturnPagedActiveShowtimes() {
+        UUID filmId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+
+        ShowTime showTime = new ShowTime();
+        showTime.setId(showtimeId);
+        showTime.setFilmId(filmId);
+        showTime.setHallId(hallId);
+        showTime.setPricingPolicyId(pricingPolicyId);
+        showTime.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        showTime.setIsDeleted(false);
+        showTime.setStartDateTime(LocalDateTime.now().plusHours(1));
+        showTime.setEndDateTime(LocalDateTime.now().plusHours(3));
+
+        ShowTimeResponse mappedResponse = ShowTimeResponse.builder()
+                .id(showtimeId)
+                .filmId(filmId)
+                .hallId(hallId)
+                .pricingPolicyId(pricingPolicyId)
+                .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
+                .build();
+
+        PricingPolicy policy = new PricingPolicy();
+        policy.setId(pricingPolicyId);
+        PricingPolicyResponse policyResponse = PricingPolicyResponse.builder().id(pricingPolicyId).build();
+
+        FilmResponse filmResponse = FilmResponse.builder().id(filmId).build();
+        HallResponse hallResponse = HallResponse.builder().id(hallId).build();
+
+        when(showTimeRepositoryImpl.countWithFilter(eq(null), any())).thenReturn(1L);
+        when(showTimeRepositoryImpl.searchWithPageAndSortAndFilter(eq(null), eq(1), eq(20), any(), any()))
+                .thenReturn(List.of(showTime));
+        when(showTimeMapper.toResponse(showTime)).thenReturn(mappedResponse);
+        when(pricingPolicyRepository.findAllById(List.of(pricingPolicyId))).thenReturn(List.of(policy));
+        when(pricingPolicyMapper.toResponse(policy)).thenReturn(policyResponse);
+        when(filmGrpcClient.getFilmsByIds(List.of(filmId))).thenReturn(java.util.Map.of(filmId, filmResponse));
+        when(hallGrpcClient.getHallById(hallId)).thenReturn(hallResponse);
+
+        var result = showTimeService.getActiveShowtimesByFilmId(filmId, null, null);
+
+        assertNotNull(result);
+        assertEquals(1, result.getTotalElements());
+        assertEquals(1, result.getData().size());
+        assertEquals(filmId, result.getData().get(0).getFilmId());
+        assertNotNull(result.getData().get(0).getFilm());
+        assertNotNull(result.getData().get(0).getHall());
+        assertNotNull(result.getData().get(0).getPricingPolicy());
     }
 
     private HttpServletRequest managerRequest(UUID userId) {

@@ -75,34 +75,22 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<ShowTimeResponse> searchShowtimes(PageRequest<ShowTimeField> request) {
-        PageResponse<ShowTimeResponse> base = searchShowtimesBase(request);
-        List<ShowTimeResponse> showtimes = new ArrayList<>(base.getData());
+        return enrichShowtimePage(searchShowtimesBase(request));
+    }
 
-        List<UUID> filmIds = showtimes.stream()
-                .map(ShowTimeResponse::getFilmId)
-                .distinct()
-                .collect(Collectors.toList());
-
-        Map<UUID, FilmResponse> filmMap = filmIds.isEmpty()
-                ? Map.of()
-                : filmGrpcClient.getFilmsByIds(filmIds);
-
-        Map<UUID, HallResponse> hallMap = getHallResponseMap(showtimes);
-
-        showtimes.forEach(showtime -> {
-            showtime.setFilm(filmMap.get(showtime.getFilmId()));
-            showtime.setHall(hallMap.get(showtime.getHallId()));
-        });
-
-        return PageResponse.<ShowTimeResponse>builder()
-                .data(showtimes)
-                .currentPage(base.getCurrentPage())
-                .totalPages(base.getTotalPages())
-                .totalElements(base.getTotalElements())
-                .size(base.getSize())
-                .hasNext(base.isHasNext())
-                .hasPrevious(base.isHasPrevious())
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ShowTimeResponse> getActiveShowtimesByFilmId(UUID filmId, Integer page, Integer size) {
+        PageRequest<ShowTimeField> request = PageRequest.<ShowTimeField>builder()
+                .page(page)
+                .size(size)
+                .filterBy(List.of(FilterField.<ShowTimeField>builder()
+                        .field(ShowTimeField.FILM_ID)
+                        .operator("EQ")
+                        .value(filmId.toString())
+                        .build()))
                 .build();
+        return enrichShowtimePage(searchShowtimesBase(request));
     }
 
     private PageResponse<ShowTimeResponse> searchShowtimesBase(PageRequest<ShowTimeField> request) {
@@ -140,6 +128,36 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 .size(size)
                 .hasNext(page < totalPages)
                 .hasPrevious(page > 1)
+                .build();
+    }
+
+    private PageResponse<ShowTimeResponse> enrichShowtimePage(PageResponse<ShowTimeResponse> base) {
+        List<ShowTimeResponse> showtimes = new ArrayList<>(base.getData());
+
+        List<UUID> filmIds = showtimes.stream()
+                .map(ShowTimeResponse::getFilmId)
+                .distinct()
+                .toList();
+
+        Map<UUID, FilmResponse> filmMap = filmIds.isEmpty()
+                ? Map.of()
+                : filmGrpcClient.getFilmsByIds(filmIds);
+
+        Map<UUID, HallResponse> hallMap = getHallResponseMap(showtimes);
+
+        showtimes.forEach(showtime -> {
+            showtime.setFilm(filmMap.get(showtime.getFilmId()));
+            showtime.setHall(hallMap.get(showtime.getHallId()));
+        });
+
+        return PageResponse.<ShowTimeResponse>builder()
+                .data(showtimes)
+                .currentPage(base.getCurrentPage())
+                .totalPages(base.getTotalPages())
+                .totalElements(base.getTotalElements())
+                .size(base.getSize())
+                .hasNext(base.isHasNext())
+                .hasPrevious(base.isHasPrevious())
                 .build();
     }
 
@@ -451,4 +469,3 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         };
     }
 }
-

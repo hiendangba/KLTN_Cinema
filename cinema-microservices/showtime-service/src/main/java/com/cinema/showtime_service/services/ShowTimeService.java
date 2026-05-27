@@ -32,4 +32,6 @@ public interface ShowTimeService {
     ShowTimeResponse getShowTimeById(UUID id);
 
     SeatMapResponse getSeatMapByShowtimeId(UUID showtimeId);
+
+    PageResponse<ShowTimeResponse> getActiveShowtimesByFilmId(UUID filmId, Integer page, Integer size);
 }
