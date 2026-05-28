@@ -226,7 +226,7 @@ services:
     image: ${IMAGE_REPO}/hall-services:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
-      JAVA_OPTS: "-Xms48m -Xmx144m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms48m -Xmx288m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       DB_POOL_MAX_SIZE: "4"
       DB_POOL_MIN_IDLE: "1"
@@ -255,7 +255,7 @@ services:
       - postgres
       - redis
       - cinema-service
-    mem_limit: 208m
+    mem_limit: 416m
 
   seat-service:
     image: ${IMAGE_REPO}/seat-service:${IMAGE_TAG:-dev}
