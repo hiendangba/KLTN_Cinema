@@ -1,8 +1,11 @@
 package com.cinema.booking_service.services.impl;
 
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
+import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.BookingResponse;
+import com.cinema.booking_service.dto.response.CheckoutContextResponse;
+import com.cinema.booking_service.dto.response.PaymentSessionSnapshotResponse;
 import com.cinema.booking_service.entity.Booking;
 import com.cinema.booking_service.entity.BookingProductItem;
 import com.cinema.booking_service.entity.BookingSeatItem;
@@ -11,17 +14,22 @@ import com.cinema.booking_service.enums.BookingStatus;
 import com.cinema.booking_service.enums.PaymentStatus;
 import com.cinema.booking_service.enums.ProductStatus;
 import com.cinema.booking_service.grpc.CinemaGrpcClient;
+import com.cinema.booking_service.http.PaymentServiceClient;
 import com.cinema.booking_service.grpc.SeatGrpcClient;
 import com.cinema.booking_service.grpc.ShowtimeGrpcClient;
 import com.cinema.booking_service.mapper.BookingMapper;
 import com.cinema.booking_service.mapper.BookingSeatItemMapper;
 import com.cinema.booking_service.repository.BookingRepository;
+import com.cinema.booking_service.repository.BookingRepositoryImpl;
 import com.cinema.booking_service.repository.BookingSeatItemRepository;
 import com.cinema.booking_service.repository.ProductRepository;
 import com.cinema.booking_service.services.BookingService;
 import com.cinema.booking_service.services.SeatLockService;
 import com.cinema.Enum.HallEnum;
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.request.SortField;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
@@ -34,6 +42,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.temporal.ChronoUnit;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -52,6 +61,7 @@ import java.util.stream.Collectors;
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
+    private final BookingRepositoryImpl bookingRepositoryImpl;
     private final BookingSeatItemRepository bookingSeatItemRepository;
     private final ProductRepository productRepository;
     private final BookingMapper bookingMapper;
@@ -60,6 +70,7 @@ public class BookingServiceImpl implements BookingService {
     private final ShowtimeGrpcClient showtimeGrpcClient;
     private final SeatGrpcClient seatGrpcClient;
     private final SeatLockService seatLockService;
+    private final PaymentServiceClient paymentServiceClient;
 
     @Value("${booking.seat-lock-minutes:5}")
     private long seatLockMinutes;
@@ -158,6 +169,58 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
+    public PageResponse<BookingResponse> searchMyBookings(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        validateCustomerRole(httpRequest);
+        UUID userId = resolveUserId(httpRequest);
+
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        String keyword = request.getNormalizedKeyword();
+
+        List<SortField<BookingField>> sortFields = request.getSortBy();
+        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
+        if (sortFields.stream().noneMatch(sort -> sort != null && sort.getField() == BookingField.TIME_CREATED)) {
+            sortFields.add(new SortField<>(BookingField.TIME_CREATED, "DESC"));
+        }
+
+        long totalElements = bookingRepositoryImpl.countWithFilter(userId, keyword, request.getFilterBy());
+        List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                userId, keyword, page, size, sortFields, request.getFilterBy());
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+
+        return PageResponse.<BookingResponse>builder()
+                .data(bookings.stream().map(bookingMapper::toResponse).toList())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingResponse getMyActiveBooking(UUID showtimeId, UUID cinemaId, HttpServletRequest httpRequest) {
+        validateCustomerRole(httpRequest);
+        UUID userId = resolveUserId(httpRequest);
+        List<Booking> bookings = bookingRepository.findActiveBookingsByUser(
+                userId,
+                EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED),
+                LocalDateTime.now(),
+                showtimeId,
+                cinemaId,
+                org.springframework.data.domain.PageRequest.of(0, 1));
+        if (bookings.isEmpty()) {
+            return null;
+        }
+        return bookingMapper.toResponse(bookings.get(0));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<BookingResponse> getBookingsByOperatorCinema(HttpServletRequest httpRequest) {
         validateOperatorRole(httpRequest);
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
@@ -173,6 +236,38 @@ public class BookingServiceImpl implements BookingService {
                 .stream()
                 .map(bookingMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CheckoutContextResponse getCheckoutContext(UUID id, HttpServletRequest httpRequest) {
+        Booking booking = getActiveBookingOrThrow(id);
+        authorizeBookingRead(booking, httpRequest);
+
+        LocalDateTime now = LocalDateTime.now();
+        long secondsToExpire = booking.getReservedUntil() == null
+                ? 0L
+                : Math.max(0L, ChronoUnit.SECONDS.between(now, booking.getReservedUntil()));
+
+        PaymentSessionSnapshotResponse paymentSession = null;
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
+            UUID requesterUserId = resolveUserId(httpRequest);
+            paymentSession = paymentServiceClient.getSessionByBookingId(id, requesterUserId);
+        }
+
+        boolean activeStatus = booking.getBookingStatus() == BookingStatus.PENDING
+                || booking.getBookingStatus() == BookingStatus.RESERVED;
+        boolean notExpired = booking.getReservedUntil() != null && booking.getReservedUntil().isAfter(now);
+        boolean unpaid = booking.getPaymentStatus() != PaymentStatus.PAID;
+        boolean paymentSessionAllowsPay = paymentSession == null || isPayableSessionStatus(paymentSession.getStatus());
+
+        return CheckoutContextResponse.builder()
+                .booking(bookingMapper.toResponse(booking))
+                .paymentSession(paymentSession)
+                .secondsToExpire(secondsToExpire)
+                .canPay(activeStatus && notExpired && unpaid && paymentSessionAllowsPay)
+                .build();
     }
 
     @Override
@@ -375,6 +470,14 @@ public class BookingServiceImpl implements BookingService {
         return status == BookingStatus.CANCELLED
                 || status == BookingStatus.EXPIRED
                 || status == BookingStatus.CONFIRMED;
+    }
+
+    private boolean isPayableSessionStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return true;
+        }
+        String normalized = status.trim().toUpperCase(Locale.ROOT);
+        return !"PAID".equals(normalized) && !"REFUNDED".equals(normalized);
     }
 
     private List<String> extractSeatCodes(List<BookingSeatItem> seatItems) {

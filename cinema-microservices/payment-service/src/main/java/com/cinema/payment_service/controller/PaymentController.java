@@ -1,6 +1,7 @@
 package com.cinema.payment_service.controller;
 
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
 import com.cinema.payment_service.dto.response.PaymentReconciliationResponse;
@@ -11,9 +12,12 @@ import com.cinema.payment_service.dto.webhook.SePayIpnRequest;
 import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.services.VietQrService;
 import com.cinema.controller.BaseController;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -57,6 +61,14 @@ public class PaymentController extends BaseController {
             @PathVariable UUID bookingId) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
         return ok(paymentSessionService.getSession(bookingId, requesterUserId));
+    }
+
+    @PostMapping("/me/sessions/search")
+    public ResponseEntity<APIResponse<PageResponse<PaymentSessionResponse>>> searchMySessions(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody PageRequest<PaymentSessionField> request) {
+        UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
+        return ok(paymentSessionService.searchMySessions(request, requesterUserId));
     }
 
     @PostMapping("/sessions/{bookingId}/refund")

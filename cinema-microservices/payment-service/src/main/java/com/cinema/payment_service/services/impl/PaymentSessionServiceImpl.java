@@ -4,16 +4,21 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.config.SePayGatewayProperties;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
 import com.cinema.payment_service.dto.response.PaymentReconciliationResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.webhook.SePayIpnRequest;
+import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.request.SortField;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
+import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.SePayCheckoutFormFactory;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,6 +33,7 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -48,6 +54,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private static final BigDecimal MIN_FOR_COMBO20K = new BigDecimal("150000");
 
     private final PaymentTransactionRepository paymentTransactionRepository;
+    private final PaymentTransactionRepositoryImpl paymentTransactionRepositoryImpl;
     private final BookingGrpcClient bookingGrpcClient;
     private final SePayGatewayProperties sePayGatewayProperties;
     private final ObjectMapper objectMapper;
@@ -115,6 +122,43 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         ensureRequesterOwnsTransaction(transaction, requesterUserId);
         return toResponse(transaction);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<PaymentSessionResponse> searchMySessions(
+            PageRequest<PaymentSessionField> request,
+            UUID requesterUserId) {
+        if (requesterUserId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        String keyword = request.getNormalizedKeyword();
+
+        List<SortField<PaymentSessionField>> sortFields = request.getSortBy();
+        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
+        if (sortFields.stream().noneMatch(sort -> sort != null && sort.getField() == PaymentSessionField.TIME_CREATED)) {
+            sortFields.add(new SortField<>(PaymentSessionField.TIME_CREATED, "DESC"));
+        }
+
+        long totalElements = paymentTransactionRepositoryImpl.countWithFilter(
+                requesterUserId, keyword, request.getFilterBy());
+        List<PaymentTransaction> sessions = paymentTransactionRepositoryImpl.searchWithPageAndSortAndFilter(
+                requesterUserId, keyword, page, size, sortFields, request.getFilterBy());
+
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+
+        return PageResponse.<PaymentSessionResponse>builder()
+                .data(sessions.stream().map(this::toResponse).toList())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .build();
     }
 
     @Override

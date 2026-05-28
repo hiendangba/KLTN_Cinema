@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Collection;
 import java.util.List;
@@ -35,6 +36,25 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     List<Booking> findAllByCinemaIdInAndIsDeletedFalseOrderByTimeCreatedDesc(Collection<UUID> cinemaIds);
 
     List<Booking> findAllByIsDeletedFalseOrderByTimeCreatedDesc();
+
+    @Query("""
+            SELECT b
+            FROM Booking b
+            WHERE b.userId = :userId
+              AND b.isDeleted = false
+              AND b.bookingStatus IN :statuses
+              AND b.reservedUntil > :now
+              AND (:showtimeId IS NULL OR b.showtimeId = :showtimeId)
+              AND (:cinemaId IS NULL OR b.cinemaId = :cinemaId)
+            ORDER BY b.timeCreated DESC
+            """)
+    List<Booking> findActiveBookingsByUser(
+            @Param("userId") UUID userId,
+            @Param("statuses") Collection<BookingStatus> statuses,
+            @Param("now") LocalDateTime now,
+            @Param("showtimeId") UUID showtimeId,
+            @Param("cinemaId") UUID cinemaId,
+            Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = "seatItems")

@@ -1,12 +1,16 @@
 package com.cinema.booking_service.controller;
 
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
+import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.BookingResponse;
+import com.cinema.booking_service.dto.response.CheckoutContextResponse;
 import com.cinema.booking_service.services.BookingService;
 import com.cinema.controller.BaseController;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -51,9 +56,34 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 
+    @PostMapping("/me/search")
+    public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchMyBookings(
+            @Valid @RequestBody PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        PageResponse<BookingResponse> response = bookingService.searchMyBookings(request, httpRequest);
+        return ok(response);
+    }
+
+    @GetMapping("/me/active")
+    public ResponseEntity<APIResponse<BookingResponse>> getMyActiveBooking(
+            @RequestParam(required = false) UUID showtimeId,
+            @RequestParam(required = false) UUID cinemaId,
+            HttpServletRequest httpRequest) {
+        BookingResponse response = bookingService.getMyActiveBooking(showtimeId, cinemaId, httpRequest);
+        return ok(response);
+    }
+
     @GetMapping("/cinemas/me")
     public ResponseEntity<APIResponse<List<BookingResponse>>> getBookingsByOperatorCinema(HttpServletRequest httpRequest) {
         List<BookingResponse> response = bookingService.getBookingsByOperatorCinema(httpRequest);
+        return ok(response);
+    }
+
+    @GetMapping("/{id}/checkout-context")
+    public ResponseEntity<APIResponse<CheckoutContextResponse>> getCheckoutContext(
+            @PathVariable UUID id,
+            HttpServletRequest httpRequest) {
+        CheckoutContextResponse response = bookingService.getCheckoutContext(id, httpRequest);
         return ok(response);
     }
 
@@ -74,4 +104,3 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 }
-
