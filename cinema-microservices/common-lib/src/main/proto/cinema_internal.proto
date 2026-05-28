@@ -7,9 +7,13 @@ option java_package = "com.cinema.grpc.cinema";
 option java_outer_classname = "CinemaInternalProto";
 
 service CinemaInternalService {
+  rpc GetAllActiveCinemas(GetAllActiveCinemasRequest) returns (GetAllActiveCinemasReply);
   rpc GetCinemaByUserId(GetCinemaByUserIdRequest) returns (GetCinemaByUserIdReply);
   rpc GetCinemasByUserId(GetCinemaByUserIdRequest) returns (GetCinemasByUserIdReply);
   rpc GetCinemaById(GetCinemaByIdRequest) returns (GetCinemaByIdReply);
+}
+
+message GetAllActiveCinemasRequest {
 }
 
 message GetCinemaByUserIdRequest {
@@ -27,6 +31,13 @@ message GetCinemaByUserIdReply {
   string error_key = 2;
   string message = 3;
   CinemaPayload cinema = 4;
+}
+
+message GetAllActiveCinemasReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated CinemaPayload cinemas = 4;
 }
 
 message GetCinemasByUserIdReply {

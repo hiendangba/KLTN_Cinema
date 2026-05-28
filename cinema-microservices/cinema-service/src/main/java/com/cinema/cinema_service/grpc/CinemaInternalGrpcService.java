@@ -6,6 +6,8 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.cinema.CinemaInternalServiceGrpc;
 import com.cinema.grpc.cinema.CinemaPayload;
+import com.cinema.grpc.cinema.GetAllActiveCinemasReply;
+import com.cinema.grpc.cinema.GetAllActiveCinemasRequest;
 import com.cinema.grpc.cinema.GetCinemaByIdReply;
 import com.cinema.grpc.cinema.GetCinemaByIdRequest;
 import com.cinema.grpc.cinema.GetCinemaByUserIdReply;
@@ -28,6 +30,35 @@ public class CinemaInternalGrpcService extends CinemaInternalServiceGrpc.CinemaI
         implements BindableService {
 
     private final CinemaService cinemaService;
+
+    @Override
+    public void getAllActiveCinemas(GetAllActiveCinemasRequest request,
+                                    StreamObserver<GetAllActiveCinemasReply> responseObserver) {
+        try {
+            List<CinemaResponse> cinemas = cinemaService.getAllActiveCinemas();
+            responseObserver.onNext(GetAllActiveCinemasReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Cinemas fetched successfully")
+                    .addAllCinemas(cinemas.stream().map(this::toPayload).toList())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(GetAllActiveCinemasReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching all active cinemas", ex);
+            responseObserver.onNext(GetAllActiveCinemasReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
 
     @Override
     public void getCinemaByUserId(GetCinemaByUserIdRequest request,

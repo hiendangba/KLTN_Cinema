@@ -47,6 +47,10 @@ spring:
     username: ${SPRING_RABBITMQ_USERNAME}
     password: ${SPRING_RABBITMQ_PASSWORD}
   grpc:
+    client:
+      channels:
+        cinema:
+          address: ${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}
     server:
       port: ${GRPC_SERVER_PORT:9191}
 server:

@@ -1,9 +1,8 @@
-# Tài liệu chuyển đổi Token sang Cookie (identity-service)
+﻿# Tài liệu chuyển đổi Token sang Cookie (identity-service)
 
 ## Mục tiêu
 
-Chuyển luồng xác thực sang mô hình ưu tiên cookie cho `accessToken`, đồng bộ với `refreshToken`, và cập nhật toàn bộ API
-liên quan đến token.
+Chuyển luồng xác thực sang mô hình ưu tiên cookie cho `accessToken`, đồng bộ với `refreshToken`, và cập nhật toàn bộ API liên quan đến token.
 
 ## Thay đổi đã áp dụng
 
@@ -30,7 +29,7 @@ liên quan đến token.
 4. `JwtAuthenticationFilter`
 
 - Đọc `accessToken` ưu tiên từ cookie `accessToken`.
-- Nếu không có cookie thì fallback sang `Authorization: Bearer ...` để tương thích ngược.
+- Nếu không có cookie thì fallback sang header `Authorization: Bearer ...` để tương thích ngược.
 
 ## Chính sách cookie hiện tại (token cookies)
 
@@ -50,9 +49,9 @@ Giá trị `Secure` và `SameSite` được cấu hình qua:
 - Kiểm tra `login` set đủ 2 cookie token và lưu token vào Redis.
 - Kiểm tra `logout` luôn clear cookie kể cả khi request không mang token.
 - Kiểm tra `refresh_token`:
-    - Thiếu cookie refresh => ném `REFRESH_TOKEN_MISSING` và clear cookie.
-    - Refresh hợp lệ => rotate token, set lại cookie mới.
-    - Access token cũ còn hiệu lực trong Redis => từ chối và clear cookie.
+  - Thiếu cookie refresh => ném `REFRESH_TOKEN_MISSING` và clear cookie.
+  - Refresh hợp lệ => rotate token, set lại cookie mới.
+  - Access token cũ còn hiệu lực trong Redis => từ chối và clear cookie.
 
 2. `JwtAuthenticationFilterTest`
 
@@ -73,7 +72,7 @@ Giá trị `Secure` và `SameSite` được cấu hình qua:
 
 ## Lưu ý cho frontend
 
-    1. Bật `withCredentials = true` khi gọi API.
-
-2. Nếu trước đây frontend gửi `Authorization` header bằng access token, hệ thống vẫn fallback hỗ trợ.
+1. Bật `withCredentials = true` khi gọi API.
+2. Nếu trước đây frontend gửi `Authorization` header bằng access token, hệ thống vẫn hỗ trợ fallback.
 3. Khi deploy production qua HTTPS, đặt `AUTH_COOKIE_SECURE=true`.
+

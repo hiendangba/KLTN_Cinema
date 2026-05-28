@@ -255,3 +255,4 @@ Nếu bạn là developer hoặc AI agent cần tài liệu kỹ thuật chi ti�
 - gRPC: giao thức gọi nội bộ giữa các service.
 - Microservices: kiến trúc tách hệ thống thành nhiều dịch vụ nhỏ theo domain.
 - UAT: kiểm thử chấp nhận người dùng trước khi triển khai thực tế.
+

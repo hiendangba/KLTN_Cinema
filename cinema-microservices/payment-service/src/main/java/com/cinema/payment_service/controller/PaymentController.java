@@ -1,9 +1,11 @@
 package com.cinema.payment_service.controller;
 
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
+import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.payment_service.dto.response.PaymentReconciliationResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
@@ -15,6 +17,7 @@ import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.PageResponse;
+import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -85,6 +88,23 @@ public class PaymentController extends BaseController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
         return ok(paymentSessionService.getReconciliation(from, to));
+    }
+
+    @PostMapping("/revenues/cinemas/search")
+    public ResponseEntity<APIResponse<CinemaRevenueReportResponse>> getAllCinemaRevenueReport(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody CinemaRevenueReportRequest request) {
+        RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_ADMIN);
+        return ok(paymentSessionService.getAllCinemaRevenueReport(request));
+    }
+
+    @PostMapping("/revenues/cinemas/me/search")
+    public ResponseEntity<APIResponse<CinemaRevenueReportResponse>> getMyCinemaRevenueReport(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody CinemaRevenueReportRequest request) {
+        UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
+        RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_MANAGER);
+        return ok(paymentSessionService.getMyCinemaRevenueReport(request, requesterUserId));
     }
 
     @PostMapping("/promotions/preview")

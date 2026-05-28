@@ -67,6 +67,33 @@ public class PaymentTransactionRepositoryImpl {
         return entityManager.createQuery(countQuery).getSingleResult();
     }
 
+    public List<PaymentTransaction> findAllForRevenueReport(
+            Collection<UUID> cinemaIds,
+            java.time.LocalDateTime from,
+            java.time.LocalDateTime to) {
+        if (cinemaIds == null || cinemaIds.isEmpty()) {
+            return List.of();
+        }
+        if (from == null || to == null) {
+            return List.of();
+        }
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<PaymentTransaction> cq = cb.createQuery(PaymentTransaction.class);
+        Root<PaymentTransaction> root = cq.from(PaymentTransaction.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(root.get("cinemaId").in(cinemaIds));
+
+        List<Predicate> eventPredicates = new ArrayList<>();
+        eventPredicates.add(buildBetweenIfPresent(cb, root, "paidAt", from, to));
+        eventPredicates.add(buildBetweenIfPresent(cb, root, "refundedAt", from, to));
+        predicates.add(cb.or(eventPredicates.toArray(new Predicate[0])));
+
+        cq.where(predicates.toArray(new Predicate[0]));
+        return entityManager.createQuery(cq).getResultList();
+    }
+
     private List<Predicate> buildPredicates(
             CriteriaBuilder cb,
             Root<PaymentTransaction> root,
@@ -88,6 +115,17 @@ public class PaymentTransactionRepositoryImpl {
         }
 
         return predicates;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Predicate buildBetweenIfPresent(
+            CriteriaBuilder cb,
+            Root<PaymentTransaction> root,
+            String fieldName,
+            java.time.LocalDateTime from,
+            java.time.LocalDateTime to) {
+        Path<? extends Comparable<?>> path = comparablePath(root, fieldName);
+        return cb.between((Path<java.time.LocalDateTime>) path, from, to);
     }
 
     private Predicate buildFilterPredicate(

@@ -15,8 +15,11 @@ public class PaymentSessionResponse {
     private UUID id;
     private UUID bookingId;
     private UUID showtimeId;
+    private UUID cinemaId;
     private UUID userId;
     private BigDecimal amount;
+    private BigDecimal ticketSubtotalSnapshot;
+    private BigDecimal productSubtotalSnapshot;
     private String currency;
     private String paymentMethod;
     private String orderInvoiceNumber;

@@ -1,21 +1,21 @@
-# Auth Header Duplication Audit
+﻿# Kiểm toán trùng lặp header auth
 
-Date: 2026-05-13
+Ngày: 2026-05-13
 
-## Scope
+## Phạm vi
 - Quét toàn bộ các module `*-service` trong monorepo.
-- Tập trung các logic lặp về:
+- Tập trung vào logic lặp quanh:
   - Đọc `X-User-Role`, `X-User-ID`
-  - Validate role (`ADMIN/MANAGER/STAFF/CUSTOMER`)
+  - Kiểm tra role (`ADMIN`, `MANAGER`, `STAFF`, `CUSTOMER`)
   - Parse `UUID` từ `X-User-ID`
-  - Throw `BusinessException` (`FORBIDDEN`, `UNAUTHORIZED`, `INVALID_FORMAT`)
+  - Throw `BusinessException` với các lỗi `FORBIDDEN`, `UNAUTHORIZED`, `INVALID_FORMAT`
 
-## Summary Findings
-- `11` file Java đang đọc trực tiếp `X_USER_ROLE` hoặc `X_USER_ID`.
-- `7` file có private role-validator kiểu `validate...Role(...)`.
-- `8` file có logic parse hoặc validate `X_USER_ID`.
+## Kết quả chính
+- Có nhiều file Java đang đọc trực tiếp header auth giống nhau.
+- Có nhiều file tự viết hàm kiểm tra role riêng.
+- Có nhiều file tự parse hoặc validate `X-User-ID` riêng.
 
-Các service chính có duplication rõ:
+Các service có duplication rõ:
 - `booking-service`
 - `cinema-service`
 - `film-service`
@@ -24,61 +24,61 @@ Các service chính có duplication rõ:
 - `user-service`
 - `identity-service` (một phần)
 
-## Current State In Common Lib
+## Trạng thái hiện tại trong `common-lib`
 - `common-lib` đã có:
-  - `HeaderNames` constants: `X_USER_ID`, `X_USER_ROLE`, `ROLE_*`.
+  - `HeaderNames` với `X_USER_ID`, `X_USER_ROLE`, `ROLE_*`.
   - `BusinessException`, `ErrorCode`.
-- `common-lib` cũng đã phụ thuộc `spring-web` và có `jakarta.servlet-api` (scope `provided`), nên có thể chứa utility xử lý `HttpServletRequest`.
+- `common-lib` cũng đã phụ thuộc `spring-web` và có `jakarta.servlet-api` ở scope `provided`, nên có thể chứa util xử lý `HttpServletRequest`.
 
-## Should This Go Into `common-lib`?
-Kết luận: **Có**, nhưng nên tách theo 2 lớp để tránh over-coupling.
+## Có nên đưa vào `common-lib` không?
+Kết luận: **có**, nhưng chỉ nên đưa phần primitive dùng chung, không đưa toàn bộ policy nghiệp vụ vào đó.
 
 ### Nên đưa vào `common-lib`
-- Utility primitives dùng chung:
+- Các util chung như:
   - `getRequiredHeader(request, headerName, missingErrorCode)`
   - `parseRequiredUuidHeader(request, headerName)`
   - `requireRole(role, expectedRole, deniedErrorCode)`
   - `requireAnyRole(role, allowedRoles, deniedErrorCode)`
-- Các hàm này giữ behavior chuẩn, giảm copy-paste, giảm lỗi khi đổi policy.
+- Mục tiêu là giảm copy-paste và giảm lỗi khi đổi policy.
 
-### Không nên đưa toàn bộ “business role policy” vào `common-lib`
-- Một số service hiện có log format và message riêng theo action.
-- Một số flow dùng rule đặc thù (`ADMIN|MANAGER`, `MANAGER only`, `CUSTOMER only`).
-- Mapping lỗi có điểm khác nhau theo bối cảnh (đặc biệt flow gRPC resolve cinema/user).
+### Không nên đưa toàn bộ policy role vào `common-lib`
+- Mỗi service vẫn có message và log riêng theo nghiệp vụ.
+- Một số flow có rule đặc thù (`ADMIN|MANAGER`, `MANAGER only`, `CUSTOMER only`).
+- Một số lỗi phụ thuộc ngữ cảnh gRPC resolve cinema/user.
 
 => `common-lib` nên cung cấp **building blocks**, còn policy cuối cùng vẫn nằm ở từng service.
 
-## Recommended Refactor Strategy
+## Chiến lược refactor đề xuất
 
-### Phase 1 (Safe, low risk)
-- Tạo `common-lib` util class, ví dụ:
+### Giai đoạn 1
+- Tạo util dùng chung trong `common-lib`, ví dụ:
   - `com.cinema.security.RequestAuthUtils`
 - Chỉ migrate phần:
   - đọc header
-  - validate missing/blank
+  - kiểm tra thiếu/blank
   - parse UUID
-  - check role/any-role
-- Không đổi API contract và không đổi error semantics hiện tại.
+  - kiểm tra role/any-role
+- Không đổi contract API và không đổi semantics lỗi hiện tại.
 
-### Phase 2 (Standardize)
-- Chuẩn hóa helper per service:
+### Giai đoạn 2
+- Chuẩn hoá helper per service:
   - `requireAdmin(...)`, `requireManager(...)`, `requireOperator(...)`
-- Chuẩn hóa message/log template để observability đồng đều.
+- Chuẩn hoá format log/message để dễ observability.
 
-### Phase 3 (Optional)
-- Nếu cần, thêm interceptor/filter ở gateway layer để giảm kiểm tra lặp ở service layer.
+### Giai đoạn 3
+- Nếu cần, thêm interceptor/filter ở gateway layer để giảm việc kiểm tra lặp ở service layer.
 
-## Risks To Watch
-- Nếu migrate ồ ạt có thể vô tình đổi semantics:
+## Rủi ro cần theo dõi
+- Nếu migrate quá ồ ạt có thể vô tình đổi semantics:
   - `FORBIDDEN` vs `UNAUTHORIZED`
-  - missing header behavior
-- Các test hiện tại có thể chưa bắt hết edge cases role/header.
+  - hành vi khi thiếu header
+- Test hiện tại có thể chưa bao hết edge case role/header.
 
 Khuyến nghị:
 - Migrate từng service theo batch nhỏ.
-- Mỗi batch chạy compile + test của service đó.
+- Mỗi batch phải compile và test chính service đó.
 
-## Candidate Files With Duplication (high level)
+## Các file còn lặp theo nhóm lớn
 - `booking-service/.../BookingServiceImpl.java`
 - `booking-service/.../ProductServiceImpl.java`
 - `cinema-service/.../CinemaServiceImpl.java`
@@ -88,4 +88,3 @@ Khuyến nghị:
 - `showtime-service/.../PricingPolicyServiceImpl.java`
 - `user-service/.../UserServiceImpl.java`
 - `identity-service/.../UserServiceImpl.java`
-

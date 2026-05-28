@@ -66,6 +66,8 @@ message BookingPaymentContextPayload {
   string reserved_until = 6;
   string booking_status = 7;
   string payment_status = 8;
+  string ticket_subtotal = 9;
+  string product_subtotal = 10;
 }
 
 message GetBookingPaymentContextReply {

@@ -1,7 +1,8 @@
-# Product API Pagination Update (booking-service)
+﻿# Cập nhật phân trang API Product (booking-service)
 
 ## Mục tiêu
-- Chuyển 2 API product từ trả toàn bộ `List<ProductResponse>` sang phân trang chuẩn `PageRequest`/`PageResponse`.
+
+- Chuyển 2 API product từ trả toàn bộ `List<ProductResponse>` sang phân trang chuẩn `PageRequest` / `PageResponse`.
 
 ## API đã thay đổi
 
@@ -58,11 +59,13 @@ Request body:
 Response: cùng format `PageResponse<ProductResponse>` như trên.
 
 ## Logic phân trang
+
 - Dùng `PageRequest<ProductField>` từ `common-lib`.
 - Truy vấn JPA `Page<Product>` theo `cinemaId` + `isDeleted = false`.
 - Sort mặc định: `timeCreated DESC` (giữ hành vi sắp xếp cũ).
 
 ## Các file đã sửa
+
 - `booking-service/src/main/java/com/cinema/booking_service/controller/ProductController.java`
 - `booking-service/src/main/java/com/cinema/booking_service/services/ProductService.java`
 - `booking-service/src/main/java/com/cinema/booking_service/services/impl/ProductServiceImpl.java`
@@ -70,9 +73,12 @@ Response: cùng format `PageResponse<ProductResponse>` như trên.
 - `booking-service/src/main/java/com/cinema/booking_service/dto/request/ProductField.java` (file mới)
 
 ## Ghi chú tương thích
-- Đây là thay đổi breaking ở route/method cho 2 API list product.
+
+- Đây là thay đổi phá vỡ tương thích ở route/method cho 2 API list product.
 - Frontend/API gateway cần đổi từ `GET` sang `POST` và gửi body phân trang.
 
 ## Kiểm tra build
+
 - Đã chạy compile module `booking-service` thành công:
 - Lệnh: `booking-service\\mvnw.cmd -DskipTests compile`
+

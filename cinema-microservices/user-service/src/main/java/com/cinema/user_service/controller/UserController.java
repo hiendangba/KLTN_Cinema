@@ -76,12 +76,28 @@ public class UserController extends BaseController {
         return ok(userResponse);
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<APIResponse<UserResponse>> getUserById(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        UserResponse userResponse = userService.getUserById(id, request);
+        return ok(userResponse);
+    }
+
     @PostMapping("/staffs/search")
     public ResponseEntity<APIResponse<PageResponse<UserResponse>>> getAllStaff(
             @Valid @RequestBody PageRequest<?> pageRequest,
             HttpServletRequest request) {
         PageResponse<UserResponse> staffList = userService.getAllStaff(pageRequest, request);
         return ok(staffList);
+    }
+
+    @PostMapping("/customers/search")
+    public ResponseEntity<APIResponse<PageResponse<UserResponse>>> getAllCustomer(
+            @Valid @RequestBody PageRequest<?> pageRequest,
+            HttpServletRequest request) {
+        PageResponse<UserResponse> customerList = userService.getAllCustomer(pageRequest, request);
+        return ok(customerList);
     }
 
     @PostMapping("/managers/search")

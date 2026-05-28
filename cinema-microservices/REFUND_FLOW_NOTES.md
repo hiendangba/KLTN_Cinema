@@ -1,4 +1,4 @@
-# Ghi Chú Chi Tiết Luồng Refund
+﻿# Ghi Chú Chi Tiết Luồng Refund
 
 ## 1. Mục đích tài liệu
 - Ghi lại đầy đủ các vấn đề, điểm mơ hồ và mâu thuẫn hiện tại của luồng `refund`.
@@ -139,3 +139,4 @@
 - File này chỉ ghi vấn đề và điểm chưa rõ.
 - File này không đề xuất phương án xử lý.
 - File này không thay thế quyết định nghiệp vụ chính thức.
+

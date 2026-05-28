@@ -363,6 +363,8 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                 .setReservedUntil(booking.getReservedUntil() == null ? "" : booking.getReservedUntil().toString())
                 .setBookingStatus(booking.getBookingStatus() == null ? "" : booking.getBookingStatus().name())
                 .setPaymentStatus(booking.getPaymentStatus() == null ? "" : booking.getPaymentStatus().name())
+                .setTicketSubtotal(booking.getTicketSubtotal() == null ? "0" : booking.getTicketSubtotal().toPlainString())
+                .setProductSubtotal(booking.getProductSubtotal() == null ? "0" : booking.getProductSubtotal().toPlainString())
                 .build();
     }
 

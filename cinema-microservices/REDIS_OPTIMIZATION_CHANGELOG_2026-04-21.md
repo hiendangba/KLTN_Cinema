@@ -464,3 +464,4 @@ Các thay đổi này biến Redis từ mức "dùng được" sang mức "vận
 - có local fallback an toàn
 
 Điều này giúp hệ thống ổn định hơn khi traffic tăng, và giúp team debug/vận hành dễ hơn rất nhiều.
+

@@ -82,7 +82,17 @@ public class BookingGrpcClient {
                     new BigDecimal(payload.getFinalAmount()),
                     payload.getReservedUntil().isBlank() ? null : LocalDateTime.parse(payload.getReservedUntil()),
                     payload.getBookingStatus(),
-                    payload.getPaymentStatus());
+                    payload.getPaymentStatus(),
+                    parseAmount(payload.getTicketSubtotal()),
+                    parseAmount(payload.getProductSubtotal()));
+        } catch (Exception ex) {
+            throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
+        }
+    }
+
+    private BigDecimal parseAmount(String rawAmount) {
+        try {
+            return rawAmount == null || rawAmount.isBlank() ? BigDecimal.ZERO : new BigDecimal(rawAmount);
         } catch (Exception ex) {
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
@@ -96,7 +106,9 @@ public class BookingGrpcClient {
             BigDecimal finalAmount,
             LocalDateTime reservedUntil,
             String bookingStatus,
-            String paymentStatus) {
+            String paymentStatus,
+            BigDecimal ticketSubtotal,
+            BigDecimal productSubtotal) {
     }
 
     public record BookingPaymentConfirmation(BookingPaymentContext booking) {

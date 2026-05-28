@@ -41,6 +41,8 @@ public interface CinemaService {
 
     List<CinemaResponse> getMyManagedCinemas(HttpServletRequest httpRequest);
 
+    List<CinemaResponse> getAllActiveCinemas();
+
     List<CinemaResponse> getCinemasByManagerId(UUID managerId);
 
     List<CinemaResponse> getAccessibleCinemasByUserId(UUID userId, String role);

@@ -22,6 +22,8 @@ spring:
       channels:
         booking:
           address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
+        cinema:
+          address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
 
 server:
   port: ${SERVER_PORT:8098}

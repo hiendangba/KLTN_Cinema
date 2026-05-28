@@ -15,6 +15,8 @@ public interface CinemaRepository extends JpaRepository<Cinema, UUID> {
 
     List<Cinema> findAllByManagerIdAndIsDeletedFalseOrderByCreatedAtDesc(UUID managerId);
 
+    List<Cinema> findAllByIsDeletedFalseOrderByCreatedAtDesc();
+
     boolean existsByCodeIgnoreCaseAndIsDeletedFalse(String code);
 
     boolean existsByCodeIgnoreCaseAndIdNotAndIsDeletedFalse(String code, UUID id);

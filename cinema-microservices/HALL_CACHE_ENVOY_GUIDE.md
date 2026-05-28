@@ -1,4 +1,4 @@
-# Triển khai Cache Hall và Giải thích Envoy (22-04-2026)
+﻿# Triển khai Cache Hall và Giải thích Envoy (22-04-2026)
 
 ## 1. Mục tiêu
 
@@ -156,3 +156,4 @@ KEYS "hall-services::halls::*"
 - Nếu tương lai cần tối ưu tiếp:
   - thêm cache cho `searchHalls` với key theo request đã normalize
   - hoặc cache theo read-model riêng cho booking/showtime.
+

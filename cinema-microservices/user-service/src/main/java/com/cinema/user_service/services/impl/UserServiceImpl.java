@@ -8,6 +8,7 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
+import com.cinema.user_service.grpc.CinemaGrpcClient;
 import com.cinema.user_service.dto.request.*;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
@@ -23,6 +24,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
+import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +38,7 @@ import org.springframework.data.domain.Pageable;
 public class UserServiceImpl implements UserService {
     UserRepository userRepository;
     UserMapper userMapper;
+    CinemaGrpcClient cinemaGrpcClient;
 
     @Override
     public ActionMessageResponse createCustomerProfile(RegisterCustomerRequest request) {
@@ -164,6 +169,28 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public UserResponse getUserById(UUID userId, HttpServletRequest httpRequest) {
+        UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        String requesterRoleRaw = RequestAuthUtils.requireRoleHeader(httpRequest);
+
+        UserEnum.UserRole requesterRole = parseUserRole(requesterRoleRaw);
+        if (requesterRole == UserEnum.UserRole.CUSTOMER) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        User targetUser = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        if (!canViewUser(requesterUserId, requesterRole, targetUser)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        log.info("User profile loaded by id: requesterId={}, requesterRole={}, targetUserId={}, targetRole={}",
+                requesterUserId, requesterRole, userId, targetUser.getRole());
+        return userMapper.toUserResponse(targetUser);
+    }
+
+    @Override
     public UserResponse getUserById(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -199,6 +226,25 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public PageResponse<UserResponse> getAllCustomer(PageRequest<?> pageRequest, HttpServletRequest request) {
+        RequestAuthUtils.requireAnyRole(request, log, "getAllCustomer",
+                HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+
+        Pageable pageable = pageRequest.toPageable();
+        Page<User> userPage = userRepository.findByRole(UserEnum.UserRole.CUSTOMER, pageable);
+
+        return PageResponse.<UserResponse>builder()
+                .data(userMapper.toUserResponseList(userPage.getContent()))
+                .currentPage(pageRequest.getPageOrDefault())
+                .totalPages(userPage.getTotalPages())
+                .totalElements(userPage.getTotalElements())
+                .size(pageRequest.getSizeOrDefault())
+                .hasNext(userPage.hasNext())
+                .hasPrevious(userPage.hasPrevious())
+                .build();
+    }
+
+    @Override
     public PageResponse<UserResponse> getAllManager(PageRequest<?> pageRequest, HttpServletRequest request) {
         RequestAuthUtils.requireRole(request, HeaderNames.ROLE_ADMIN, log, "getAllManager");
 
@@ -214,5 +260,46 @@ public class UserServiceImpl implements UserService {
                 .hasNext(userPage.hasNext())
                 .hasPrevious(userPage.hasPrevious())
                 .build();
+    }
+
+    private UserEnum.UserRole parseUserRole(String roleRaw) {
+        try {
+            return UserEnum.UserRole.valueOf(roleRaw);
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private boolean canViewUser(UUID requesterUserId, UserEnum.UserRole requesterRole, User targetUser) {
+        UserEnum.UserRole targetRole = targetUser.getRole();
+
+        return switch (requesterRole) {
+            case ADMIN -> true;
+            case MANAGER -> targetRole == UserEnum.UserRole.CUSTOMER
+                    || (targetRole == UserEnum.UserRole.STAFF
+                    && hasSharedCinema(requesterUserId, targetUser.getId()));
+            case STAFF -> targetRole == UserEnum.UserRole.CUSTOMER;
+            case CUSTOMER -> false;
+        };
+    }
+
+    private boolean hasSharedCinema(UUID requesterUserId, UUID targetUserId) {
+        List<UUID> requesterCinemas = cinemaGrpcClient.getCinemaIdsByUserId(requesterUserId,
+                UserEnum.UserRole.MANAGER.name());
+        List<UUID> targetCinemas = cinemaGrpcClient.getCinemaIdsByUserId(targetUserId,
+                UserEnum.UserRole.STAFF.name());
+
+        if (requesterCinemas.isEmpty() || targetCinemas.isEmpty()) {
+            return false;
+        }
+
+        Set<UUID> requesterCinemaSet = new HashSet<>(requesterCinemas);
+        for (UUID cinemaId : targetCinemas) {
+            if (requesterCinemaSet.contains(cinemaId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

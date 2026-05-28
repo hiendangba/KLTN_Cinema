@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.UUID;
 
 public interface PaymentTransactionRepository extends JpaRepository<PaymentTransaction, UUID> {
@@ -24,4 +25,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
                                                                LocalDateTime now);
 
     List<PaymentTransaction> findAllByTimeCreatedBetween(LocalDateTime from, LocalDateTime to);
+
+    List<PaymentTransaction> findAllByCinemaIdIsNotNull();
+
+    List<PaymentTransaction> findAllByCinemaIdIn(Collection<UUID> cinemaIds);
 }

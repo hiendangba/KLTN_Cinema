@@ -1,4 +1,4 @@
-# Ghi Chú Tối Ưu RAM Cho Hệ Thống Microservices
+﻿# Ghi Chú Tối Ưu RAM Cho Hệ Thống Microservices
 
 ## 1) Bối cảnh và mục tiêu
 
@@ -253,3 +253,4 @@ Nếu cần, có thể tạo thêm một tài liệu riêng dạng “SOP tối 
 - No OOM-triggered service restarts during observation.
 - Total RAM usage stays within the agreed safety threshold.
 - Team can quickly identify top memory consumers using the monitoring script.
+

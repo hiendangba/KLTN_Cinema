@@ -1,4 +1,4 @@
-# RFC: Chuẩn Hóa Seat-Map Canonical Cho BE + FE
+﻿# RFC: Chuẩn Hóa Seat-Map Canonical Cho BE + FE
 
 ## 1. Mục tiêu tài liệu
 - Tên tài liệu chính thức: `SEAT_SERVICE_MIGRATION_PLAN.md`.
@@ -179,3 +179,4 @@ Kết quả: FE render được đầy đủ sơ đồ (ghế + lối đi + bloc
 - Diagram mới khớp mô hình canonical seat-map.
 - Thuật ngữ thống nhất: `showtimeId`, `hallId`, `seatCode`, `hallImagePath`, `SeatState`, `CellType`.
 - FE có đủ contract và ví dụ payload để tự triển khai render + submit.
+

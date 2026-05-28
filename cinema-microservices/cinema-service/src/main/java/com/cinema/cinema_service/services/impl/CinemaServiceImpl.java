@@ -277,6 +277,12 @@ public class CinemaServiceImpl implements CinemaService {
         return getAccessibleCinemasByUserId(managerId, role);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<CinemaResponse> getAllActiveCinemas() {
+        return mapManagedCinemasToResponses(cinemaRepository.findAllByIsDeletedFalseOrderByCreatedAtDesc());
+    }
+
     // Manager xem cac rap do minh quan ly.
     @Override
     @Transactional(readOnly = true)

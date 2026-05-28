@@ -1,9 +1,11 @@
 package com.cinema.payment_service.services;
 
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
+import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.payment_service.dto.response.PaymentReconciliationResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
@@ -28,6 +30,10 @@ public interface PaymentSessionService {
     PaymentSessionResponse requestRefund(UUID bookingId, UUID requesterUserId, RefundPaymentRequest request);
 
     PaymentReconciliationResponse getReconciliation(LocalDateTime from, LocalDateTime to);
+
+    CinemaRevenueReportResponse getAllCinemaRevenueReport(CinemaRevenueReportRequest request);
+
+    CinemaRevenueReportResponse getMyCinemaRevenueReport(CinemaRevenueReportRequest request, UUID requesterUserId);
 
     PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId);
 

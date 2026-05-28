@@ -1,16 +1,16 @@
-# Hall Create API Sample (FE)
+﻿# Mẫu API tạo hall cho frontend
 
 ## Endpoint
 - `POST /api/halls`
 
-## Request Headers
+## Header
 - `Authorization: Bearer <access_token>`
 - `Content-Type: application/json`
 
-## JSON Mẫu Tạo Rạp
+## JSON mẫu
 ```json
 {
-  "name": "Rap 01 - Tang 2",
+  "name": "Rạp 01 - Tầng 2",
   "status": "ACTIVE",
   "layoutDefinition": {
     "totalRows": 5,
@@ -22,14 +22,7 @@
       { "row": 1, "col": 3, "type": "AISLE" },
       { "row": 1, "col": 4, "type": "SEAT", "seatType": "VIP" },
       { "row": 1, "col": 5, "type": "SEAT", "seatType": "VIP" },
-      { "row": 1, "col": 6, "type": "BLOCKED" },
-
-      { "row": 2, "col": 1, "type": "SEAT", "seatType": "STANDARD" },
-      { "row": 2, "col": 2, "type": "SEAT", "seatType": "STANDARD" },
-      { "row": 2, "col": 3, "type": "AISLE" },
-      { "row": 2, "col": 4, "type": "SEAT", "seatType": "STANDARD" },
-      { "row": 2, "col": 5, "type": "SEAT", "seatType": "STANDARD" },
-      { "row": 2, "col": 6, "type": "SEAT", "seatType": "COUPLE" }
+      { "row": 1, "col": 6, "type": "BLOCKED" }
     ]
   },
   "imagePaths": [
@@ -43,5 +36,5 @@
 - `status`: `ACTIVE` hoặc `MAINTENANCE`.
 - `screenPosition`: `TOP | BOTTOM | LEFT | RIGHT`.
 - `type`: `SEAT | AISLE | BLOCKED`.
-- Khi `type = SEAT` thì cần `seatType` (`STANDARD | VIP | COUPLE`).
-- Khi `type = AISLE` hoặc `BLOCKED` thì không gửi `seatType`.
+- Nếu `type = SEAT` thì cần `seatType` (`STANDARD | VIP | COUPLE`).
+- Nếu `type = AISLE` hoặc `BLOCKED` thì không gửi `seatType`.

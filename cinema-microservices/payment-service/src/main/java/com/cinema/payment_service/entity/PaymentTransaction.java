@@ -33,11 +33,20 @@ public class PaymentTransaction {
     @Column(name = "showtime_id", columnDefinition = "uuid", nullable = false)
     private UUID showtimeId;
 
+    @Column(name = "cinema_id", columnDefinition = "uuid")
+    private UUID cinemaId;
+
     @Column(name = "user_id", columnDefinition = "uuid")
     private UUID userId;
 
     @Column(name = "amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
+
+    @Column(name = "ticket_subtotal_snapshot", precision = 12, scale = 2)
+    private BigDecimal ticketSubtotalSnapshot;
+
+    @Column(name = "product_subtotal_snapshot", precision = 12, scale = 2)
+    private BigDecimal productSubtotalSnapshot;
 
     @Column(name = "currency", nullable = false, length = 8)
     private String currency;

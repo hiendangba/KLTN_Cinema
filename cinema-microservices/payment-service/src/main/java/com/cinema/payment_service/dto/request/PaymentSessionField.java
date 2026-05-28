@@ -13,6 +13,7 @@ import java.util.UUID;
 public enum PaymentSessionField {
     ID("id", UUID.class),
     BOOKING_ID("bookingId", UUID.class),
+    CINEMA_ID("cinemaId", UUID.class),
     STATUS("status", PaymentTransactionStatus.class),
     TIME_CREATED("timeCreated", LocalDateTime.class);
 

@@ -25,11 +25,15 @@ public interface UserService {
 
     UserResponse getMyProfile(HttpServletRequest request);
 
+    UserResponse getUserById(UUID userId, HttpServletRequest httpRequest);
+
     UserResponse getUserById(UUID userId);
 
     UserExistenceResponse checkUserExists(UUID userId);
 
     PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request);
+
+    PageResponse<UserResponse> getAllCustomer(PageRequest<?> pageRequest, HttpServletRequest request);
 
     PageResponse<UserResponse> getAllManager(PageRequest<?> pageRequest, HttpServletRequest request);
 }

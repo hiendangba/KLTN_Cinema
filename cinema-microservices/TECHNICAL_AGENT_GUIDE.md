@@ -1,4 +1,4 @@
-﻿# TECHNICAL_AGENT_GUIDE - CinemaStar Engineering Handbook
+﻿# Sổ tay kỹ thuật CinemaStar
 
 > Tài liệu kỹ thuật chi tiết cho Developer và AI Agent.
 > 
@@ -11,12 +11,12 @@
 ## Cách dùng tài liệu này
 
 - Nếu bạn là người mới vào dự án: đọc theo thứ tự từ trên xuống.
-- Nếu bạn là AI agent: ưu tiên đọc phần "AI Agent Playbook" ở cuối trước khi sửa code.
+- Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
 ---
 
-## Legacy Technical Baseline (chi tiết 500+ dòng)
+## Nền tảng kỹ thuật cũ (chi tiết 500+ dòng)
 
 Phần bên dưới là bản kỹ thuật chi tiết đã được dùng trong dự án trước đó, giữ lại để tham chiếu đầy đủ.
 Lưu ý: một số tên file compose/envoy trong phần lịch sử có thể khác với cấu trúc hiện tại, hãy ưu tiên các phần "Chạy nhanh", "Cấu trúc dự án" và "Hướng dẫn chạy" bên dưới.
@@ -819,111 +819,111 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ---
 
-## 🤖 AI Action Log
+## 🤖 Nhật ký hành động AI
 
-### 2026-04-10 18:59 (UTC+07:00) - Create README action logging skill
-- Request: Review existing skills quickly and create a skill that logs each future request into README.md.
-- Actions: Created `.agents/skills/readme-action-logger/SKILL.md` and set up append-log rules for each completed task.
-- Files: `.agents/skills/readme-action-logger/SKILL.md`, `README.md`
-- Result: The repository is ready to use README action logging for subsequent requests.
+### 2026-04-10 18:59 (UTC+07:00) - Tạo skill ghi log vào README
+- Yêu cầu: rà nhanh các skill hiện có và tạo một skill để ghi lại từng yêu cầu mới vào `README.md`.
+- Hành động: tạo `.agents/skills/readme-action-logger/SKILL.md` và thiết lập quy tắc append log cho mỗi tác vụ hoàn thành.
+- File: `.agents/skills/readme-action-logger/SKILL.md`, `README.md`
+- Kết quả: kho mã đã sẵn sàng dùng cơ chế ghi log vào README cho các yêu cầu tiếp theo.
 
-### 2026-04-10 19:00 (UTC+07:00) - Switch AI action logs to English
-- Request: Write action log entries in English.
-- Actions: Updated the logger skill rules to enforce English entries and translated the existing log entry to English.
-- Files: `.agents/skills/readme-action-logger/SKILL.md`, `README.md`
-- Result: AI action logs are now standardized in English.
+### 2026-04-10 19:00 (UTC+07:00) - Chuyển log AI sang tiếng Anh
+- Yêu cầu: viết các mục nhật ký hành động bằng tiếng Anh.
+- Hành động: cập nhật quy tắc của skill logger để buộc ghi log bằng tiếng Anh và dịch mục log hiện có sang tiếng Anh.
+- File: `.agents/skills/readme-action-logger/SKILL.md`, `README.md`
+- Kết quả: các log AI đã được chuẩn hóa sang tiếng Anh.
 
-### 2026-04-10 19:20 (UTC+07:00) - Diagnose and verify full project build
-- Request: Re-check the whole project because it was failing and identify the cause.
-- Actions: Ran compile checks across all modules, rebuilt and installed `common-lib`, installed parent POM to local Maven repo, and re-verified every service compile.
-- Files: `README.md`
-- Result: All modules now compile successfully with `-DskipTests` in local verification.
+### 2026-04-10 19:20 (UTC+07:00) - Chẩn đoán và xác minh build toàn dự án
+- Yêu cầu: rà lại toàn bộ dự án vì đang lỗi và xác định nguyên nhân.
+- Hành động: chạy kiểm tra compile trên tất cả module, rebuild và cài lại `common-lib`, cài parent POM vào local Maven repo, rồi kiểm tra lại compile của từng service.
+- File: `README.md`
+- Kết quả: tất cả module đều compile thành công với `-DskipTests` trong lần xác minh local.
 
-### 2026-04-10 20:15 (UTC+07:00) - Extend hall response with cinema payload
-- Request: Add `cinemaResponse` in `HallResponse` and keep README action logging updated.
-- Actions: Added `CinemaResponse` DTO in `hall-service`, extended `HallResponse` with `cinemaResponse`, mapped response population from `HallServiceImpl`, and updated mapper ignore rules for new field.
-- Files: `hall-service/src/main/java/com/cinema/hall_services/dto/response/CinemaResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `hall-service/src/main/java/com/cinema/hall_services/mapper/HallMapper.java`, `README.md`
-- Result: Hall API response now includes a `cinemaResponse` object with cinema id (and optional name field for future expansion).
+### 2026-04-10 20:15 (UTC+07:00) - Mở rộng response hall với payload cinema
+- Yêu cầu: thêm `cinemaResponse` vào `HallResponse` và giữ log hành động trong README được cập nhật.
+- Hành động: thêm DTO `CinemaResponse` trong `hall-service`, mở rộng `HallResponse` với `cinemaResponse`, map dữ liệu từ `HallServiceImpl`, và cập nhật quy tắc ignore của mapper cho field mới.
+- File: `hall-service/src/main/java/com/cinema/hall_services/dto/response/CinemaResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `hall-service/src/main/java/com/cinema/hall_services/mapper/HallMapper.java`, `README.md`
+- Kết quả: response API hall hiện có thêm object `cinemaResponse` chứa id cinema (và có thể mở rộng tên cinema sau này).
 
-### 2026-04-10 20:20 (UTC+07:00) - Fix Envoy route for POST /api/halls
-- Request: Investigate `404 NR` when calling `POST /api/halls` from Postman.
-- Actions: Updated Envoy routes to match both `/api/halls` and `/api/halls/` in `envoy.local.yaml` and `envoy.prod.yaml`.
-- Files: `envoy/envoy.local.yaml`, `envoy/envoy.prod.yaml`, `README.md`
-- Result: Gateway route matching now handles hall APIs with or without trailing slash.
+### 2026-04-10 20:20 (UTC+07:00) - Sửa route Envoy cho `POST /api/halls`
+- Yêu cầu: điều tra lỗi `404 NR` khi gọi `POST /api/halls` từ Postman.
+- Hành động: cập nhật route Envoy để khớp cả `/api/halls` và `/api/halls/` trong `envoy.local.yaml` và `envoy.prod.yaml`.
+- File: `envoy/envoy.local.yaml`, `envoy/envoy.prod.yaml`, `README.md`
+- Kết quả: gateway đã xử lý đúng API hall dù có hoặc không có dấu gạch chéo cuối đường dẫn.
 
-### 2026-04-10 20:25 (UTC+07:00) - Fix Jackson package mismatch for layoutJson
-- Request: Resolve `HttpMessageConversionException` for `HallCreateRequest.layoutJson`.
-- Actions: Migrated hall-service JSON imports from `com.fasterxml.jackson.*` to `tools.jackson.*` (Spring 7/Jackson 3), covering request DTOs, response DTO, and service JSON processing.
-- Files: `hall-service/src/main/java/com/cinema/hall_services/dto/request/HallCreateRequest.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/request/UpdateHallLayoutRequest.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
-- Result: `layoutJson` can be deserialized correctly by Spring message converters using Jackson 3 types.
+### 2026-04-10 20:25 (UTC+07:00) - Sửa lệch package Jackson cho `layoutJson`
+- Yêu cầu: xử lý `HttpMessageConversionException` cho `HallCreateRequest.layoutJson`.
+- Hành động: chuyển import JSON của hall-service từ `com.fasterxml.jackson.*` sang `tools.jackson.*` (Spring 7/Jackson 3), bao phủ DTO request, DTO response và xử lý JSON trong service.
+- File: `hall-service/src/main/java/com/cinema/hall_services/dto/request/HallCreateRequest.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/request/UpdateHallLayoutRequest.java`, `hall-service/src/main/java/com/cinema/hall_services/dto/response/HallResponse.java`, `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Kết quả: `layoutJson` được Spring deserialize đúng bằng các type của Jackson 3.
 
-### 2026-04-10 20:30 (UTC+07:00) - Remove deprecated JSON handling in hall service
-- Request: Fix deprecated method usage and stabilize hall service JSON parsing.
-- Actions: Reworked `HallServiceImpl` with `JsonMapper.builder().build()`, replaced integer checks with non-deprecated `isIntegralNumber()` flow, restored `cinemaId` resolution from `X-User-ID` (removed hardcoded value), and fixed malformed `parseSeatType` logic.
-- Files: `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
-- Result: Hall service avoids deprecated JSON APIs and is back to manager-scoped cinema resolution.
+### 2026-04-10 20:30 (UTC+07:00) - Loại bỏ xử lý JSON deprecated trong hall service
+- Yêu cầu: sửa các method deprecated và ổn định lại xử lý JSON của hall service.
+- Hành động: tái cấu trúc `HallServiceImpl` với `JsonMapper.builder().build()`, thay các kiểm tra integer bằng luồng `isIntegralNumber()` không deprecated, khôi phục cách suy ra `cinemaId` từ `X-User-ID` (bỏ giá trị hardcode), và sửa logic `parseSeatType` bị lỗi cú pháp.
+- File: `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Kết quả: hall service không còn dùng API JSON deprecated và quay lại cơ chế xác định cinema theo manager scope.
 
-### 2026-04-10 20:33 (UTC+07:00) - Remove deprecated textual JsonNode methods
-- Request: Replace deprecated `isTextual()` and `asText()` calls in hall layout validation.
-- Actions: Updated `HallServiceImpl` to use Jackson 3 `TextNode.textValue()` pattern in `readRequiredText` and `parseSeatType`, removing deprecated textual API usage.
-- Files: `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
-- Result: Hall layout text parsing no longer depends on deprecated JsonNode textual methods.
+### 2026-04-10 20:33 (UTC+07:00) - Loại bỏ các method textual deprecated của JsonNode
+- Yêu cầu: thay `isTextual()` và `asText()` deprecated trong validation layout hall.
+- Hành động: cập nhật `HallServiceImpl` sang pattern `TextNode.textValue()` của Jackson 3 trong `readRequiredText` và `parseSeatType`, loại bỏ API textual deprecated.
+- File: `hall-service/src/main/java/com/cinema/hall_services/services/impl/HallServiceImpl.java`, `README.md`
+- Kết quả: xử lý text trong layout hall không còn phụ thuộc các method textual deprecated của JsonNode.
 
-### 2026-04-22 00:10 (UTC+07:00) - Add cinema staff PUT endpoint and migrate cinema mapper to MapStruct
-- Request: Add missing `PUT` endpoint for cinema staff assignment and align mapper implementation style with other services.
-- Actions: Added `PUT /api/cinemas/{id}/staffs` through controller/service/serviceImpl, migrated `cinema-service` mapper from manual class to MapStruct interface, and updated `cinema-service/pom.xml` with MapStruct processor config.
-- Files: `cinema-service/src/main/java/com/cinema/cinema_service/controller/CinemaController.java`, `cinema-service/src/main/java/com/cinema/cinema_service/services/CinemaService.java`, `cinema-service/src/main/java/com/cinema/cinema_service/services/impl/CinemaServiceImpl.java`, `cinema-service/src/main/java/com/cinema/cinema_service/mapper/CinemaMapper.java`, `cinema-service/pom.xml`, `README.md`, `TECHNICAL_AGENT_GUIDE.md`
-- Result: Cinema staff APIs now support idempotent `PUT` update flow and mapper style is consistent with MapStruct-based services.
+### 2026-04-22 00:10 (UTC+07:00) - Thêm endpoint PUT cho staff cinema và chuyển mapper sang MapStruct
+- Yêu cầu: thêm endpoint `PUT` còn thiếu cho gán staff vào cinema và đồng bộ cách triển khai mapper với các service khác.
+- Hành động: thêm `PUT /api/cinemas/{id}/staffs` qua controller/service/serviceImpl, chuyển mapper của `cinema-service` từ class thủ công sang interface MapStruct, và cập nhật `cinema-service/pom.xml` với cấu hình processor của MapStruct.
+- File: `cinema-service/src/main/java/com/cinema/cinema_service/controller/CinemaController.java`, `cinema-service/src/main/java/com/cinema/cinema_service/services/CinemaService.java`, `cinema-service/src/main/java/com/cinema/cinema_service/services/impl/CinemaServiceImpl.java`, `cinema-service/src/main/java/com/cinema/cinema_service/mapper/CinemaMapper.java`, `cinema-service/pom.xml`, `README.md`, `TECHNICAL_AGENT_GUIDE.md`
+- Kết quả: API staff của cinema hỗ trợ flow `PUT` idempotent và style mapper đồng nhất với các service dùng MapStruct.
 
-### 2026-04-22 00:40 (UTC+07:00) - Fix RedisConfig generic pool typing and serializer deprecation
-- Request: Investigate compile errors related to `GenericObjectPoolConfig<?>` and `GenericJackson2JsonRedisSerializer`.
-- Actions: Updated Redis pool generic type to `GenericObjectPoolConfig<StatefulConnection<?, ?>>` and replaced deprecated `GenericJackson2JsonRedisSerializer` with `GenericJacksonJsonRedisSerializer` in Redis configs.
-- Files: `identity-service/src/main/java/com/cinema/identity_service/config/RedisConfig.java`, `user-service/src/main/java/com/cinema/user_service/config/RedisConfig.java`, `film-service/src/main/java/com/cinema/film_service/config/RedisConfig.java`, `showtime-service/src/main/java/com/cinema/showtime_service/config/RedisConfig.java`, `README.md`, `TECHNICAL_AGENT_GUIDE.md`
-- Result: Removed incompatible generic type errors in Lettuce pooling config and eliminated deprecated Redis serializer usage in the affected services.
+### 2026-04-22 00:40 (UTC+07:00) - Sửa kiểu generic RedisConfig và serializer deprecated
+- Yêu cầu: điều tra lỗi compile liên quan đến `GenericObjectPoolConfig<?>` và `GenericJackson2JsonRedisSerializer`.
+- Hành động: cập nhật kiểu generic của Redis pool thành `GenericObjectPoolConfig<StatefulConnection<?, ?>>` và thay `GenericJackson2JsonRedisSerializer` deprecated bằng `GenericJacksonJsonRedisSerializer` trong các cấu hình Redis.
+- File: `identity-service/src/main/java/com/cinema/identity_service/config/RedisConfig.java`, `user-service/src/main/java/com/cinema/user_service/config/RedisConfig.java`, `film-service/src/main/java/com/cinema/film_service/config/RedisConfig.java`, `showtime-service/src/main/java/com/cinema/showtime_service/config/RedisConfig.java`, `README.md`, `TECHNICAL_AGENT_GUIDE.md`
+- Kết quả: bỏ được lỗi generic không tương thích trong cấu hình pooling của Lettuce và loại bỏ serializer Redis deprecated ở các service liên quan.
 
-### 2026-05-13 07:05 (UTC+07:00) - Migrate cinema search pagination to PageRequest/PageResponse
-- Request: Refactor `cinema-service` search pagination from cursor-based to page-based request.
-- Skills used: `backend-dev-guidelines`, `api-documentation`.
-- Actions:
-  - Switched `POST /api/cinemas/search` request type from `CursorPageRequest<CinemaField>` to `PageRequest<CinemaField>`.
-  - Switched response type from `CursorPageResponse<CinemaResponse>` to `PageResponse<CinemaResponse>`.
-  - Reworked service search flow to use `page/size` and compute `totalElements`, `totalPages`, `hasNext`, `hasPrevious`.
-  - Added repository methods `searchWithPageAndSortAndFilter(...)` and `countWithFilter(...)` while preserving keyword/filter/sort behavior.
-  - Verified compile via containerized Maven build in Docker.
-- Files:
+### 2026-05-13 07:05 (UTC+07:00) - Chuyển phân trang cinema search sang PageRequest/PageResponse
+- Yêu cầu: refactor phân trang của `cinema-service` từ request kiểu cursor sang request kiểu page.
+- Kỹ năng đã dùng: `backend-dev-guidelines`, `api-documentation`.
+- Hành động:
+  - Chuyển kiểu request của `POST /api/cinemas/search` từ `CursorPageRequest<CinemaField>` sang `PageRequest<CinemaField>`.
+  - Chuyển kiểu response từ `CursorPageResponse<CinemaResponse>` sang `PageResponse<CinemaResponse>`.
+  - Tái cấu trúc luồng search để dùng `page/size` và tự tính `totalElements`, `totalPages`, `hasNext`, `hasPrevious`.
+  - Thêm các method repository `searchWithPageAndSortAndFilter(...)` và `countWithFilter(...)` nhưng vẫn giữ nguyên keyword/filter/sort.
+  - Xác minh compile bằng Maven build chạy trong Docker.
+- File:
   - `cinema-service/src/main/java/com/cinema/cinema_service/controller/CinemaController.java`
   - `cinema-service/src/main/java/com/cinema/cinema_service/services/CinemaService.java`
   - `cinema-service/src/main/java/com/cinema/cinema_service/services/impl/CinemaServiceImpl.java`
   - `cinema-service/src/main/java/com/cinema/cinema_service/repository/CinemaRepositoryImpl.java`
-- Result: Cinema search API now supports page-based pagination payload:
+- Kết quả: API search cinema hiện hỗ trợ payload phân trang theo page:
   - `{"page":1,"size":12,"keyword":"","filterBy":[],"sortBy":[]}`
 
-### 2026-05-13 07:20 (UTC+07:00) - Add managerName in CinemaResponse
-- Request: Add `managerName` field to cinema response for frontend usage.
-- Skills used: `backend-dev-guidelines`, `api-documentation`.
-- Actions:
-  - Added `managerName` to `CinemaResponse`.
-  - Updated `CinemaMapper` mapping to ignore `managerName` explicitly to keep MapStruct compile-safe with `ReportingPolicy.ERROR`.
-  - Verified compile via Docker build.
-- Files:
+### 2026-05-13 07:20 (UTC+07:00) - Thêm `managerName` vào `CinemaResponse`
+- Yêu cầu: thêm field `managerName` vào response cinema cho frontend sử dụng.
+- Kỹ năng đã dùng: `backend-dev-guidelines`, `api-documentation`.
+- Hành động:
+  - Thêm `managerName` vào `CinemaResponse`.
+  - Cập nhật mapping trong `CinemaMapper` để ignore rõ ràng `managerName`, giúp MapStruct compile an toàn với `ReportingPolicy.ERROR`.
+  - Xác minh compile bằng Docker build.
+- File:
   - `cinema-service/src/main/java/com/cinema/cinema_service/dto/response/CinemaResponse.java`
   - `cinema-service/src/main/java/com/cinema/cinema_service/mapper/CinemaMapper.java`
-- Result: API response now includes `managerName` field (currently nullable until manager profile-name source is wired).
+- Kết quả: response API hiện có thêm field `managerName` (tạm thời có thể null cho đến khi nối nguồn tên manager).
 
-### 2026-05-13 07:35 (UTC+07:00) - Wire managerName for cinema search/getById via user-service gRPC
-- Request: Return real `managerName` in `GET /api/cinemas/{id}` and `POST /api/cinemas/search`.
-- Skills used: `backend-dev-guidelines`, `api-documentation`.
-- Actions:
-  - Added internal RPC `GetUserBasicById` in shared `user_internal.proto`.
-  - Implemented RPC handler in `user-service` gRPC layer and exposed `UserService.getUserById(...)`.
-  - Added `UserGrpcClient` in `cinema-service` and enriched `managerName` for `getById` + `search`.
-  - Added gRPC client channel config in `cinema-service` and runtime env in `compose.prod.yaml`.
-- Result: `managerName` is now populated from `user-service` for search/getById responses, with graceful fallback to `null` if user-service is unavailable.
+### 2026-05-13 07:35 (UTC+07:00) - Nối `managerName` cho cinema search/getById qua gRPC user-service
+- Yêu cầu: trả về `managerName` thật trong `GET /api/cinemas/{id}` và `POST /api/cinemas/search`.
+- Kỹ năng đã dùng: `backend-dev-guidelines`, `api-documentation`.
+- Hành động:
+  - Thêm RPC nội bộ `GetUserBasicById` trong `user_internal.proto`.
+  - Implement handler RPC ở lớp gRPC của `user-service` và expose `UserService.getUserById(...)`.
+  - Thêm `UserGrpcClient` trong `cinema-service` và enrich `managerName` cho `getById` + `search`.
+  - Thêm cấu hình channel gRPC trong `cinema-service` và biến runtime trong `compose.prod.yaml`.
+- Kết quả: `managerName` hiện được lấy từ `user-service` cho response search/getById, và tự fallback về `null` nếu `user-service` không khả dụng.
 
 
 ---
 
-## AI Agent Playbook (Bổ sung mới)
+## Sổ tay tác nghiệp AI (bổ sung mới)
 
 ### A. Quy tắc ra quyết định nhanh
 
@@ -964,67 +964,91 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 Cập nhật kỹ thuật gần nhất: 13/05/2026.
 
-### 2026-05-20 Hall API Simplification (ADR)
-- Status: Accepted
-- Skills used: architecture-decision-records, api-design-principles
+### 2026-05-20 - Tối giản API hall
+- Trạng thái: Đã chấp nhận
+- Kỹ năng đã dùng: `architecture-decision-records`, `api-design-principles`
 
-#### Context
-- FE su dung 1 man hinh duy nhat de tao/sua hall.
-- FE gui full payload moi lan submit (name, status, layoutDefinition).
-- Kien truc moi da tach seat canonical sang seat-service (gRPC internal).
+#### Bối cảnh
+- FE dùng 1 màn hình duy nhất để tạo/sửa hall.
+- FE gửi full payload mỗi lần submit (`name`, `status`, `layoutDefinition`).
+- Kiến trúc mới đã tách seat canonical sang `seat-service` (gRPC nội bộ).
 
-#### Options considered
-1. Giu 3 DTO + 3 endpoint rieng (`HallCreateRequest`, `UpdateHallRequest`, `UpdateHallStatusRequest`)
-- Pros: endpoint chuyen biet, de phan quyen chi tiet.
-- Cons: FE phai ghep nhieu flow, de goi nham endpoint, contract phuc tap.
+#### Các phương án đã cân nhắc
+1. Giữ 3 DTO + 3 endpoint riêng (`HallCreateRequest`, `UpdateHallRequest`, `UpdateHallStatusRequest`)
+- Ưu điểm: endpoint chuyên biệt, dễ phân quyền chi tiết.
+- Nhược điểm: FE phải ghép nhiều flow, dễ gọi nhầm endpoint, contract phức tạp.
 
-2. Gop 1 DTO chung cho create/update, bo patch status rieng
-- Pros: FE don gian, contract gon, dung voi UX 1 form.
-- Cons: can bao ve nghiep vu khi update layout trong luc dang co booking.
+2. Gộp 1 DTO chung cho create/update, bỏ patch status riêng
+- Ưu điểm: FE đơn giản, contract gọn, đúng với UX 1 form.
+- Nhược điểm: cần bảo vệ nghiệp vụ khi update layout trong lúc đang có booking.
 
-#### Decision
-- Chon Option 2.
-- Tao DTO chung `HallUpsertRequest` cho ca `POST /api/halls` va `PUT /api/halls/{id}`.
-- Bo endpoint `PATCH /api/halls/{id}` cap nhat status rieng.
-- Bo cac DTO cu: `HallCreateRequest`, `UpdateHallRequest`, `UpdateHallStatusRequest`.
-- `createHall` va `updateHall` deu xu ly layoutDefinition thong qua `seat-service` (gRPC).
+#### Quyết định
+- Chọn phương án 2.
+- Tạo DTO chung `HallUpsertRequest` cho cả `POST /api/halls` và `PUT /api/halls/{id}`.
+- Bỏ endpoint `PATCH /api/halls/{id}` cập nhật status riêng.
+- Bỏ các DTO cũ: `HallCreateRequest`, `UpdateHallRequest`, `UpdateHallStatusRequest`.
+- `createHall` và `updateHall` đều xử lý `layoutDefinition` thông qua `seat-service` (gRPC).
 
-#### Consequences
-- Positive:
-  - FE chi con 1 contract de tao/sua hall.
-  - Backend de maintain hon, it duplicate DTO.
-  - Van giu duoc rule an toan: chan sua layout neu hall dang co booking active.
-- Trade-off:
-  - Mat endpoint status-rieng; moi thay doi status di qua full form submit.
+#### Hệ quả
+- Tích cực:
+  - FE chỉ còn 1 contract để tạo/sửa hall.
+  - Backend dễ bảo trì hơn, ít DTO bị lặp.
+  - Vẫn giữ được rule an toàn: chặn sửa layout nếu hall đang có booking active.
+- Đánh đổi:
+  - Mất endpoint status riêng; mỗi lần đổi status đi qua full form submit.
 
-#### Safety notes
-- `PUT /api/halls/{id}` van check `HALL_LAYOUT_IN_USE` truoc khi replace layout.
-- Neu seat-layout chua ton tai, backend fallback create layout trong update flow.
+#### Ghi chú an toàn
+- `PUT /api/halls/{id}` vẫn kiểm tra `HALL_LAYOUT_IN_USE` trước khi replace layout.
+- Nếu seat-layout chưa tồn tại, backend fallback tạo layout trong flow update.
 
-### 2026-05-20 Hall Form Contract Refinement (ADR)
-- Status: Accepted (Supersedes `2026-05-20 Hall API Simplification (ADR)` phien ban truoc)
-- Skills used: architecture-decision-records, api-design-principles
+### 2026-05-20 - Tinh chỉnh hợp đồng form hall
+- Trạng thái: Đã chấp nhận (thay thế phiên bản `2026-05-20 - Tối giản API hall`)
+- Kỹ năng đã dùng: `architecture-decision-records`, `api-design-principles`
 
-#### Context
-- FE van dung 1 giao dien tao/sua hall, gui full payload.
-- Team muon ten DTO ro nghia nghiep vu (`Create`/`Update`) thay vi `Upsert`.
-- Hall co nhieu anh, can gui danh sach anh trong cung request hall thay vi API them tung anh.
+#### Bối cảnh
+- FE vẫn dùng 1 giao diện tạo/sửa hall, gửi full payload.
+- Team muốn tên DTO rõ nghĩa nghiệp vụ (`Create`/`Update`) thay vì `Upsert`.
+- Hall có nhiều ảnh, cần gửi danh sách ảnh trong cùng request hall thay vì API thêm từng ảnh.
 
-#### Decision
-- Tach lai DTO:
+#### Quyết định
+- Tách lại DTO:
   - `HallCreateRequest`
   - `UpdateHallRequest`
-- Ca 2 DTO deu gom:
+- Cả 2 DTO đều gồm:
   - `name`, `status`, `layoutDefinition`, `imagePaths: List<String>`
-- Bo endpoint add image rieng `POST /api/halls/{id}/images`.
-- Dong bo anh theo full payload trong create/update:
-  - Anh co trong request: tao moi/khai phuc neu da soft-delete.
-  - Anh khong con trong request: soft-delete.
+- Bỏ endpoint thêm ảnh riêng `POST /api/halls/{id}/images`.
+- Đồng bộ ảnh theo full payload trong create/update:
+  - Ảnh có trong request: tạo mới/khôi phục nếu đã soft-delete.
+  - Ảnh không còn trong request: soft-delete.
 
-#### Consequences
-- Positive:
-  - Ten request ro nghia va quen thuoc cho team.
-  - FE van chi can 1 form, 1 lan submit la cap nhat ca hall + layout + images.
-  - Khong can quan ly API them anh rieng.
-- Trade-off:
-  - Update la full-replace image list, FE phai gui day du danh sach anh hien tai.
+#### Hệ quả
+- Tích cực:
+  - Tên request rõ nghĩa và quen thuộc cho team.
+  - FE vẫn chỉ cần 1 form, 1 lần submit là cập nhật cả hall + layout + images.
+  - Không cần quản lý API thêm ảnh riêng.
+- Đánh đổi:
+  - Update là full-replace image list, FE phải gửi đầy đủ danh sách ảnh hiện tại.
+
+### 2026-05-29 Tra cứu chi tiết user qua REST
+- Yêu cầu: mở `GET /api/users/{id}` để đội support/vận hành tra cứu chi tiết user theo `userId` với kiểm soát quyền theo role.
+- Quyết định: `ADMIN` đọc được mọi user; `MANAGER` đọc được tất cả `CUSTOMER` và chỉ đọc được `STAFF` khi staff đó thuộc rạp mà manager đang quản lý; `STAFF` chỉ đọc được toàn bộ `CUSTOMER`; `CUSTOMER` vẫn ở `/me`.
+- Ghi chú: luồng gRPC nội bộ `getUserById(UUID)` vẫn giữ nguyên; route REST mới tái sử dụng cùng dữ liệu service với lớp kiểm tra quyền trong `user-service`, và phạm vi rạp giữa manager/staff được xác thực qua gRPC `cinema-service`.
+
+### 2026-05-29 API tìm kiếm customer
+- Yêu cầu: thêm API tìm kiếm customer có phân trang, tương tự `POST /api/users/staffs/search`.
+- Quyết định: mở `POST /api/users/customers/search` và cho `ADMIN` / `MANAGER` / `STAFF` dùng để tra cứu toàn bộ customer phục vụ vận hành.
+- Ghi chú: endpoint này dùng cùng pattern `PageRequest` / `PageResponse` như search staff/manager và trả hồ sơ customer trực tiếp từ `user-service`.
+
+### 2026-05-29 Báo cáo doanh thu theo rạp
+- Yêu cầu: xây dựng báo cáo doanh thu cho `ADMIN` và `MANAGER`, phân trang theo rạp, và trả cùng lúc `page` + `total` summary trong cùng một response.
+- Quyết định: mở `POST /api/payments/revenues/cinemas/search` cho admin và `POST /api/payments/revenues/cinemas/me/search` cho manager.
+- Ghi chú:
+  - Báo cáo tính theo lúc thực thu, không theo thời điểm tạo giao dịch.
+  - `paidAt` là sự kiện tiền vào, `refundedAt` là sự kiện tiền ra.
+  - Frontend gửi `dateRange` riêng, tách khỏi `pageRequest`.
+  - `page` là summary của các rạp đang hiển thị ở trang hiện tại.
+  - `total` là summary của toàn bộ phạm vi đã lọc.
+  - Phạm vi rạp lấy từ gRPC `cinema-service`, và các rạp không có doanh thu trong khoảng lọc vẫn phải được hiển thị với giá trị 0.
+  - Tài liệu giải thích đầy đủ và danh sách file liên quan: [REVENUE_REPORT_RULES.md](./REVENUE_REPORT_RULES.md)
+
+
