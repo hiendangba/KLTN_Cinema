@@ -74,9 +74,6 @@ public class PaymentTransactionRepositoryImpl {
         if (cinemaIds == null || cinemaIds.isEmpty()) {
             return List.of();
         }
-        if (from == null || to == null) {
-            return List.of();
-        }
 
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<PaymentTransaction> cq = cb.createQuery(PaymentTransaction.class);
@@ -86,9 +83,17 @@ public class PaymentTransactionRepositoryImpl {
         predicates.add(root.get("cinemaId").in(cinemaIds));
 
         List<Predicate> eventPredicates = new ArrayList<>();
-        eventPredicates.add(buildBetweenIfPresent(cb, root, "paidAt", from, to));
-        eventPredicates.add(buildBetweenIfPresent(cb, root, "refundedAt", from, to));
-        predicates.add(cb.or(eventPredicates.toArray(new Predicate[0])));
+        Predicate paidPredicate = buildEventTimePredicate(cb, root, "paidAt", from, to);
+        if (paidPredicate != null) {
+            eventPredicates.add(paidPredicate);
+        }
+        Predicate refundedPredicate = buildEventTimePredicate(cb, root, "refundedAt", from, to);
+        if (refundedPredicate != null) {
+            eventPredicates.add(refundedPredicate);
+        }
+        if (!eventPredicates.isEmpty()) {
+            predicates.add(cb.or(eventPredicates.toArray(new Predicate[0])));
+        }
 
         cq.where(predicates.toArray(new Predicate[0]));
         return entityManager.createQuery(cq).getResultList();
@@ -118,13 +123,22 @@ public class PaymentTransactionRepositoryImpl {
     }
 
     @SuppressWarnings("unchecked")
-    private Predicate buildBetweenIfPresent(
+    private Predicate buildEventTimePredicate(
             CriteriaBuilder cb,
             Root<PaymentTransaction> root,
             String fieldName,
             java.time.LocalDateTime from,
             java.time.LocalDateTime to) {
         Path<? extends Comparable<?>> path = comparablePath(root, fieldName);
+        if (from == null && to == null) {
+            return null;
+        }
+        if (from == null) {
+            return cb.lessThanOrEqualTo((Path<java.time.LocalDateTime>) path, to);
+        }
+        if (to == null) {
+            return cb.greaterThanOrEqualTo((Path<java.time.LocalDateTime>) path, from);
+        }
         return cb.between((Path<java.time.LocalDateTime>) path, from, to);
     }
 

@@ -2,9 +2,11 @@ package com.cinema.booking_service.services;
 
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
+import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.CheckoutContextResponse;
 import com.cinema.booking_service.dto.response.BookingResponse;
+import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
@@ -24,6 +26,10 @@ public interface BookingService {
     CheckoutContextResponse getCheckoutContext(UUID id, HttpServletRequest httpRequest);
 
     PageResponse<BookingResponse> searchBookingsByOperatorCinema(PageRequest<BookingField> request, HttpServletRequest httpRequest);
+
+    BookingRevenueReportResponse getAllCinemaRevenueReport(BookingRevenueReportRequest request);
+
+    BookingRevenueReportResponse getMyCinemaRevenueReport(BookingRevenueReportRequest request, HttpServletRequest httpRequest);
 
     ActionMessageResponse updateBookingStatus(UUID id, UpdateBookingStatusRequest request, HttpServletRequest httpRequest);
 

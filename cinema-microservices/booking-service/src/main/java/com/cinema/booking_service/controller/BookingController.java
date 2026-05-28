@@ -2,8 +2,10 @@ package com.cinema.booking_service.controller;
 
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
+import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.BookingResponse;
+import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
 import com.cinema.booking_service.dto.response.CheckoutContextResponse;
 import com.cinema.booking_service.services.BookingService;
 import com.cinema.controller.BaseController;
@@ -11,6 +13,8 @@ import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
+import com.cinema.http.HeaderNames;
+import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -71,6 +75,24 @@ public class BookingController extends BaseController {
             @Valid @RequestBody PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
         PageResponse<BookingResponse> response = bookingService.searchBookingsByOperatorCinema(request, httpRequest);
+        return ok(response);
+    }
+
+    @PostMapping("/revenues/cinemas/search")
+    public ResponseEntity<APIResponse<BookingRevenueReportResponse>> getAllCinemaRevenueReport(
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody BookingRevenueReportRequest request) {
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN);
+        BookingRevenueReportResponse response = bookingService.getAllCinemaRevenueReport(request);
+        return ok(response);
+    }
+
+    @PostMapping("/revenues/cinemas/me/search")
+    public ResponseEntity<APIResponse<BookingRevenueReportResponse>> getMyCinemaRevenueReport(
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody BookingRevenueReportRequest request) {
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
+        BookingRevenueReportResponse response = bookingService.getMyCinemaRevenueReport(request, httpRequest);
         return ok(response);
     }
 

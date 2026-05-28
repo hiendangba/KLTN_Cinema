@@ -2,8 +2,13 @@ package com.cinema.booking_service.services.impl;
 
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
+import com.cinema.booking_service.dto.request.BookingRevenueField;
+import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.BookingResponse;
+import com.cinema.booking_service.dto.response.BookingRevenueItemResponse;
+import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
+import com.cinema.booking_service.dto.response.BookingRevenueSummaryResponse;
 import com.cinema.booking_service.dto.response.CheckoutContextResponse;
 import com.cinema.booking_service.dto.response.PaymentSessionSnapshotResponse;
 import com.cinema.booking_service.entity.Booking;
@@ -28,6 +33,8 @@ import com.cinema.booking_service.services.BookingService;
 import com.cinema.booking_service.services.SeatLockService;
 import com.cinema.Enum.HallEnum;
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.request.DateRange;
+import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.PageResponse;
@@ -41,12 +48,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.lang.reflect.Array;
 import java.time.temporal.ChronoUnit;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -256,6 +267,30 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
+    public BookingRevenueReportResponse getAllCinemaRevenueReport(BookingRevenueReportRequest request) {
+        validateRevenueReportRequest(request);
+        List<CinemaGrpcClient.CinemaSummary> cinemas = cinemaGrpcClient.getAllActiveCinemas();
+        return buildBookingRevenueReport(cinemas, request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public BookingRevenueReportResponse getMyCinemaRevenueReport(
+            BookingRevenueReportRequest request,
+            HttpServletRequest httpRequest) {
+        validateRevenueReportRequest(request);
+        UUID requesterUserId = resolveUserId(httpRequest);
+        List<CinemaGrpcClient.CinemaSummary> cinemas = cinemaGrpcClient.getCinemasByUserId(
+                requesterUserId,
+                HeaderNames.ROLE_MANAGER);
+        if (cinemas == null || cinemas.isEmpty()) {
+            throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+        }
+        return buildBookingRevenueReport(cinemas, request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public CheckoutContextResponse getCheckoutContext(UUID id, HttpServletRequest httpRequest) {
         Booking booking = getActiveBookingOrThrow(id);
         authorizeBookingRead(booking, httpRequest);
@@ -345,6 +380,417 @@ public class BookingServiceImpl implements BookingService {
     private Booking getActiveBookingOrThrow(UUID id) {
         return bookingRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    private void validateRevenueReportRequest(BookingRevenueReportRequest request) {
+        if (request == null || request.getPageRequest() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        DateRange dateRange = request.getDateRange();
+        if (dateRange != null
+                && dateRange.getFrom() != null
+                && dateRange.getTo() != null
+                && dateRange.getFrom().isAfter(dateRange.getTo())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+    }
+
+    private BookingRevenueReportResponse buildBookingRevenueReport(
+            List<CinemaGrpcClient.CinemaSummary> cinemas,
+            BookingRevenueReportRequest request) {
+        DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
+        PageRequest<BookingRevenueField> pageRequest = request.getPageRequest();
+
+        List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
+        scopeCinemas = scopeCinemas.stream()
+                .filter(cinema -> cinema != null && cinema.id() != null)
+                .distinct()
+                .toList();
+
+        List<BookingRevenueItemResponse> allItems = initializeBookingRevenueItems(scopeCinemas);
+        if (!allItems.isEmpty()) {
+            Map<UUID, BookingRevenueAccumulator> accumulatorMap = allItems.stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            BookingRevenueItemResponse::cinemaId,
+                            item -> new BookingRevenueAccumulator(item.cinemaId(), item.cinemaName()),
+                            (left, right) -> left,
+                            LinkedHashMap::new));
+
+            List<Booking> bookings = bookingRepository.findAllForBookingRevenueReport(
+                    scopeCinemas.stream().map(CinemaGrpcClient.CinemaSummary::id).toList(),
+                    from,
+                    to,
+                    EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED));
+
+            for (Booking booking : bookings) {
+                BookingRevenueAccumulator accumulator = accumulatorMap.get(booking.getCinemaId());
+                if (accumulator == null) {
+                    continue;
+                }
+                accumulator.addBooking(booking);
+            }
+
+            allItems = accumulatorMap.values().stream()
+                    .map(BookingRevenueAccumulator::toResponse)
+                    .toList();
+        }
+
+        List<BookingRevenueItemResponse> filteredItems = applyBookingRevenuePageRequest(allItems, pageRequest);
+        int page = pageRequest.getPageOrDefault();
+        int size = pageRequest.getSizeOrDefault();
+        long totalElements = filteredItems.size();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+        List<BookingRevenueItemResponse> pageItems = paginate(filteredItems, page, size);
+
+        return BookingRevenueReportResponse.builder()
+                .from(from)
+                .to(to)
+                .generatedAt(LocalDateTime.now())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .items(pageItems)
+                .page(toSummary(pageItems))
+                .total(toSummary(filteredItems))
+                .build();
+    }
+
+    private List<BookingRevenueItemResponse> initializeBookingRevenueItems(
+            List<CinemaGrpcClient.CinemaSummary> cinemas) {
+        if (cinemas == null || cinemas.isEmpty()) {
+            return List.of();
+        }
+        return cinemas.stream()
+                .map(cinema -> BookingRevenueItemResponse.builder()
+                        .cinemaId(cinema.id())
+                        .cinemaName(cinema.name())
+                        .totalBookings(0)
+                        .pendingCount(0)
+                        .reservedCount(0)
+                        .confirmedCount(0)
+                        .ticketSubtotalAmount(BigDecimal.ZERO)
+                        .productSubtotalAmount(BigDecimal.ZERO)
+                        .grossAmount(BigDecimal.ZERO)
+                        .build())
+                .toList();
+    }
+
+    private List<BookingRevenueItemResponse> applyBookingRevenuePageRequest(
+            List<BookingRevenueItemResponse> items,
+            PageRequest<BookingRevenueField> request) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+
+        List<BookingRevenueItemResponse> filtered = new ArrayList<>(items);
+        String keyword = request.getNormalizedKeyword();
+        if (StringUtils.hasText(keyword)) {
+            filtered = filtered.stream()
+                    .filter(item -> matchesKeyword(item, keyword))
+                    .collect(Collectors.toCollection(ArrayList::new));
+        }
+
+        List<FilterField<BookingRevenueField>> filters = request.getFilterBy();
+        if (filters != null && !filters.isEmpty()) {
+            filtered = filtered.stream()
+                    .filter(item -> matchesAllFilters(item, filters))
+                    .collect(Collectors.toCollection(ArrayList::new));
+        }
+
+        filtered.sort(buildBookingRevenueComparator(request.getSortBy()));
+        return filtered;
+    }
+
+    private Comparator<BookingRevenueItemResponse> buildBookingRevenueComparator(
+            List<SortField<BookingRevenueField>> sortFields) {
+        Comparator<BookingRevenueItemResponse> comparator = Comparator
+                .comparing(BookingRevenueItemResponse::cinemaName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(BookingRevenueItemResponse::cinemaId, Comparator.nullsLast(Comparator.naturalOrder()));
+
+        if (sortFields == null || sortFields.isEmpty()) {
+            return comparator;
+        }
+
+        Comparator<BookingRevenueItemResponse> merged = null;
+        for (SortField<BookingRevenueField> sort : sortFields) {
+            if (sort == null || sort.getField() == null) {
+                continue;
+            }
+            Comparator<BookingRevenueItemResponse> fieldComparator = (left, right) ->
+                    compareValues(
+                            getBookingRevenueFieldValue(left, sort.getField()),
+                            getBookingRevenueFieldValue(right, sort.getField()));
+            if ("DESC".equalsIgnoreCase(sort.getDirection())) {
+                fieldComparator = fieldComparator.reversed();
+            }
+            merged = merged == null ? fieldComparator : merged.thenComparing(fieldComparator);
+        }
+
+        return merged == null ? comparator : comparator.thenComparing(merged);
+    }
+
+    private boolean matchesKeyword(BookingRevenueItemResponse item, String keyword) {
+        if (!StringUtils.hasText(keyword) || item == null) {
+            return true;
+        }
+        String normalized = keyword.trim().toLowerCase(Locale.ROOT);
+        return containsIgnoreCase(item.cinemaName(), normalized)
+                || containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(), normalized);
+    }
+
+    private boolean matchesAllFilters(
+            BookingRevenueItemResponse item,
+            List<FilterField<BookingRevenueField>> filters) {
+        for (FilterField<BookingRevenueField> filter : filters) {
+            if (!matchesFilter(item, filter)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean matchesFilter(BookingRevenueItemResponse item, FilterField<BookingRevenueField> filter) {
+        if (item == null || filter == null || filter.getField() == null || filter.getOperator() == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        String operator = filter.getOperator().trim().toUpperCase(Locale.ROOT);
+        Object rawValue = filter.getValue();
+        if (rawValue == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        Object fieldValue = getBookingRevenueFieldValue(item, filter.getField());
+        Class<?> dataType = filter.getField().getDataType();
+
+        return switch (operator) {
+            case "EQ" -> compareValues(fieldValue, BookingRevenueField.convertValue(String.valueOf(rawValue), dataType)) == 0;
+            case "NEQ" -> compareValues(fieldValue, BookingRevenueField.convertValue(String.valueOf(rawValue), dataType)) != 0;
+            case "LIKE" -> fieldValue instanceof String text
+                    && containsIgnoreCase(text, String.valueOf(rawValue).toLowerCase(Locale.ROOT));
+            case "GTE" -> compareValues(fieldValue, BookingRevenueField.convertValue(String.valueOf(rawValue), dataType)) >= 0;
+            case "LTE" -> compareValues(fieldValue, BookingRevenueField.convertValue(String.valueOf(rawValue), dataType)) <= 0;
+            case "IN" -> matchesInValues(fieldValue, rawValue, dataType);
+            case "BETWEEN" -> matchesBetweenValues(fieldValue, rawValue, dataType);
+            default -> throw new BusinessException(ErrorCode.INVALID_INPUT);
+        };
+    }
+
+    private boolean matchesInValues(Object fieldValue, Object rawValue, Class<?> dataType) {
+        List<Comparable<?>> values = convertToComparableList(rawValue, dataType);
+        for (Comparable<?> value : values) {
+            if (compareValues(fieldValue, value) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean matchesBetweenValues(Object fieldValue, Object rawValue, Class<?> dataType) {
+        List<Comparable<?>> values = convertToComparableList(rawValue, dataType);
+        if (values.size() != 2) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        Comparable<?> start = values.get(0);
+        Comparable<?> end = values.get(1);
+        if (compareValues(start, end) > 0) {
+            Comparable<?> tmp = start;
+            start = end;
+            end = tmp;
+        }
+        return compareValues(fieldValue, start) >= 0 && compareValues(fieldValue, end) <= 0;
+    }
+
+    private List<Comparable<?>> convertToComparableList(Object rawValue, Class<?> dataType) {
+        if (rawValue == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        List<Comparable<?>> values = new ArrayList<>();
+        if (rawValue instanceof Collection<?> collection) {
+            for (Object item : collection) {
+                values.add(BookingRevenueField.convertValue(String.valueOf(item), dataType));
+            }
+            return values;
+        }
+
+        if (rawValue.getClass().isArray()) {
+            int length = Array.getLength(rawValue);
+            for (int i = 0; i < length; i++) {
+                values.add(BookingRevenueField.convertValue(String.valueOf(Array.get(rawValue, i)), dataType));
+            }
+            return values;
+        }
+
+        String text = String.valueOf(rawValue).trim();
+        if (text.isEmpty()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        for (String token : text.split(",")) {
+            String value = token.trim();
+            if (value.isEmpty()) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            values.add(BookingRevenueField.convertValue(value, dataType));
+        }
+        return values;
+    }
+
+    private Object getBookingRevenueFieldValue(BookingRevenueItemResponse item, BookingRevenueField field) {
+        return switch (field) {
+            case CINEMA_ID -> item.cinemaId();
+            case CINEMA_NAME -> item.cinemaName();
+            case TOTAL_BOOKINGS -> item.totalBookings();
+            case PENDING_COUNT -> item.pendingCount();
+            case RESERVED_COUNT -> item.reservedCount();
+            case CONFIRMED_COUNT -> item.confirmedCount();
+            case TICKET_SUBTOTAL_AMOUNT -> item.ticketSubtotalAmount();
+            case PRODUCT_SUBTOTAL_AMOUNT -> item.productSubtotalAmount();
+            case GROSS_AMOUNT -> item.grossAmount();
+        };
+    }
+
+    private int compareValues(Object left, Object right) {
+        if (left == right) {
+            return 0;
+        }
+        if (left == null) {
+            return -1;
+        }
+        if (right == null) {
+            return 1;
+        }
+        if (left instanceof Comparable<?> comparableLeft) {
+            try {
+                @SuppressWarnings("unchecked")
+                Comparable<Object> typedLeft = (Comparable<Object>) comparableLeft;
+                return typedLeft.compareTo(right);
+            } catch (ClassCastException ex) {
+                return String.valueOf(left).compareToIgnoreCase(String.valueOf(right));
+            }
+        }
+        return String.valueOf(left).compareToIgnoreCase(String.valueOf(right));
+    }
+
+    private boolean containsIgnoreCase(String text, String keyword) {
+        if (text == null || keyword == null) {
+            return false;
+        }
+        return text.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT));
+    }
+
+    private List<BookingRevenueItemResponse> paginate(List<BookingRevenueItemResponse> items, int page, int size) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        int fromIndex = Math.max(0, (page - 1) * size);
+        if (fromIndex >= items.size()) {
+            return List.of();
+        }
+        int toIndex = Math.min(items.size(), fromIndex + size);
+        return new ArrayList<>(items.subList(fromIndex, toIndex));
+    }
+
+    private BookingRevenueSummaryResponse toSummary(List<BookingRevenueItemResponse> items) {
+        if (items == null || items.isEmpty()) {
+            return BookingRevenueSummaryResponse.builder()
+                    .totalBookings(0)
+                    .pendingCount(0)
+                    .reservedCount(0)
+                    .confirmedCount(0)
+                    .ticketSubtotalAmount(BigDecimal.ZERO)
+                    .productSubtotalAmount(BigDecimal.ZERO)
+                    .grossAmount(BigDecimal.ZERO)
+                    .build();
+        }
+
+        long totalBookings = 0L;
+        long pendingCount = 0L;
+        long reservedCount = 0L;
+        long confirmedCount = 0L;
+        BigDecimal ticketSubtotalAmount = BigDecimal.ZERO;
+        BigDecimal productSubtotalAmount = BigDecimal.ZERO;
+        BigDecimal grossAmount = BigDecimal.ZERO;
+
+        for (BookingRevenueItemResponse item : items) {
+            if (item == null) {
+                continue;
+            }
+            totalBookings += item.totalBookings();
+            pendingCount += item.pendingCount();
+            reservedCount += item.reservedCount();
+            confirmedCount += item.confirmedCount();
+            ticketSubtotalAmount = ticketSubtotalAmount.add(nvl(item.ticketSubtotalAmount()));
+            productSubtotalAmount = productSubtotalAmount.add(nvl(item.productSubtotalAmount()));
+            grossAmount = grossAmount.add(nvl(item.grossAmount()));
+        }
+
+        return BookingRevenueSummaryResponse.builder()
+                .totalBookings(totalBookings)
+                .pendingCount(pendingCount)
+                .reservedCount(reservedCount)
+                .confirmedCount(confirmedCount)
+                .ticketSubtotalAmount(ticketSubtotalAmount)
+                .productSubtotalAmount(productSubtotalAmount)
+                .grossAmount(grossAmount)
+                .build();
+    }
+
+    private static BigDecimal nvl(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private static class BookingRevenueAccumulator {
+        private final UUID cinemaId;
+        private final String cinemaName;
+        private long totalBookings;
+        private long pendingCount;
+        private long reservedCount;
+        private long confirmedCount;
+        private BigDecimal ticketSubtotalAmount = BigDecimal.ZERO;
+        private BigDecimal productSubtotalAmount = BigDecimal.ZERO;
+        private BigDecimal grossAmount = BigDecimal.ZERO;
+
+        private BookingRevenueAccumulator(UUID cinemaId, String cinemaName) {
+            this.cinemaId = cinemaId;
+            this.cinemaName = cinemaName;
+        }
+
+        private void addBooking(Booking booking) {
+            if (booking == null) {
+                return;
+            }
+            totalBookings++;
+            if (booking.getBookingStatus() == BookingStatus.PENDING) {
+                pendingCount++;
+            } else if (booking.getBookingStatus() == BookingStatus.RESERVED) {
+                reservedCount++;
+            } else if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
+                confirmedCount++;
+            }
+            ticketSubtotalAmount = ticketSubtotalAmount.add(BookingServiceImpl.nvl(booking.getTicketSubtotal()));
+            productSubtotalAmount = productSubtotalAmount.add(BookingServiceImpl.nvl(booking.getProductSubtotal()));
+            grossAmount = grossAmount.add(BookingServiceImpl.nvl(booking.getFinalAmount()));
+        }
+
+        private BookingRevenueItemResponse toResponse() {
+            return BookingRevenueItemResponse.builder()
+                    .cinemaId(cinemaId)
+                    .cinemaName(cinemaName)
+                    .totalBookings(totalBookings)
+                    .pendingCount(pendingCount)
+                    .reservedCount(reservedCount)
+                    .confirmedCount(confirmedCount)
+                    .ticketSubtotalAmount(ticketSubtotalAmount)
+                    .productSubtotalAmount(productSubtotalAmount)
+                    .grossAmount(grossAmount)
+                    .build();
+        }
     }
 
     private void authorizeBookingRead(Booking booking, HttpServletRequest httpRequest) {

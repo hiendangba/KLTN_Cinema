@@ -4,6 +4,9 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.GrpcErrorUtils;
 import com.cinema.grpc.cinema.CinemaInternalServiceGrpc;
+import com.cinema.grpc.cinema.CinemaPayload;
+import com.cinema.grpc.cinema.GetAllActiveCinemasReply;
+import com.cinema.grpc.cinema.GetAllActiveCinemasRequest;
 import com.cinema.grpc.cinema.GetCinemaByUserIdReply;
 import com.cinema.grpc.cinema.GetCinemaByUserIdRequest;
 import com.cinema.grpc.cinema.GetCinemasByUserIdReply;
@@ -49,6 +52,23 @@ public class CinemaGrpcClient {
         }
     }
 
+    public List<CinemaSummary> getAllActiveCinemas() {
+        try {
+            GetAllActiveCinemasReply reply = cinemaBlockingStub.getAllActiveCinemas(
+                    GetAllActiveCinemasRequest.newBuilder().build());
+
+            if (!reply.getSuccess()) {
+                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.CINEMA_SERVICE_ERROR));
+            }
+
+            return reply.getCinemasList().stream()
+                    .map(this::toSummary)
+                    .toList();
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+    }
+
     public List<UUID> getCinemaIdsByUserId(UUID userId, String role) {
         try {
             GetCinemasByUserIdReply reply = cinemaBlockingStub.getCinemasByUserId(
@@ -74,5 +94,21 @@ public class CinemaGrpcClient {
         } catch (StatusRuntimeException ex) {
             throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
         }
+    }
+
+    private CinemaSummary toSummary(CinemaPayload payload) {
+        if (payload == null || payload.getId().isBlank()) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+        try {
+            return new CinemaSummary(
+                    UUID.fromString(payload.getId()),
+                    payload.getName());
+        } catch (Exception ex) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+    }
+
+    public record CinemaSummary(UUID id, String name) {
     }
 }

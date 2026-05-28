@@ -1,4 +1,4 @@
-package com.cinema.payment_service.dto.request;
+package com.cinema.booking_service.dto.request;
 
 import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.PageRequest;
@@ -12,12 +12,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CinemaRevenueReportRequest {
+public class BookingRevenueReportRequest {
 
     @Valid
     private DateRange dateRange;
 
     @Valid
     @NotNull(message = "Page request is required")
-    private PageRequest<CinemaRevenueField> pageRequest;
+    private PageRequest<BookingRevenueField> pageRequest;
 }

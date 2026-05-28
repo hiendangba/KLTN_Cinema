@@ -62,6 +62,22 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("now") LocalDateTime now,
             @Param("statuses") Collection<BookingStatus> statuses);
 
+    @Query("""
+            SELECT b
+            FROM Booking b
+            WHERE b.isDeleted = false
+              AND b.cinemaId IN :cinemaIds
+              AND (:from IS NULL OR b.timeCreated >= :from)
+              AND (:to IS NULL OR b.timeCreated <= :to)
+              AND b.bookingStatus IN :statuses
+            ORDER BY b.timeCreated DESC, b.id ASC
+            """)
+    List<Booking> findAllForBookingRevenueReport(
+            @Param("cinemaIds") Collection<UUID> cinemaIds,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("statuses") Collection<BookingStatus> statuses);
+
     boolean existsByShowtimeIdAndIsDeletedFalseAndBookingStatusIn(UUID showtimeId, Collection<BookingStatus> statuses);
 
     boolean existsByShowtimeIdInAndIsDeletedFalseAndBookingStatusIn(

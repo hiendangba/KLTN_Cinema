@@ -1042,11 +1042,12 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 ### 2026-05-29 Báo cáo doanh thu theo rạp
 - Yêu cầu: xây dựng báo cáo doanh thu cho `ADMIN` và `MANAGER`, phân trang theo rạp, và trả cùng lúc `page` + `total` summary trong cùng một response.
 - Quyết định: mở `POST /api/payments/revenues/cinemas/search` cho admin và `POST /api/payments/revenues/cinemas/me/search` cho manager.
-- Ghi chú:
-  - Báo cáo tính theo lúc thực thu, không theo thời điểm tạo giao dịch.
-  - `paidAt` là sự kiện tiền vào, `refundedAt` là sự kiện tiền ra.
-  - Frontend gửi `dateRange` riêng, tách khỏi `pageRequest`.
-  - `page` là summary của các rạp đang hiển thị ở trang hiện tại.
+  - Ghi chú:
+    - Báo cáo tính theo lúc thực thu, không theo thời điểm tạo giao dịch.
+    - `paidAt` là sự kiện tiền vào, `refundedAt` là sự kiện tiền ra.
+    - Frontend gửi `dateRange` riêng, tách khỏi `pageRequest`.
+    - Nếu không truyền `dateRange` thì report lấy toàn bộ dữ liệu.
+    - `page` là summary của các rạp đang hiển thị ở trang hiện tại.
   - `total` là summary của toàn bộ phạm vi đã lọc.
   - Phạm vi rạp lấy từ gRPC `cinema-service`, và các rạp không có doanh thu trong khoảng lọc vẫn phải được hiển thị với giá trị 0.
   - Tài liệu giải thích đầy đủ và danh sách file liên quan: [REVENUE_REPORT_RULES.md](./REVENUE_REPORT_RULES.md)
@@ -1058,5 +1059,96 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - Không đổi sang `PageRequest` cho film vì catalog phim lớn.
   - `dateRange` là payload riêng, tách khỏi dữ liệu cursor.
   - Mục tiêu hiển thị mặc định là phim mới phát hành trước.
+
+### 2026-05-29 Báo cáo bán hàng ở booking-service
+- Yêu cầu: thêm một báo cáo riêng để nhìn giá trị đơn hàng phát sinh, tách bạch với báo cáo doanh thu thực thu của `payment-service`.
+- Quyết định:
+  - Mở `POST /api/bookings/revenues/cinemas/search` cho `ADMIN`.
+  - Mở `POST /api/bookings/revenues/cinemas/me/search` cho `MANAGER`.
+  - Dữ liệu báo cáo lấy từ `Booking`, không lấy từ `PaymentTransaction`.
+  - Mốc thời gian của báo cáo là `Booking.timeCreated`.
+  - Booking chưa thanh toán vẫn được tính vào giá trị đơn hàng; chỉ loại các booking đã `CANCELLED` hoặc `EXPIRED`.
+  - Ghi chú:
+    - Response dùng cùng kiểu `items` + `page` + `total` như báo cáo bên payment để FE render thống nhất.
+    - `pageRequest` giữ vai trò phân trang/lọc/sắp xếp theo rạp.
+    - Nếu frontend không truyền `dateRange` thì report lấy toàn bộ dữ liệu.
+  - `dateRange` gửi riêng trong body request, không nhét vào `PageRequest`.
+
+### Mẫu request gửi FE
+- Nếu không lọc theo ngày thì bỏ hẳn `dateRange` khỏi body.
+- Nếu có lọc theo ngày thì `dateRange` phải có đủ `from` và `to`.
+
+#### Báo cáo doanh thu thực tế ở payment-service
+```json
+{
+  "pageRequest": {
+    "page": 1,
+    "size": 20,
+    "keyword": "",
+    "sortBy": [],
+    "filterBy": []
+  }
+}
+```
+
+```json
+{
+  "dateRange": {
+    "from": "2026-05-01T00:00:00",
+    "to": "2026-05-31T23:59:59"
+  },
+  "pageRequest": {
+    "page": 1,
+    "size": 20,
+    "keyword": "",
+    "sortBy": [],
+    "filterBy": []
+  }
+}
+```
+
+#### Báo cáo bán hàng ở booking-service
+```json
+{
+  "pageRequest": {
+    "page": 1,
+    "size": 20,
+    "keyword": "",
+    "sortBy": [],
+    "filterBy": []
+  }
+}
+```
+
+```json
+{
+  "dateRange": {
+    "from": "2026-05-01T00:00:00",
+    "to": "2026-05-31T23:59:59"
+  },
+  "pageRequest": {
+    "page": 1,
+    "size": 20,
+    "keyword": "",
+    "sortBy": [],
+    "filterBy": []
+  }
+}
+```
+
+#### Tìm kiếm film
+```json
+{
+  "cursor": null,
+  "size": 20,
+  "keyword": "",
+  "sortBy": [],
+  "filterBy": [],
+  "dateRange": {
+    "from": "2026-01-01T00:00:00",
+    "to": "2026-05-31T23:59:59"
+  }
+}
+```
 
 

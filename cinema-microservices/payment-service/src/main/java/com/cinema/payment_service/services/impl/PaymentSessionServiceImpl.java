@@ -678,11 +678,14 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private void validateRevenueReportRequest(CinemaRevenueReportRequest request) {
-        if (request == null || request.getDateRange() == null || request.getPageRequest() == null) {
+        if (request == null || request.getPageRequest() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
         DateRange dateRange = request.getDateRange();
-        if (dateRange.getFrom() == null || dateRange.getTo() == null || dateRange.getTo().isBefore(dateRange.getFrom())) {
+        if (dateRange != null
+                && dateRange.getFrom() != null
+                && dateRange.getTo() != null
+                && dateRange.getTo().isBefore(dateRange.getFrom())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
     }
@@ -691,6 +694,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             List<CinemaGrpcClient.CinemaSummary> cinemas,
             CinemaRevenueReportRequest request) {
         DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
         PageRequest<CinemaRevenueField> pageRequest = request.getPageRequest();
         List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
         scopeCinemas = scopeCinemas.stream()
@@ -709,15 +714,15 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
             List<PaymentTransaction> revenueTransactions = paymentTransactionRepositoryImpl.findAllForRevenueReport(
                     scopeCinemas.stream().map(CinemaGrpcClient.CinemaSummary::id).toList(),
-                    dateRange.getFrom(),
-                    dateRange.getTo());
+                    from,
+                    to);
 
             for (PaymentTransaction transaction : revenueTransactions) {
                 CinemaRevenueAccumulator accumulator = accumulatorMap.get(transaction.getCinemaId());
                 if (accumulator == null) {
                     continue;
                 }
-                applyTransactionToAccumulator(accumulator, transaction, dateRange.getFrom(), dateRange.getTo());
+                applyTransactionToAccumulator(accumulator, transaction, from, to);
             }
 
             allItems = accumulatorMap.values().stream()
@@ -733,8 +738,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         List<CinemaRevenueItemResponse> pageItems = paginate(filteredItems, page, size);
 
         return CinemaRevenueReportResponse.builder()
-                .from(dateRange.getFrom())
-                .to(dateRange.getTo())
+                .from(from)
+                .to(to)
                 .generatedAt(LocalDateTime.now())
                 .currentPage(page)
                 .totalPages(totalPages)
@@ -1018,6 +1023,18 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     private boolean isBetween(LocalDateTime value, LocalDateTime from, LocalDateTime to) {
         if (value == null || from == null || to == null) {
+            if (value == null) {
+                return false;
+            }
+            if (from == null && to == null) {
+                return true;
+            }
+            if (from == null) {
+                return !value.isAfter(to);
+            }
+            if (to == null) {
+                return !value.isBefore(from);
+            }
             return false;
         }
         return !value.isBefore(from) && !value.isAfter(to);

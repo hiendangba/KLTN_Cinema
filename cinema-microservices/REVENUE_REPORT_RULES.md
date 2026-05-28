@@ -51,6 +51,7 @@
 ## Contract request
 
 - `dateRange` gửi riêng, không nhét vào `PageRequest`
+- Nếu frontend không truyền `dateRange` thì report lấy toàn bộ dữ liệu, không trả lỗi
 - `pageRequest` chỉ lo:
   - page
   - size
@@ -110,4 +111,14 @@
 - Mẫu request/response không phá contract `PageRequest` hiện có.
 - Báo cáo sửa theo event time (`paidAt`/`refundedAt`) nên phù hợp với nghiệp vụ thanh toán thực tế.
 - Snapshot `cinemaId` từ `showtime -> booking -> payment` giúp report không phải join ngược theo `userId`.
+
+## Báo cáo bán hàng ở `booking-service`
+
+- Đây là báo cáo khác với report ở `payment-service`.
+- `booking-service` tính theo `Booking.timeCreated` và tổng tiền đơn `Booking.finalAmount`.
+- Booking chưa thanh toán vẫn được tính vào giá trị đơn hàng phát sinh.
+- Chỉ loại các booking đã `CANCELLED` hoặc `EXPIRED`.
+- Mục đích là xem “đã bán được bao nhiêu”, không phải “đã thu được bao nhiêu tiền”.
+- Report này dùng cùng pattern `dateRange` + `pageRequest` + `items/page/total` để FE render thống nhất.
+- Nếu frontend không truyền `dateRange` thì report booking cũng lấy toàn bộ dữ liệu.
 
