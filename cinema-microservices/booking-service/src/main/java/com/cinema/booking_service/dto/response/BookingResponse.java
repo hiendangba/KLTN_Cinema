@@ -16,6 +16,9 @@ public class BookingResponse {
     private UUID id;
     private UUID showtimeId;
     private UUID cinemaId;
+    private String filmTitle;
+    private LocalDateTime showtimeStartDateTime;
+    private LocalDateTime showtimeEndDateTime;
     private UUID userId;
     private CustomerInfoResponse customerInfo;
     private PaymentStatus paymentStatus;
@@ -29,4 +32,3 @@ public class BookingResponse {
     private LocalDateTime timeCreated;
     private LocalDateTime timeUpdated;
 }
-

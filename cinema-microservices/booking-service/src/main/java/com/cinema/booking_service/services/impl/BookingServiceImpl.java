@@ -14,6 +14,7 @@ import com.cinema.booking_service.enums.BookingStatus;
 import com.cinema.booking_service.enums.PaymentStatus;
 import com.cinema.booking_service.enums.ProductStatus;
 import com.cinema.booking_service.grpc.CinemaGrpcClient;
+import com.cinema.booking_service.grpc.FilmGrpcClient;
 import com.cinema.booking_service.http.PaymentServiceClient;
 import com.cinema.booking_service.grpc.SeatGrpcClient;
 import com.cinema.booking_service.grpc.ShowtimeGrpcClient;
@@ -67,6 +68,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingMapper bookingMapper;
     private final BookingSeatItemMapper bookingSeatItemMapper;
     private final CinemaGrpcClient cinemaGrpcClient;
+    private final FilmGrpcClient filmGrpcClient;
     private final ShowtimeGrpcClient showtimeGrpcClient;
     private final SeatGrpcClient seatGrpcClient;
     private final SeatLockService seatLockService;
@@ -78,8 +80,9 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public BookingResponse createBooking(CreateBookingRequest request, HttpServletRequest httpRequest) {
-        validateCustomerRole(httpRequest);
-        UUID userId = resolveUserId(httpRequest);
+        validateBookingCreatorRole(httpRequest);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        UUID userId = HeaderNames.ROLE_CUSTOMER.equals(role) ? resolveUserId(httpRequest) : null;
 
         List<CreateBookingRequest.SeatItem> seatItems = request.getSeatItems();
         if (seatItems == null || seatItems.isEmpty() || seatItems.size() > 5) {
@@ -91,6 +94,7 @@ public class BookingServiceImpl implements BookingService {
         if (!showtime.getCinemaId().equals(request.getCinemaId())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
+        FilmGrpcClient.FilmSnapshot film = filmGrpcClient.getFilmById(showtime.getFilmId());
         Map<String, SeatGrpcClient.SeatSnapshot> canonicalSeatSnapshotByCode =
                 validateAndResolveSeatSnapshots(showtime.getHallId(), seatItems, normalizedSeatCodes);
         if (bookingSeatItemRepository.existsLockedSeatCodes(
@@ -106,6 +110,9 @@ public class BookingServiceImpl implements BookingService {
         }
         booking.setUserId(userId);
         booking.setCinemaId(showtime.getCinemaId());
+        booking.setFilmTitle(film.getTitle());
+        booking.setShowtimeStartDateTime(showtime.getStartDateTime());
+        booking.setShowtimeEndDateTime(showtime.getEndDateTime());
         booking.setBookingStatus(BookingStatus.RESERVED);
         booking.setPaymentStatus(PaymentStatus.UNPAID);
         booking.setReservedUntil(LocalDateTime.now().plusMinutes(seatLockMinutes));
@@ -154,17 +161,6 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = getActiveBookingOrThrow(id);
         authorizeBookingRead(booking, httpRequest);
         return bookingMapper.toResponse(booking);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<BookingResponse> getMyBookings(HttpServletRequest httpRequest) {
-        validateCustomerRole(httpRequest);
-        UUID userId = resolveUserId(httpRequest);
-        return bookingRepository.findAllByUserIdAndIsDeletedFalseOrderByTimeCreatedDesc(userId)
-                .stream()
-                .map(bookingMapper::toResponse)
-                .toList();
     }
 
     @Override
@@ -221,21 +217,41 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<BookingResponse> getBookingsByOperatorCinema(HttpServletRequest httpRequest) {
+    public PageResponse<BookingResponse> searchBookingsByOperatorCinema(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
         validateOperatorRole(httpRequest);
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
-        if (HeaderNames.ROLE_ADMIN.equals(role)) {
-            return bookingRepository.findAllByIsDeletedFalseOrderByTimeCreatedDesc()
-                    .stream()
-                    .map(bookingMapper::toResponse)
-                    .toList();
+        UUID userId = null;
+        Set<UUID> accessibleCinemaIds = null;
+        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
+            accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest, role);
         }
 
-        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest, role);
-        return bookingRepository.findAllByCinemaIdInAndIsDeletedFalseOrderByTimeCreatedDesc(accessibleCinemaIds)
-                .stream()
-                .map(bookingMapper::toResponse)
-                .toList();
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        String keyword = request.getNormalizedKeyword();
+
+        List<SortField<BookingField>> sortFields = request.getSortBy();
+        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
+        if (sortFields.stream().noneMatch(sort -> sort != null && sort.getField() == BookingField.TIME_CREATED)) {
+            sortFields.add(new SortField<>(BookingField.TIME_CREATED, "DESC"));
+        }
+
+        long totalElements = bookingRepositoryImpl.countWithFilter(userId, accessibleCinemaIds, keyword, request.getFilterBy());
+        List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                userId, accessibleCinemaIds, keyword, page, size, sortFields, request.getFilterBy());
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+
+        return PageResponse.<BookingResponse>builder()
+                .data(bookings.stream().map(bookingMapper::toResponse).toList())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .build();
     }
 
     @Override
@@ -488,6 +504,15 @@ public class BookingServiceImpl implements BookingService {
                 .map(BookingSeatItem::getSeatCode)
                 .map(this::normalizeSeatCode)
                 .toList();
+    }
+
+    private void validateBookingCreatorRole(HttpServletRequest httpRequest) {
+        RequestAuthUtils.requireAnyRole(
+                httpRequest,
+                HeaderNames.ROLE_CUSTOMER,
+                HeaderNames.ROLE_ADMIN,
+                HeaderNames.ROLE_MANAGER,
+                HeaderNames.ROLE_STAFF);
     }
 
     private void validateCustomerRole(HttpServletRequest httpRequest) {

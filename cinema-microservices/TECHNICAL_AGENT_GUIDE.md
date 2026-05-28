@@ -748,10 +748,19 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - Bổ sung API booking:
     - `POST /api/bookings`
     - `GET /api/bookings/{id}`
-    - `GET /api/bookings/me`
-    - `GET /api/bookings/cinemas/me`
+    - `POST /api/bookings/me/search`
+    - `POST /api/bookings/cinemas/me/search`
+    - `GET /api/bookings/me/active`
     - `PATCH /api/bookings/{id}/status`
     - `POST /api/bookings/{id}/cancel`
+  - Booking snapshot:
+    - Lưu snapshot ngay lúc tạo booking để history/search tự đủ dữ liệu:
+      - `customerInfo.fullName/email/phone`
+      - `filmTitle`
+      - `showtimeStartDateTime`
+      - `showtimeEndDateTime`
+    - `customerInfo` luôn bắt buộc; `userId` chỉ là liên kết bổ sung khi booking gắn với tài khoản đăng nhập.
+    - History/search tìm theo `customerInfo.fullName` và `filmTitle`, không cần gọi lại `UserService` hoặc `ShowtimeService` khi đọc lịch sử.
   - Chuẩn request frontend:
     - Chỉ dùng **1 payload** `CreateBookingRequest` khi khách đã chọn xong toàn bộ ghế + sản phẩm.
     - `customerInfo`, `seatItems`, `productItems` được thiết kế dạng nested object/list trong cùng request.

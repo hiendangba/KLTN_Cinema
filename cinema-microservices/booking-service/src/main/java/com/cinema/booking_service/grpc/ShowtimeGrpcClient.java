@@ -12,6 +12,7 @@ import lombok.Getter;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Component
@@ -44,6 +45,9 @@ public class ShowtimeGrpcClient {
                     .hallId(parseUuid(reply.getShowtime().getHallId(), ErrorCode.SHOWTIME_SERVICE_ERROR))
                     .cinemaId(parseUuid(reply.getShowtime().getCinemaId(), ErrorCode.SHOWTIME_SERVICE_ERROR))
                     .pricingPolicyId(parseUuid(reply.getShowtime().getPricingPolicyId(), ErrorCode.SHOWTIME_SERVICE_ERROR))
+                    .filmId(parseUuid(reply.getShowtime().getFilmId(), ErrorCode.SHOWTIME_SERVICE_ERROR))
+                    .startDateTime(parseDateTime(reply.getShowtime().getStartDateTime(), ErrorCode.SHOWTIME_SERVICE_ERROR))
+                    .endDateTime(parseDateTime(reply.getShowtime().getEndDateTime(), ErrorCode.SHOWTIME_SERVICE_ERROR))
                     .build();
         } catch (StatusRuntimeException ex) {
             throw new BusinessException(ErrorCode.SHOWTIME_SERVICE_ERROR);
@@ -58,6 +62,14 @@ public class ShowtimeGrpcClient {
         }
     }
 
+    private LocalDateTime parseDateTime(String raw, ErrorCode fallback) {
+        try {
+            return LocalDateTime.parse(raw);
+        } catch (Exception ex) {
+            throw new BusinessException(fallback);
+        }
+    }
+
     @Getter
     @Builder
     public static class ShowtimeSummary {
@@ -65,5 +77,8 @@ public class ShowtimeGrpcClient {
         private UUID hallId;
         private UUID cinemaId;
         private UUID pricingPolicyId;
+        private UUID filmId;
+        private LocalDateTime startDateTime;
+        private LocalDateTime endDateTime;
     }
 }

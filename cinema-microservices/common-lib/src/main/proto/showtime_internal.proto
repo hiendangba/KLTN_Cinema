@@ -20,6 +20,9 @@ message ShowtimePayload {
   string hall_id = 2;
   string cinema_id = 3;
   string pricing_policy_id = 4;
+  string film_id = 5;
+  string start_date_time = 6;
+  string end_date_time = 7;
 }
 
 message GetShowtimeByIdReply {

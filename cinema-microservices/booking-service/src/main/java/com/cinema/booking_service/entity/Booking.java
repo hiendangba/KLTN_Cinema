@@ -39,7 +39,16 @@ public class Booking {
     @Column(name = "cinema_id", columnDefinition = "uuid", nullable = false)
     private UUID cinemaId;
 
-    @Column(name = "user_id", columnDefinition = "uuid", nullable = false)
+    @Column(name = "film_title", length = 255)
+    private String filmTitle;
+
+    @Column(name = "showtime_start_date_time")
+    private LocalDateTime showtimeStartDateTime;
+
+    @Column(name = "showtime_end_date_time")
+    private LocalDateTime showtimeEndDateTime;
+
+    @Column(name = "user_id", columnDefinition = "uuid")
     private UUID userId;
 
     @Embedded
@@ -113,4 +122,3 @@ public class Booking {
         timeUpdated = LocalDateTime.now();
     }
 }
-

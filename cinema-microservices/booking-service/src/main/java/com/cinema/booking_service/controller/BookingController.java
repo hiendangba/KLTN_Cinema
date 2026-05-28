@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -50,12 +49,6 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 
-    @GetMapping("/me")
-    public ResponseEntity<APIResponse<List<BookingResponse>>> getMyBookings(HttpServletRequest httpRequest) {
-        List<BookingResponse> response = bookingService.getMyBookings(httpRequest);
-        return ok(response);
-    }
-
     @PostMapping("/me/search")
     public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchMyBookings(
             @Valid @RequestBody PageRequest<BookingField> request,
@@ -73,9 +66,11 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 
-    @GetMapping("/cinemas/me")
-    public ResponseEntity<APIResponse<List<BookingResponse>>> getBookingsByOperatorCinema(HttpServletRequest httpRequest) {
-        List<BookingResponse> response = bookingService.getBookingsByOperatorCinema(httpRequest);
+    @PostMapping("/cinemas/me/search")
+    public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchBookingsByOperatorCinema(
+            @Valid @RequestBody PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        PageResponse<BookingResponse> response = bookingService.searchBookingsByOperatorCinema(request, httpRequest);
         return ok(response);
     }
 

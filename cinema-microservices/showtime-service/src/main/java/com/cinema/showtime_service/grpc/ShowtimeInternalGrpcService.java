@@ -53,6 +53,9 @@ public class ShowtimeInternalGrpcService extends ShowtimeInternalServiceGrpc.Sho
                             .setHallId(showTime.getHallId().toString())
                             .setCinemaId(cinemaId.toString())
                             .setPricingPolicyId(showTime.getPricingPolicyId().toString())
+                            .setFilmId(showTime.getFilmId().toString())
+                            .setStartDateTime(showTime.getStartDateTime().toString())
+                            .setEndDateTime(showTime.getEndDateTime().toString())
                             .build())
                     .build());
             responseObserver.onCompleted();

@@ -10,7 +10,6 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface BookingService {
@@ -18,15 +17,13 @@ public interface BookingService {
 
     BookingResponse getBookingById(UUID id, HttpServletRequest httpRequest);
 
-    List<BookingResponse> getMyBookings(HttpServletRequest httpRequest);
-
     PageResponse<BookingResponse> searchMyBookings(PageRequest<BookingField> request, HttpServletRequest httpRequest);
 
     BookingResponse getMyActiveBooking(UUID showtimeId, UUID cinemaId, HttpServletRequest httpRequest);
 
     CheckoutContextResponse getCheckoutContext(UUID id, HttpServletRequest httpRequest);
 
-    List<BookingResponse> getBookingsByOperatorCinema(HttpServletRequest httpRequest);
+    PageResponse<BookingResponse> searchBookingsByOperatorCinema(PageRequest<BookingField> request, HttpServletRequest httpRequest);
 
     ActionMessageResponse updateBookingStatus(UUID id, UpdateBookingStatusRequest request, HttpServletRequest httpRequest);
 

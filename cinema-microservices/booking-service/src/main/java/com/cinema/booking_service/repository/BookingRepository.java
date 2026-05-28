@@ -29,14 +29,6 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             """)
     Optional<Booking> findLockedByIdAndIsDeletedFalse(@Param("id") UUID id);
 
-    List<Booking> findAllByUserIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID userId);
-
-    List<Booking> findAllByCinemaIdAndIsDeletedFalseOrderByTimeCreatedDesc(UUID cinemaId);
-
-    List<Booking> findAllByCinemaIdInAndIsDeletedFalseOrderByTimeCreatedDesc(Collection<UUID> cinemaIds);
-
-    List<Booking> findAllByIsDeletedFalseOrderByTimeCreatedDesc();
-
     @Query("""
             SELECT b
             FROM Booking b

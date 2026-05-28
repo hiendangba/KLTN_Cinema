@@ -173,6 +173,8 @@ services:
       REDIS_PASSWORD: ""
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
+      FILM_GRPC_HOST: film-service
+      FILM_GRPC_PORT: 9192
       SHOWTIME_GRPC_HOST: showtime-service
       SHOWTIME_GRPC_PORT: 9194
       SEAT_GRPC_HOST: seat-service
@@ -188,6 +190,7 @@ services:
       - postgres
       - redis
       - cinema-service
+      - film-service
     mem_limit: 224m
 
   payment-service:
