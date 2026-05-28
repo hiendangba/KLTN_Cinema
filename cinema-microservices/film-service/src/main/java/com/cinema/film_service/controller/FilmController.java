@@ -4,13 +4,13 @@ import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
+import com.cinema.film_service.dto.request.FilmCursorPageRequest;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.services.FilmService;
-import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.response.CursorPageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -30,7 +30,7 @@ public class FilmController extends BaseController {
 
     @PostMapping("/search")
     public ResponseEntity<APIResponse<CursorPageResponse<FilmResponse>>> searchFilms(
-            @Valid @RequestBody CursorPageRequest<FilmField> request) {
+            @Valid @RequestBody FilmCursorPageRequest request) {
         CursorPageResponse<FilmResponse> response = filmService.searchFilms(request);
         return ok(response);
     }

@@ -1,10 +1,12 @@
 package com.cinema.film_service.services.impl;
 
 import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
+import com.cinema.film_service.dto.request.FilmCursorPageRequest;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
 import com.cinema.dto.response.ActionMessageResponse;
@@ -118,22 +120,21 @@ public class FilmServiceImpl implements FilmService {
     }
 
     @Override
-    public CursorPageResponse<FilmResponse> searchFilms(
-            CursorPageRequest<FilmField> request) {
-        log.info("Lấy danh sách phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={})",
+    public CursorPageResponse<FilmResponse> searchFilms(FilmCursorPageRequest request) {
+        log.info("Lấy danh sách phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={}, dateRange={})",
                 request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
-                request.getFilterBy());
+                request.getFilterBy(), request.getDateRange());
 
         String[] cursorParts = request.getParsedCompositeCursor();
         String keyword = request.getNormalizedKeyword();
         int size = request.getSizeOrDefault();
 
-        // Truyền thẳng các DTO filter/sort vào repository
-        List<SortField<FilmField>> sortFields = request.getSortBy();
-        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        // Luôn thêm ID làm sort cuối để đảm bảo thứ tự ổn định
-        sortFields.add(new SortField<>(FilmField.ID, "ASC"));
-        List<FilterField<FilmField>> filterFields = request.getFilterBy();
+        List<SortField<FilmField>> sortFields = buildSortFields(request.getSortBy());
+        List<FilterField<FilmField>> filterFields = request.getFilterBy() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(request.getFilterBy());
+        appendReleaseDateRangeFilter(filterFields, request.getDateRange());
+
         List<Film> films = filmRepositoryImpl.searchWithCursorAndSortAndFilter(
                 cursorParts, keyword, size, sortFields, filterFields);
         boolean hasNext = films.size() > size;
@@ -166,6 +167,34 @@ public class FilmServiceImpl implements FilmService {
                 .hasNext(hasNext)
                 .size(films.size())
                 .build();
+    }
+
+    private List<SortField<FilmField>> buildSortFields(List<SortField<FilmField>> requestedSortFields) {
+        List<SortField<FilmField>> sortFields = requestedSortFields == null
+                ? new ArrayList<>()
+                : new ArrayList<>(requestedSortFields);
+
+        boolean hasExplicitSort = !sortFields.isEmpty();
+        sortFields.removeIf(sortField -> sortField != null && sortField.getField() == FilmField.ID);
+
+        if (!hasExplicitSort) {
+            sortFields.add(0, new SortField<>(FilmField.RELEASE_DATE, "DESC"));
+        }
+
+        sortFields.add(new SortField<>(FilmField.ID, "ASC"));
+        return sortFields;
+    }
+
+    private void appendReleaseDateRangeFilter(List<FilterField<FilmField>> filterFields, DateRange dateRange) {
+        if (dateRange == null) {
+            return;
+        }
+
+        filterFields.add(FilterField.<FilmField>builder()
+                .field(FilmField.RELEASE_DATE)
+                .operator("BETWEEN")
+                .value(List.of(dateRange.getFrom().toLocalDate(), dateRange.getTo().toLocalDate()))
+                .build());
     }
 
     @Override

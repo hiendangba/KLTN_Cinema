@@ -1051,4 +1051,12 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - Phạm vi rạp lấy từ gRPC `cinema-service`, và các rạp không có doanh thu trong khoảng lọc vẫn phải được hiển thị với giá trị 0.
   - Tài liệu giải thích đầy đủ và danh sách file liên quan: [REVENUE_REPORT_RULES.md](./REVENUE_REPORT_RULES.md)
 
+### 2026-05-29 Tìm kiếm film giữ cursor và ưu tiên phim mới nhất
+- Yêu cầu: giữ `CursorPageRequest` cho `film-service`, đồng thời cho phép lọc theo khoảng ngày phát hành.
+- Quyết định: search film tiếp tục dùng cursor paging, mặc định sắp xếp `releaseDate DESC` rồi tie-break bằng `id ASC`, và nếu frontend gửi `dateRange` thì lọc theo `releaseDate` trong khoảng đó.
+- Ghi chú:
+  - Không đổi sang `PageRequest` cho film vì catalog phim lớn.
+  - `dateRange` là payload riêng, tách khỏi dữ liệu cursor.
+  - Mục tiêu hiển thị mặc định là phim mới phát hành trước.
+
 

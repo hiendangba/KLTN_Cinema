@@ -1,8 +1,6 @@
 package com.cinema.film_service.services;
 
-// import các class cursor paging mới nếu có
-
-import com.cinema.dto.request.CursorPageRequest;
+import com.cinema.film_service.dto.request.FilmCursorPageRequest;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
@@ -24,7 +22,7 @@ public interface FilmService {
 
     BatchFilmResponse getFilmsInBatch(BatchFilmRequest request);
 
-    CursorPageResponse<FilmResponse> searchFilms(CursorPageRequest<FilmField> request);
+    CursorPageResponse<FilmResponse> searchFilms(FilmCursorPageRequest request);
 
     ActionMessageResponse deleteFilm(UUID id, HttpServletRequest httpRequest);
 }
