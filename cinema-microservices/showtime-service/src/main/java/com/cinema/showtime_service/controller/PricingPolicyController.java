@@ -3,7 +3,10 @@ package com.cinema.showtime_service.controller;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.response.PageResponse;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.showtime_service.dto.request.PricingPolicyCreateRequest;
+import com.cinema.showtime_service.dto.request.PricingPolicyField;
 import com.cinema.showtime_service.dto.request.PricingPolicyUpdateRequest;
 import com.cinema.showtime_service.dto.response.PricingPolicyResponse;
 import com.cinema.showtime_service.services.PricingPolicyService;
@@ -20,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -57,9 +59,11 @@ public class PricingPolicyController extends BaseController {
         return ok(pricingPolicyService.getPricingPolicyById(id, httpRequest));
     }
 
-    @GetMapping
-    public ResponseEntity<APIResponse<List<PricingPolicyResponse>>> getAllPricingPolicies(
+    @PostMapping("/search")
+    public ResponseEntity<APIResponse<PageResponse<PricingPolicyResponse>>> searchPricingPolicies(
+            @Valid @RequestBody PageRequest<PricingPolicyField> request,
             HttpServletRequest httpRequest) {
-        return ok(pricingPolicyService.getAllPricingPolicies(httpRequest));
+        PageResponse<PricingPolicyResponse> response = pricingPolicyService.searchPricingPolicies(request, httpRequest);
+        return ok(response);
     }
 }
