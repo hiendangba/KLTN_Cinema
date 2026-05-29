@@ -91,7 +91,8 @@ public class UserServiceImpl implements UserService {
     // Register customer account: create OTP payload, cache verification state, and
     // queue OTP email.
     @Override
-    public ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest) {
+    public ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
+                                                  HttpServletResponse response) {
         if (userRepository.existsByEmail(registerCustomerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
         }
@@ -126,6 +127,7 @@ public class UserServiceImpl implements UserService {
         }
         log.warn("otp generate :{}", otp);
         redisTemplate.opsForValue().set(otpKey, otpData, 5, TimeUnit.MINUTES);
+        setTokenCookie(response, VerifyToken, verifyToken, TimeUnit.MINUTES.toMillis(5));
         internalEmailDispatchService.sendAsync(new SendEmailRequest(
                 registerCustomerRequest.getEmail(),
                 "Đăng ký tài khoản thành công",

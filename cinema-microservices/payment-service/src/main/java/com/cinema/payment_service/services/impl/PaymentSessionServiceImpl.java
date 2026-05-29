@@ -23,11 +23,13 @@ import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.excel.ExcelExportUtils;
 import com.cinema.payment_service.entity.PaymentTransaction;
+import com.cinema.payment_service.entity.PaymentTransactionPromotion;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
+import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
@@ -56,6 +58,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -74,6 +77,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final PaymentTransactionRepositoryImpl paymentTransactionRepositoryImpl;
     private final BookingGrpcClient bookingGrpcClient;
     private final CinemaGrpcClient cinemaGrpcClient;
+    private final PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
     private final MomoGatewayProperties momoGatewayProperties;
     private final MomoPaymentGatewayClient momoPaymentGatewayClient;
     private final PromotionEngine promotionEngine;
@@ -127,15 +131,20 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setStatus(PaymentTransactionStatus.PENDING);
         transaction.setExpiresAt(bookingContext.reservedUntil());
 
-        applyPromotionIfNeeded(transaction, requestedPromotionCode, bookingContext, requesterUserId);
+        List<PromotionQuote> appliedPromotions = applyPromotionIfNeeded(
+                transaction,
+                requestedPromotionCode,
+                bookingContext,
+                requesterUserId);
 
         MomoPaymentGatewayClient.MomoCheckoutResult checkoutResult = momoPaymentGatewayClient.createCheckout(
                 transaction,
                 bookingContext);
         transaction.setPayUrl(checkoutResult.payUrl());
         transaction.setCheckoutPayloadJson(checkoutResult.requestPayloadJson());
-        paymentTransactionRepository.save(transaction);
-        return toResponse(transaction);
+        PaymentTransaction savedTransaction = paymentTransactionRepository.save(transaction);
+        savePromotionSnapshots(savedTransaction, appliedPromotions);
+        return toResponse(savedTransaction);
     }
 
     @Override
@@ -348,6 +357,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                         "Refunded Count",
                         "Ticket Subtotal Amount",
                         "Product Subtotal Amount",
+                        "Promotion Code",
+                        "Promotion Name",
+                        "Promotion Discount Amount",
                         "Paid Amount",
                         "Refunded Amount",
                         "Gross Amount",
@@ -365,6 +377,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                                 item.refundedCount(),
                                 item.ticketSubtotalAmount(),
                                 item.productSubtotalAmount(),
+                                item.promotionCode(),
+                                item.promotionName(),
+                                item.promotionDiscountAmount(),
                                 item.paidAmount(),
                                 item.refundedAmount(),
                                 item.grossAmount(),
@@ -587,12 +602,15 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         return requestedPromotionCode.equals(latestPromotionCode);
     }
 
-    private void applyPromotionIfNeeded(PaymentTransaction transaction,
-                                        String requestedPromotionCode,
-                                        BookingGrpcClient.BookingPaymentContext bookingContext,
-                                        UUID requesterUserId) {
+    private List<PromotionQuote> applyPromotionIfNeeded(PaymentTransaction transaction,
+                                                        String requestedPromotionCode,
+                                                        BookingGrpcClient.BookingPaymentContext bookingContext,
+                                                        UUID requesterUserId) {
         if (!StringUtils.hasText(requestedPromotionCode)) {
-            return;
+            transaction.setPromotionCode(null);
+            transaction.setPromotionName(null);
+            transaction.setPromotionDiscountAmount(ZERO);
+            return List.of();
         }
 
         BigDecimal baseAmount = normalizeAmount(bookingContext.finalAmount());
@@ -601,9 +619,112 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 baseAmount,
                 bookingContext,
                 requesterUserId);
-        transaction.setPromotionCode(quote.promotionCode());
-        transaction.setPromotionDiscountAmount(quote.discountAmount());
-        transaction.setAmount(normalizeAmount(baseAmount.subtract(quote.discountAmount())));
+        List<PromotionQuote> appliedPromotions = List.of(quote);
+        transaction.setPromotionCode(joinPromotionCodes(appliedPromotions));
+        transaction.setPromotionName(joinPromotionNames(appliedPromotions));
+        transaction.setPromotionDiscountAmount(sumPromotionDiscountQuotes(appliedPromotions));
+        transaction.setAmount(normalizeAmount(baseAmount.subtract(transaction.getPromotionDiscountAmount())));
+        return appliedPromotions;
+    }
+
+    private void savePromotionSnapshots(PaymentTransaction transaction, List<PromotionQuote> appliedPromotions) {
+        if (transaction == null || transaction.getId() == null || appliedPromotions == null || appliedPromotions.isEmpty()) {
+            return;
+        }
+
+        List<PaymentTransactionPromotion> snapshots = new ArrayList<>();
+        int applyOrder = 1;
+        for (PromotionQuote quote : appliedPromotions) {
+            if (quote == null || !StringUtils.hasText(quote.promotionCode())) {
+                continue;
+            }
+            PaymentTransactionPromotion snapshot = new PaymentTransactionPromotion();
+            snapshot.setPaymentTransactionId(transaction.getId());
+            snapshot.setPromotionId(quote.promotionId());
+            snapshot.setPromotionCode(normalizeStringValue(quote.promotionCode()));
+            snapshot.setPromotionName(normalizeStringValue(quote.promotionName()));
+            snapshot.setDiscountAmount(normalizeAmount(quote.discountAmount()));
+            snapshot.setApplyOrder(applyOrder++);
+            snapshots.add(snapshot);
+        }
+
+        if (!snapshots.isEmpty()) {
+            paymentTransactionPromotionRepository.saveAll(snapshots);
+        }
+    }
+
+    private String joinPromotionCodes(List<PromotionQuote> appliedPromotions) {
+        if (appliedPromotions == null || appliedPromotions.isEmpty()) {
+            return null;
+        }
+        return appliedPromotions.stream()
+                .map(PromotionQuote::promotionCode)
+                .filter(StringUtils::hasText)
+                .map(PaymentSessionServiceImpl::normalizeStringValue)
+                .collect(Collectors.joining(", "));
+    }
+
+    private String joinPromotionNames(List<PromotionQuote> appliedPromotions) {
+        if (appliedPromotions == null || appliedPromotions.isEmpty()) {
+            return null;
+        }
+        return appliedPromotions.stream()
+                .map(PromotionQuote::promotionName)
+                .filter(StringUtils::hasText)
+                .map(PaymentSessionServiceImpl::normalizeStringValue)
+                .collect(Collectors.joining(", "));
+    }
+
+    private BigDecimal sumPromotionDiscountQuotes(List<PromotionQuote> appliedPromotions) {
+        if (appliedPromotions == null || appliedPromotions.isEmpty()) {
+            return ZERO;
+        }
+        BigDecimal total = ZERO;
+        for (PromotionQuote quote : appliedPromotions) {
+            if (quote == null) {
+                continue;
+            }
+            total = total.add(normalizeAmount(quote.discountAmount()));
+        }
+        return normalizeAmount(total);
+    }
+
+    private BigDecimal sumPromotionDiscountSnapshots(List<PromotionSnapshotView> promotionSnapshots) {
+        if (promotionSnapshots == null || promotionSnapshots.isEmpty()) {
+            return ZERO;
+        }
+        BigDecimal total = ZERO;
+        for (PromotionSnapshotView snapshot : promotionSnapshots) {
+            if (snapshot == null) {
+                continue;
+            }
+            total = total.add(normalizeAmount(snapshot.discountAmount()));
+        }
+        return normalizeAmount(total);
+    }
+
+    private static void appendPromotionTokens(List<String> target, String value) {
+        if (target == null || !StringUtils.hasText(value)) {
+            return;
+        }
+        target.add(value.trim());
+    }
+
+    private static String joinPromotionTokens(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return "";
+        }
+        return values.stream()
+                .filter(StringUtils::hasText)
+                .map(String::trim)
+                .collect(Collectors.joining(", "));
+    }
+
+    private static String normalizeStringValue(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     private PaymentSessionResponse toResponse(PaymentTransaction transaction) {
@@ -631,6 +752,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .refundReason(transaction.getRefundReason())
                 .refundedAt(transaction.getRefundedAt())
                 .promotionCode(transaction.getPromotionCode())
+                .promotionName(transaction.getPromotionName())
                 .promotionDiscountAmount(transaction.getPromotionDiscountAmount())
                 .build();
     }
@@ -845,13 +967,23 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 requestedFilmIds,
                 from,
                 to);
+        Map<UUID, List<PromotionSnapshotView>> promotionSnapshotsByTransactionId = loadPromotionSnapshots(
+                revenueTransactions.stream()
+                        .map(PaymentTransaction::getId)
+                        .filter(java.util.Objects::nonNull)
+                        .toList());
 
         for (PaymentTransaction transaction : revenueTransactions) {
             CinemaRevenueAccumulator accumulator = accumulatorMap.get(transaction.getCinemaId());
             if (accumulator == null) {
                 continue;
             }
-            applyTransactionToAccumulator(accumulator, transaction, from, to);
+            applyTransactionToAccumulator(
+                    accumulator,
+                    transaction,
+                    promotionSnapshotsByTransactionId.get(transaction.getId()),
+                    from,
+                    to);
         }
 
         List<CinemaRevenueItemResponse> allFilteredItems = accumulatorMap.values().stream()
@@ -905,6 +1037,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                         .refundedCount(0)
                         .ticketSubtotalAmount(ZERO)
                         .productSubtotalAmount(ZERO)
+                        .promotionCode("")
+                        .promotionName("")
+                        .promotionDiscountAmount(ZERO)
                         .paidAmount(ZERO)
                         .refundedAmount(ZERO)
                         .grossAmount(ZERO)
@@ -916,6 +1051,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private void applyTransactionToAccumulator(
             CinemaRevenueAccumulator accumulator,
             PaymentTransaction transaction,
+            List<PromotionSnapshotView> promotionSnapshots,
             LocalDateTime from,
             LocalDateTime to) {
         if (transaction == null) {
@@ -924,9 +1060,15 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         if (isBetween(transaction.getPaidAt(), from, to)) {
             BigDecimal amount = normalizeAmount(transaction.getAmount());
+            List<PromotionSnapshotView> resolvedPromotionSnapshots = resolvePromotionSnapshots(
+                    transaction,
+                    promotionSnapshots);
             accumulator.totalTransactions++;
             accumulator.paidCount++;
             accumulator.paidAmount = accumulator.paidAmount.add(amount);
+            accumulator.appendPromotionSnapshots(resolvedPromotionSnapshots);
+            accumulator.promotionDiscountAmount = accumulator.promotionDiscountAmount.add(
+                    sumPromotionDiscountSnapshots(resolvedPromotionSnapshots));
             accumulator.grossAmount = accumulator.grossAmount.add(amount);
             accumulator.netAmount = accumulator.netAmount.add(amount);
             accumulator.ticketSubtotalAmount = accumulator.ticketSubtotalAmount.add(
@@ -948,6 +1090,60 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             accumulator.productSubtotalAmount = accumulator.productSubtotalAmount.subtract(
                     normalizeAmount(transaction.getProductSubtotalSnapshot()));
         }
+    }
+
+    private Map<UUID, List<PromotionSnapshotView>> loadPromotionSnapshots(Collection<UUID> paymentTransactionIds) {
+        if (paymentTransactionIds == null || paymentTransactionIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<PaymentTransactionPromotion> snapshots = paymentTransactionPromotionRepository
+                .findAllByPaymentTransactionIdIn(
+                        paymentTransactionIds,
+                        org.springframework.data.domain.Sort.by(
+                                org.springframework.data.domain.Sort.Order.asc("paymentTransactionId"),
+                                org.springframework.data.domain.Sort.Order.asc("applyOrder"),
+                                org.springframework.data.domain.Sort.Order.asc("timeCreated"),
+                                org.springframework.data.domain.Sort.Order.asc("id")));
+        if (snapshots == null || snapshots.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, List<PromotionSnapshotView>> grouped = new LinkedHashMap<>();
+        for (PaymentTransactionPromotion snapshot : snapshots) {
+            if (snapshot == null || snapshot.getPaymentTransactionId() == null) {
+                continue;
+            }
+            grouped.computeIfAbsent(snapshot.getPaymentTransactionId(), key -> new ArrayList<>())
+                    .add(new PromotionSnapshotView(
+                            snapshot.getPromotionId(),
+                            normalizeStringValue(snapshot.getPromotionCode()),
+                            normalizeStringValue(snapshot.getPromotionName()),
+                            normalizeAmount(snapshot.getDiscountAmount()),
+                            snapshot.getApplyOrder(),
+                            snapshot.getTimeCreated()));
+        }
+        return grouped;
+    }
+
+    private List<PromotionSnapshotView> resolvePromotionSnapshots(
+            PaymentTransaction transaction,
+            List<PromotionSnapshotView> promotionSnapshots) {
+        if (promotionSnapshots != null && !promotionSnapshots.isEmpty()) {
+            return promotionSnapshots;
+        }
+
+        if (transaction == null || !StringUtils.hasText(transaction.getPromotionCode())) {
+            return List.of();
+        }
+
+        return List.of(new PromotionSnapshotView(
+                null,
+                normalizeStringValue(transaction.getPromotionCode()),
+                normalizeStringValue(transaction.getPromotionName()),
+                normalizeAmount(transaction.getPromotionDiscountAmount()),
+                1,
+                transaction.getTimeCreated()));
     }
 
     private List<CinemaRevenueItemResponse> applyCinemaRevenuePageRequest(
@@ -1125,6 +1321,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             case REFUNDED_COUNT -> item.refundedCount();
             case TICKET_SUBTOTAL_AMOUNT -> item.ticketSubtotalAmount();
             case PRODUCT_SUBTOTAL_AMOUNT -> item.productSubtotalAmount();
+            case PROMOTION_CODE -> item.promotionCode();
+            case PROMOTION_NAME -> item.promotionName();
+            case PROMOTION_DISCOUNT_AMOUNT -> item.promotionDiscountAmount();
             case PAID_AMOUNT -> item.paidAmount();
             case REFUNDED_AMOUNT -> item.refundedAmount();
             case GROSS_AMOUNT -> item.grossAmount();
@@ -1203,6 +1402,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     .refundedCount(0)
                     .ticketSubtotalAmount(ZERO)
                     .productSubtotalAmount(ZERO)
+                    .promotionCode("")
+                    .promotionName("")
+                    .promotionDiscountAmount(ZERO)
                     .paidAmount(ZERO)
                     .refundedAmount(ZERO)
                     .grossAmount(ZERO)
@@ -1219,10 +1421,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         long refundedCount = 0;
         BigDecimal ticketSubtotalAmount = ZERO;
         BigDecimal productSubtotalAmount = ZERO;
+        BigDecimal promotionDiscountAmount = ZERO;
         BigDecimal paidAmount = ZERO;
         BigDecimal refundedAmount = ZERO;
         BigDecimal grossAmount = ZERO;
         BigDecimal netAmount = ZERO;
+        List<String> promotionCodes = new ArrayList<>();
+        List<String> promotionNames = new ArrayList<>();
 
         for (CinemaRevenueItemResponse item : items) {
             if (item == null) {
@@ -1237,6 +1442,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             refundedCount += item.refundedCount();
             ticketSubtotalAmount = ticketSubtotalAmount.add(normalizeAmount(item.ticketSubtotalAmount()));
             productSubtotalAmount = productSubtotalAmount.add(normalizeAmount(item.productSubtotalAmount()));
+            appendPromotionTokens(promotionCodes, item.promotionCode());
+            appendPromotionTokens(promotionNames, item.promotionName());
+            promotionDiscountAmount = promotionDiscountAmount.add(normalizeAmount(item.promotionDiscountAmount()));
             paidAmount = paidAmount.add(normalizeAmount(item.paidAmount()));
             refundedAmount = refundedAmount.add(normalizeAmount(item.refundedAmount()));
             grossAmount = grossAmount.add(normalizeAmount(item.grossAmount()));
@@ -1253,6 +1461,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .refundedCount(refundedCount)
                 .ticketSubtotalAmount(ticketSubtotalAmount)
                 .productSubtotalAmount(productSubtotalAmount)
+                .promotionCode(joinPromotionTokens(promotionCodes))
+                .promotionName(joinPromotionTokens(promotionNames))
+                .promotionDiscountAmount(promotionDiscountAmount)
                 .paidAmount(paidAmount)
                 .refundedAmount(refundedAmount)
                 .grossAmount(grossAmount)
@@ -1272,6 +1483,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         private long refundedCount;
         private BigDecimal ticketSubtotalAmount = ZERO;
         private BigDecimal productSubtotalAmount = ZERO;
+        private final List<String> promotionCodes = new ArrayList<>();
+        private final List<String> promotionNames = new ArrayList<>();
+        private BigDecimal promotionDiscountAmount = ZERO;
         private BigDecimal paidAmount = ZERO;
         private BigDecimal refundedAmount = ZERO;
         private BigDecimal grossAmount = ZERO;
@@ -1295,11 +1509,36 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     .refundedCount(refundedCount)
                     .ticketSubtotalAmount(ticketSubtotalAmount)
                     .productSubtotalAmount(productSubtotalAmount)
+                    .promotionCode(joinPromotionTokens(promotionCodes))
+                    .promotionName(joinPromotionTokens(promotionNames))
+                    .promotionDiscountAmount(promotionDiscountAmount)
                     .paidAmount(paidAmount)
                     .refundedAmount(refundedAmount)
                     .grossAmount(grossAmount)
                     .netAmount(netAmount)
                     .build();
         }
+
+        private void appendPromotionSnapshots(List<PromotionSnapshotView> snapshots) {
+            if (snapshots == null || snapshots.isEmpty()) {
+                return;
+            }
+            for (PromotionSnapshotView snapshot : snapshots) {
+                if (snapshot == null) {
+                    continue;
+                }
+                appendPromotionTokens(promotionCodes, snapshot.promotionCode());
+                appendPromotionTokens(promotionNames, snapshot.promotionName());
+            }
+        }
+    }
+
+    private record PromotionSnapshotView(
+            UUID promotionId,
+            String promotionCode,
+            String promotionName,
+            BigDecimal discountAmount,
+            Integer applyOrder,
+            LocalDateTime timeCreated) {
     }
 }

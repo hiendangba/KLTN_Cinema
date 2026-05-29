@@ -25,8 +25,10 @@ public class UserController extends BaseController {
     private final UserService userService;
 
     @PostMapping("/register")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> register(@Valid @RequestBody RegisterCustomerRequest registerCustomerRequest) {
-        ActionMessageResponse registerCustomerResponse = userService.registerCustomer(registerCustomerRequest);
+    public ResponseEntity<APIResponse<ActionMessageResponse>> register(
+            @Valid @RequestBody RegisterCustomerRequest registerCustomerRequest,
+            HttpServletResponse response) {
+        ActionMessageResponse registerCustomerResponse = userService.registerCustomer(registerCustomerRequest, response);
         return created(registerCustomerResponse);
     }
 

@@ -12,7 +12,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 public interface UserService {
-    ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest);
+    ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest, HttpServletResponse response);
 
     ActionMessageResponse createManager(RegisterManagerRequest registerManagerRequest, HttpServletRequest request);
 

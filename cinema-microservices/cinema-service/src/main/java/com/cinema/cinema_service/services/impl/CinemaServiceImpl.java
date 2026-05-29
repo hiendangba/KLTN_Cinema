@@ -275,7 +275,9 @@ public class CinemaServiceImpl implements CinemaService {
         validateSelfReadRole(httpRequest);
         UUID managerId = extractUserId(httpRequest);
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
-        return getAccessibleCinemasByUserId(managerId, role);
+        return getAccessibleCinemasByUserId(managerId, role).stream()
+                .filter(this::isActiveCinema)
+                .toList();
     }
 
     @Override
@@ -289,9 +291,7 @@ public class CinemaServiceImpl implements CinemaService {
     @Transactional(readOnly = true)
     public List<CinemaResponse> getCinemasByManagerId(UUID managerId) {
         return mapManagedCinemasToResponses(
-                cinemaRepository.findAllByManagerIdAndIsDeletedFalseOrderByCreatedAtDesc(managerId).stream()
-                        .filter(this::isActiveCinema)
-                        .toList());
+                cinemaRepository.findAllByManagerIdAndIsDeletedFalseOrderByCreatedAtDesc(managerId));
     }
 
     // Staff xem rap dang gan, con manager xem rap do minh quan ly.

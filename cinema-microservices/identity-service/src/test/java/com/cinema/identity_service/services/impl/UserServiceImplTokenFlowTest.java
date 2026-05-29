@@ -4,6 +4,7 @@ import com.cinema.Enum.UserEnum;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.entity.User;
 import com.cinema.identity_service.grpc.UserGrpcClient;
@@ -29,12 +30,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -232,6 +235,35 @@ class UserServiceImplTokenFlowTest {
         assertThat(setCookies).hasSize(2);
         assertThat(setCookies).anyMatch(v -> v.contains("accessToken=") && v.contains("Max-Age=0"));
         assertThat(setCookies).anyMatch(v -> v.contains("refreshToken=") && v.contains("Max-Age=0"));
+    }
+
+    @Test
+    void registerCustomer_shouldSetVerifyTokenCookie() {
+        RegisterCustomerRequest request = RegisterCustomerRequest.builder()
+                .name("Test User")
+                .email("test@example.com")
+                .password("Password@123")
+                .dob(LocalDate.of(2000, 1, 1))
+                .gender(UserEnum.Gender.MALE)
+                .phone("0123456789")
+                .build();
+
+        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(passwordEncoder.encode(request.getPassword())).thenReturn("encoded-password");
+        when(otpEncoder.encode(anyString())).thenReturn("encoded-otp");
+        when(valueOperations.setIfAbsent(anyString(), anyString(), eq(5L), eq(TimeUnit.MINUTES))).thenReturn(true);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ActionMessageResponse action = service.registerCustomer(request, response);
+
+        assertThat(action.getMessage()).isNotBlank();
+        List<String> setCookies = response.getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(setCookies).hasSize(1);
+        assertThat(setCookies.get(0)).contains("verifyToken=");
+        assertThat(setCookies.get(0)).contains("Max-Age=300");
+        verify(redisTemplate).opsForValue();
+        verify(valueOperations).set(anyString(), any(), eq(5L), eq(TimeUnit.MINUTES));
     }
 
     private User buildActiveUser() {

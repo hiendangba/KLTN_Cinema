@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record PromotionQuote(
         String promotionCode,
+        String promotionName,
         BigDecimal discountAmount,
         String note,
         UUID promotionId) {

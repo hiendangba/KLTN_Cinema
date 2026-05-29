@@ -97,6 +97,9 @@ public class PaymentTransaction {
     @Column(name = "promotion_code", length = 80)
     private String promotionCode;
 
+    @Column(name = "promotion_name", length = 120)
+    private String promotionName;
+
     @Column(name = "promotion_discount_amount", precision = 12, scale = 2)
     private BigDecimal promotionDiscountAmount;
 

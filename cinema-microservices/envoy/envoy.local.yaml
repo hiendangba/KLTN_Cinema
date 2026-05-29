@@ -65,7 +65,7 @@ static_resources:
                           append_action: OVERWRITE_IF_EXISTS_OR_ADD
                       routes:
                         - match:
-                            prefix: /api/auth/
+                            prefix: /api/auth
                           route:
                             cluster: identity-service
                             timeout: 15s
@@ -74,17 +74,17 @@ static_resources:
                               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                               disabled: true
                         - match:
-                            prefix: /api/users/
+                            prefix: /api/users
                           route:
                             cluster: user-service
                             timeout: 30s
                         - match:
-                            prefix: /api/films/
+                            prefix: /api/films
                           route:
                             cluster: film-service
                             timeout: 30s
                         - match:
-                            prefix: /api/showtimes/
+                            prefix: /api/showtimes
                           route:
                             cluster: showtime-service
                             timeout: 30s
@@ -94,7 +94,7 @@ static_resources:
                             cluster: cinema-service
                             timeout: 30s
                         - match:
-                            prefix: /api/cinemas/
+                            prefix: /api/cinemas
                           route:
                             cluster: cinema-service
                             timeout: 30s
@@ -104,12 +104,12 @@ static_resources:
                             cluster: hall-services
                             timeout: 30s
                         - match:
-                            prefix: /api/halls/
+                            prefix: /api/halls
                           route:
                             cluster: hall-services
                             timeout: 30s
                         - match:
-                            prefix: /api/email/
+                            prefix: /api/email
                           route:
                             cluster: email-service
                             timeout: 30s
@@ -119,7 +119,7 @@ static_resources:
                             cluster: seat-service
                             timeout: 30s
                         - match:
-                            prefix: /api/seats/
+                            prefix: /api/seats
                           route:
                             cluster: seat-service
                             timeout: 30s
@@ -129,7 +129,7 @@ static_resources:
                             cluster: booking-service
                             timeout: 30s
                         - match:
-                            prefix: /api/bookings/
+                            prefix: /api/bookings
                           route:
                             cluster: booking-service
                             timeout: 30s
@@ -143,7 +143,7 @@ static_resources:
                               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                               disabled: true
                         - match:
-                            prefix: /api/payments/vietqr/banks/
+                            prefix: /api/payments/vietqr/banks
                           route:
                             cluster: payment-service
                             timeout: 30s
@@ -161,7 +161,7 @@ static_resources:
                               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                               disabled: true
                         - match:
-                            prefix: /api/payments/webhooks/momo/
+                            prefix: /api/payments/webhooks/momo
                           route:
                             cluster: payment-service
                             timeout: 30s
@@ -175,7 +175,7 @@ static_resources:
                             cluster: payment-service
                             timeout: 30s
                         - match:
-                            prefix: /api/payments/
+                            prefix: /api/payments
                           route:
                             cluster: payment-service
                             timeout: 30s

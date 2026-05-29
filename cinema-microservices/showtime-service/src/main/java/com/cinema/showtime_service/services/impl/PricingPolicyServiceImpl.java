@@ -183,9 +183,6 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
             String role = RequestAuthUtils.requireRoleHeader(httpRequest);
             List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
-            if (cinemaIds.isEmpty()) {
-                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
-            }
             return new HashSet<>(cinemaIds);
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.UNAUTHORIZED || ex.getErrorCode() == ErrorCode.INVALID_FORMAT) {

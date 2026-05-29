@@ -12,6 +12,7 @@ import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
+import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
@@ -34,6 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,6 +47,9 @@ class PaymentSessionServiceImplTest {
 
     @Mock
     private PaymentTransactionRepositoryImpl paymentTransactionRepositoryImpl;
+
+    @Mock
+    private PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
 
     @Mock
     private BookingGrpcClient bookingGrpcClient;
@@ -153,7 +158,12 @@ class PaymentSessionServiceImplTest {
                 BigDecimal.valueOf(180000),
                 bookingContext,
                 userId))
-                .thenReturn(new PromotionQuote("CINEMASTAR10", BigDecimal.valueOf(18000), "Applied 10% discount", UUID.randomUUID()));
+                .thenReturn(new PromotionQuote(
+                        "CINEMASTAR10",
+                        "CinemaStar 10%",
+                        BigDecimal.valueOf(18000),
+                        "Applied 10% discount",
+                        UUID.randomUUID()));
 
         CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
         request.setBookingId(bookingId);
@@ -185,11 +195,17 @@ class PaymentSessionServiceImplTest {
                 new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
 
         PaymentTransaction tx1 = buildTransaction(cinema1, film1, PaymentTransactionStatus.PAID,
-                LocalDateTime.of(2026, 5, 29, 9, 0), null, BigDecimal.valueOf(100000), BigDecimal.ZERO);
+                LocalDateTime.of(2026, 5, 29, 9, 0), null,
+                BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(10000),
+                "CINEMASTAR10", "CinemaStar 10%");
         PaymentTransaction tx2 = buildTransaction(cinema1, film2, PaymentTransactionStatus.PAID,
-                LocalDateTime.of(2026, 5, 29, 10, 0), null, BigDecimal.valueOf(120000), BigDecimal.ZERO);
+                LocalDateTime.of(2026, 5, 29, 10, 0), null,
+                BigDecimal.valueOf(120000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
         PaymentTransaction tx3 = buildTransaction(cinema2, film1, PaymentTransactionStatus.PAID,
-                LocalDateTime.of(2026, 5, 29, 11, 0), null, BigDecimal.valueOf(130000), BigDecimal.ZERO);
+                LocalDateTime.of(2026, 5, 29, 11, 0), null,
+                BigDecimal.valueOf(130000), BigDecimal.ZERO, BigDecimal.valueOf(5000),
+                "WEEKDAY15", "Weekday 15%");
 
         when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
                 anyCollection(),
@@ -212,13 +228,14 @@ class PaymentSessionServiceImplTest {
                             .toList();
                 });
 
+        PageRequest<CinemaRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
         CinemaRevenueReportRequest request = CinemaRevenueReportRequest.builder()
                 .cinemaIds(List.of(cinema1))
                 .filmIds(List.of(film1))
-                .pageRequest(PageRequest.<CinemaRevenueField>builder()
-                        .page(1)
-                        .size(10)
-                        .build())
+                .pageRequest(pageRequest)
                 .build();
 
         CinemaRevenueReportResponse response = paymentSessionService.getAllCinemaRevenueReport(request);
@@ -237,6 +254,50 @@ class PaymentSessionServiceImplTest {
         assertEquals(1, response.items().size());
         assertEquals(cinema1, response.items().get(0).cinemaId());
         assertEquals(1L, response.items().get(0).totalTransactions());
+        assertEquals("CINEMASTAR10", response.items().get(0).promotionCode());
+        assertEquals("CinemaStar 10%", response.items().get(0).promotionName());
+        assertEquals(BigDecimal.valueOf(10000), response.items().get(0).promotionDiscountAmount());
+        assertEquals("CINEMASTAR10", response.total().promotionCode());
+        assertEquals("CinemaStar 10%", response.total().promotionName());
+        assertEquals(BigDecimal.valueOf(10000), response.total().promotionDiscountAmount());
+    }
+
+    @Test
+    void getAllCinemaRevenueReport_shouldKeepPromotionDiscountZeroWhenNotApplied() {
+        UUID cinema1 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+
+        PaymentTransaction tx1 = buildTransaction(cinema1, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 9, 0), null,
+                BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                isNull(),
+                any(),
+                any()))
+                .thenReturn(List.of(tx1));
+
+        PageRequest<CinemaRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
+        CinemaRevenueReportRequest request = CinemaRevenueReportRequest.builder()
+                .pageRequest(pageRequest)
+                .build();
+
+        CinemaRevenueReportResponse response = paymentSessionService.getAllCinemaRevenueReport(request);
+
+        assertEquals(BigDecimal.ZERO.setScale(0), response.items().get(0).promotionDiscountAmount());
+        assertEquals("", response.items().get(0).promotionCode());
+        assertEquals("", response.items().get(0).promotionName());
+        assertEquals(BigDecimal.ZERO.setScale(0), response.total().promotionDiscountAmount());
+        assertEquals("", response.total().promotionCode());
+        assertEquals("", response.total().promotionName());
     }
 
     private PaymentTransaction buildTransaction(
@@ -246,7 +307,10 @@ class PaymentSessionServiceImplTest {
             LocalDateTime paidAt,
             LocalDateTime refundedAt,
             BigDecimal amount,
-            BigDecimal refundAmount) {
+            BigDecimal refundAmount,
+            BigDecimal promotionDiscountAmount,
+            String promotionCode,
+            String promotionName) {
         PaymentTransaction transaction = new PaymentTransaction();
         transaction.setId(UUID.randomUUID());
         transaction.setBookingId(UUID.randomUUID());
@@ -267,6 +331,9 @@ class PaymentSessionServiceImplTest {
         transaction.setPaidAt(paidAt);
         transaction.setRefundedAt(refundedAt);
         transaction.setRefundAmount(refundAmount);
+        transaction.setPromotionCode(promotionCode);
+        transaction.setPromotionName(promotionName);
+        transaction.setPromotionDiscountAmount(promotionDiscountAmount);
         return transaction;
     }
 }

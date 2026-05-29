@@ -494,9 +494,6 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         try {
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
             List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER);
-            if (cinemaIds.isEmpty()) {
-                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
-            }
             return new HashSet<>(cinemaIds);
         } catch (BusinessException ex) {
             if (ex.getErrorCode() == ErrorCode.UNAUTHORIZED || ex.getErrorCode() == ErrorCode.INVALID_FORMAT) {

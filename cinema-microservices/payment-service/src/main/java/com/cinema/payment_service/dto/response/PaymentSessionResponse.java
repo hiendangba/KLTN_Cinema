@@ -35,5 +35,6 @@ public class PaymentSessionResponse {
     private String refundReason;
     private LocalDateTime refundedAt;
     private String promotionCode;
+    private String promotionName;
     private BigDecimal promotionDiscountAmount;
 }

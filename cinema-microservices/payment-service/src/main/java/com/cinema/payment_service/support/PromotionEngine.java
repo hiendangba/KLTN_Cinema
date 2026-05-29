@@ -93,7 +93,7 @@ public class PromotionEngine {
             UUID requesterUserId,
             boolean strict) {
         if (!StringUtils.hasText(promotionCode)) {
-            return new PromotionQuote("", ZERO, "No promotion code", null);
+            return new PromotionQuote("", "", ZERO, "No promotion code", null);
         }
 
         Promotion promotion = promotionRepository.findByCodeIgnoreCaseAndIsDeletedFalse(promotionCode)
@@ -102,14 +102,19 @@ public class PromotionEngine {
             if (strict) {
                 throw new BusinessException(ErrorCode.NOT_FOUND);
             }
-            return new PromotionQuote(promotionCode, ZERO, "Promotion code is not supported", null);
+            return new PromotionQuote(promotionCode, "", ZERO, "Promotion code is not supported", null);
         }
 
         if (!isPromotionActiveNow(promotion)) {
             if (strict) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST);
             }
-            return new PromotionQuote(promotion.getCode(), ZERO, "Promotion is inactive or expired", promotion.getId());
+            return new PromotionQuote(
+                    promotion.getCode(),
+                    promotion.getName(),
+                    ZERO,
+                    "Promotion is inactive or expired",
+                    promotion.getId());
         }
 
         if (bookingContext != null) {
@@ -120,6 +125,7 @@ public class PromotionEngine {
                 }
                 return new PromotionQuote(
                         promotion.getCode(),
+                        promotion.getName(),
                         ZERO,
                         "Promotion is not applicable to this booking",
                         promotion.getId());
@@ -130,6 +136,7 @@ public class PromotionEngine {
             }
             return new PromotionQuote(
                     promotion.getCode(),
+                    promotion.getName(),
                     ZERO,
                     "Promotion requires booking context",
                     promotion.getId());
@@ -142,6 +149,7 @@ public class PromotionEngine {
             }
             return new PromotionQuote(
                     promotion.getCode(),
+                    promotion.getName(),
                     ZERO,
                     "Min order is " + normalizeAmount(promotion.getMinOrderAmount()),
                     promotion.getId());
@@ -154,6 +162,7 @@ public class PromotionEngine {
             }
             return new PromotionQuote(
                     promotion.getCode(),
+                    promotion.getName(),
                     ZERO,
                     "Promotion is not applicable to this booking",
                     promotion.getId());
@@ -161,6 +170,7 @@ public class PromotionEngine {
 
         return new PromotionQuote(
                 promotion.getCode(),
+                promotion.getName(),
                 discount,
                 buildSuccessNote(promotion),
                 promotion.getId());
