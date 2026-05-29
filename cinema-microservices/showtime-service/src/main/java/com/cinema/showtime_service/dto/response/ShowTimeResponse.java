@@ -21,6 +21,9 @@ public class ShowTimeResponse {
     UUID hallId;
     UUID filmId;
     UUID pricingPolicyId;
+    Integer totalSeatCapacity;
+    Integer occupiedSeats;
+    Integer availableSeats;
     FilmResponse film;
     PricingPolicyResponse pricingPolicy;
     HallResponse hall;

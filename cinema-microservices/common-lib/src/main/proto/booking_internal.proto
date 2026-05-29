@@ -68,6 +68,7 @@ message BookingPaymentContextPayload {
   string payment_status = 8;
   string ticket_subtotal = 9;
   string product_subtotal = 10;
+  string film_id = 11;
 }
 
 message GetBookingPaymentContextReply {

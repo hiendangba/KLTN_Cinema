@@ -12,6 +12,7 @@ import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Order;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -24,6 +25,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 @RequiredArgsConstructor
 @Repository
@@ -84,6 +86,45 @@ public class BookingRepositoryImpl {
         countQuery.select(cb.count(root));
         countQuery.where(predicates.toArray(new Predicate[0]));
         return entityManager.createQuery(countQuery).getSingleResult();
+    }
+
+    public List<Booking> findAllForShowtimePerformanceReport(
+            Collection<UUID> cinemaIds,
+            Collection<UUID> filmIds,
+            LocalDateTime from,
+            LocalDateTime to,
+            Collection<com.cinema.booking_service.enums.BookingStatus> statuses) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Booking> cq = cb.createQuery(Booking.class);
+        Root<Booking> root = cq.from(Booking.class);
+        root.fetch("seatItems", JoinType.LEFT);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.isFalse(root.get("isDeleted")));
+        if (cinemaIds != null && !cinemaIds.isEmpty()) {
+            predicates.add(root.get("cinemaId").in(cinemaIds));
+        }
+        if (filmIds != null && !filmIds.isEmpty()) {
+            predicates.add(root.get("filmId").in(filmIds));
+        }
+        if (from != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("showtimeStartDateTime"), from));
+        }
+        if (to != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("showtimeStartDateTime"), to));
+        }
+        if (statuses != null && !statuses.isEmpty()) {
+            predicates.add(root.get("bookingStatus").in(statuses));
+        }
+
+        cq.select(root).distinct(true);
+        cq.where(predicates.toArray(new Predicate[0]));
+        cq.orderBy(
+                cb.asc(root.get("showtimeStartDateTime")),
+                cb.asc(root.get("showtimeId")),
+                cb.asc(root.get("id")));
+
+        return entityManager.createQuery(cq).getResultList();
     }
 
     private List<Predicate> buildPredicates(

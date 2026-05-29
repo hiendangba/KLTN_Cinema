@@ -107,6 +107,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setBookingId(bookingContext.bookingId());
         transaction.setShowtimeId(bookingContext.showtimeId());
         transaction.setCinemaId(bookingContext.cinemaId());
+        transaction.setFilmId(bookingContext.filmId());
         transaction.setUserId(bookingContext.userId());
         transaction.setAmount(normalizeAmount(bookingContext.finalAmount()));
         transaction.setTicketSubtotalSnapshot(normalizeAmount(bookingContext.ticketSubtotal()));
@@ -697,9 +698,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
         LocalDateTime to = dateRange == null ? null : dateRange.getTo();
         PageRequest<CinemaRevenueField> pageRequest = request.getPageRequest();
+        List<UUID> requestedCinemaIds = normalizeUuidList(request.getCinemaIds());
+        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
         List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
         scopeCinemas = scopeCinemas.stream()
                 .filter(cinema -> cinema != null && cinema.id() != null)
+                .filter(cinema -> requestedCinemaIds == null || requestedCinemaIds.contains(cinema.id()))
                 .distinct()
                 .toList();
 
@@ -714,6 +718,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
             List<PaymentTransaction> revenueTransactions = paymentTransactionRepositoryImpl.findAllForRevenueReport(
                     scopeCinemas.stream().map(CinemaGrpcClient.CinemaSummary::id).toList(),
+                    requestedFilmIds,
                     from,
                     to);
 
@@ -751,6 +756,17 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .page(toSummary(pageItems))
                 .total(toSummary(filteredItems))
                 .build();
+    }
+
+    private List<UUID> normalizeUuidList(Collection<UUID> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        List<UUID> normalized = values.stream()
+                .filter(value -> value != null)
+                .distinct()
+                .toList();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private List<CinemaRevenueItemResponse> initializeRevenueItems(List<CinemaGrpcClient.CinemaSummary> cinemas) {

@@ -17,7 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class BookingRevenueReportRequest {
+public class ShowtimePerformanceReportRequest {
 
     @Valid
     private DateRange dateRange;
@@ -30,5 +30,5 @@ public class BookingRevenueReportRequest {
 
     @Valid
     @NotNull(message = "Page request is required")
-    private PageRequest<BookingRevenueField> pageRequest;
+    private PageRequest<ShowtimePerformanceField> pageRequest;
 }

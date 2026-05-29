@@ -18,5 +18,8 @@ public interface ShowTimeMapper {
     @Mapping(target = "pricingPolicy", ignore = true)
     @Mapping(target = "film", ignore = true)
     @Mapping(target = "hall", ignore = true)
+    @Mapping(target = "totalSeatCapacity", ignore = true)
+    @Mapping(target = "occupiedSeats", ignore = true)
+    @Mapping(target = "availableSeats", ignore = true)
     ShowTimeResponse toResponse(ShowTime showTime);
 }

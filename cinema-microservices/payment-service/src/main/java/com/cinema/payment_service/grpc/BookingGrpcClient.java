@@ -78,6 +78,7 @@ public class BookingGrpcClient {
                     UUID.fromString(payload.getBookingId()),
                     UUID.fromString(payload.getShowtimeId()),
                     UUID.fromString(payload.getCinemaId()),
+                    parseNullableUuid(payload.getFilmId()),
                     UUID.fromString(payload.getUserId()),
                     new BigDecimal(payload.getFinalAmount()),
                     payload.getReservedUntil().isBlank() ? null : LocalDateTime.parse(payload.getReservedUntil()),
@@ -98,10 +99,22 @@ public class BookingGrpcClient {
         }
     }
 
+    private UUID parseNullableUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (Exception ex) {
+            throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
+        }
+    }
+
     public record BookingPaymentContext(
             UUID bookingId,
             UUID showtimeId,
             UUID cinemaId,
+            UUID filmId,
             UUID userId,
             BigDecimal finalAmount,
             LocalDateTime reservedUntil,

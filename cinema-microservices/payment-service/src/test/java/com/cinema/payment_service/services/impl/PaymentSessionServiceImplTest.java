@@ -1,0 +1,204 @@
+package com.cinema.payment_service.services.impl;
+
+import com.cinema.payment_service.config.SePayGatewayProperties;
+import com.cinema.payment_service.dto.request.CinemaRevenueField;
+import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
+import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
+import com.cinema.payment_service.dto.response.PaymentSessionResponse;
+import com.cinema.payment_service.entity.PaymentTransaction;
+import com.cinema.payment_service.enums.PaymentTransactionStatus;
+import com.cinema.payment_service.grpc.BookingGrpcClient;
+import com.cinema.payment_service.grpc.CinemaGrpcClient;
+import com.cinema.payment_service.repository.PaymentTransactionRepository;
+import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
+import com.cinema.dto.request.PageRequest;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class PaymentSessionServiceImplTest {
+
+    @Mock
+    private PaymentTransactionRepository paymentTransactionRepository;
+
+    @Mock
+    private PaymentTransactionRepositoryImpl paymentTransactionRepositoryImpl;
+
+    @Mock
+    private BookingGrpcClient bookingGrpcClient;
+
+    @Mock
+    private CinemaGrpcClient cinemaGrpcClient;
+
+    @Mock
+    private SePayGatewayProperties sePayGatewayProperties;
+
+    @Spy
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    @InjectMocks
+    private PaymentSessionServiceImpl paymentSessionService;
+
+    @Test
+    void createSession_shouldPersistFilmIdSnapshotFromBookingContext() {
+        UUID bookingId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = new BookingGrpcClient.BookingPaymentContext(
+                bookingId,
+                showtimeId,
+                cinemaId,
+                filmId,
+                userId,
+                BigDecimal.valueOf(180000),
+                LocalDateTime.now().plusMinutes(30),
+                "PENDING",
+                "UNPAID",
+                BigDecimal.valueOf(150000),
+                BigDecimal.valueOf(30000));
+
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.empty());
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(sePayGatewayProperties.getBaseUrl()).thenReturn("https://sepay.example.com");
+        when(sePayGatewayProperties.getMerchantId()).thenReturn("merchant");
+        when(sePayGatewayProperties.getSecretKey()).thenReturn("secret");
+        when(sePayGatewayProperties.getPaymentMethod()).thenReturn("QR_DONG_THEO_DON_HANG");
+        when(sePayGatewayProperties.getReturnUrl()).thenReturn("https://app.example.com/return");
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+
+        PaymentSessionResponse response = paymentSessionService.createSession(request, userId);
+
+        ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
+        verify(paymentTransactionRepository).save(transactionCaptor.capture());
+
+        PaymentTransaction saved = transactionCaptor.getValue();
+        assertNotNull(response);
+        assertEquals(bookingId, response.getBookingId());
+        assertEquals(filmId, saved.getFilmId());
+        assertNotNull(response.getCheckoutUrl());
+    }
+
+    @Test
+    void getAllCinemaRevenueReport_shouldFilterByCinemaAndFilmBeforeAggregating() {
+        UUID cinema1 = UUID.randomUUID();
+        UUID cinema2 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+        UUID film2 = UUID.randomUUID();
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"),
+                new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
+
+        PaymentTransaction tx1 = buildTransaction(cinema1, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 9, 0), null, BigDecimal.valueOf(100000), BigDecimal.ZERO);
+        PaymentTransaction tx2 = buildTransaction(cinema1, film2, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 10, 0), null, BigDecimal.valueOf(120000), BigDecimal.ZERO);
+        PaymentTransaction tx3 = buildTransaction(cinema2, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 11, 0), null, BigDecimal.valueOf(130000), BigDecimal.ZERO);
+
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                anyCollection(),
+                any(),
+                any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    List<UUID> cinemaIds = (List<UUID>) invocation.getArgument(0);
+                    @SuppressWarnings("unchecked")
+                    List<UUID> filmIds = (List<UUID>) invocation.getArgument(1);
+                    LocalDateTime from = invocation.getArgument(2);
+                    LocalDateTime to = invocation.getArgument(3);
+                    return List.of(tx1, tx2, tx3).stream()
+                            .filter(tx -> cinemaIds.contains(tx.getCinemaId()))
+                            .filter(tx -> filmIds == null || filmIds.isEmpty() || filmIds.contains(tx.getFilmId()))
+                            .filter(tx -> tx.getPaidAt() != null
+                                    && (from == null || !tx.getPaidAt().isBefore(from))
+                                    && (to == null || !tx.getPaidAt().isAfter(to)))
+                            .toList();
+                });
+
+        CinemaRevenueReportRequest request = CinemaRevenueReportRequest.builder()
+                .cinemaIds(List.of(cinema1))
+                .filmIds(List.of(film1))
+                .pageRequest(PageRequest.<CinemaRevenueField>builder()
+                        .page(1)
+                        .size(10)
+                        .build())
+                .build();
+
+        CinemaRevenueReportResponse response = paymentSessionService.getAllCinemaRevenueReport(request);
+
+        ArgumentCaptor<List<UUID>> cinemaIdsCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<UUID>> filmIdsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(paymentTransactionRepositoryImpl).findAllForRevenueReport(
+                cinemaIdsCaptor.capture(),
+                filmIdsCaptor.capture(),
+                any(),
+                any());
+
+        assertEquals(List.of(cinema1), cinemaIdsCaptor.getValue());
+        assertEquals(List.of(film1), filmIdsCaptor.getValue());
+        assertEquals(1L, response.total().totalTransactions());
+        assertEquals(1, response.items().size());
+        assertEquals(cinema1, response.items().get(0).cinemaId());
+        assertEquals(1L, response.items().get(0).totalTransactions());
+    }
+
+    private PaymentTransaction buildTransaction(
+            UUID cinemaId,
+            UUID filmId,
+            PaymentTransactionStatus status,
+            LocalDateTime paidAt,
+            LocalDateTime refundedAt,
+            BigDecimal amount,
+            BigDecimal refundAmount) {
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.setId(UUID.randomUUID());
+        transaction.setBookingId(UUID.randomUUID());
+        transaction.setShowtimeId(UUID.randomUUID());
+        transaction.setCinemaId(cinemaId);
+        transaction.setFilmId(filmId);
+        transaction.setUserId(UUID.randomUUID());
+        transaction.setAmount(amount);
+        transaction.setTicketSubtotalSnapshot(amount);
+        transaction.setProductSubtotalSnapshot(BigDecimal.ZERO);
+        transaction.setCurrency("VND");
+        transaction.setPaymentMethod("QR_DONG_THEO_DON_HANG");
+        transaction.setOrderInvoiceNumber("INV-" + UUID.randomUUID());
+        transaction.setCheckoutUrl("https://sepay.example.com/v1/checkout/init");
+        transaction.setCheckoutPayloadJson("{}");
+        transaction.setStatus(status);
+        transaction.setExpiresAt(LocalDateTime.now().plusHours(1));
+        transaction.setPaidAt(paidAt);
+        transaction.setRefundedAt(refundedAt);
+        transaction.setRefundAmount(refundAmount);
+        return transaction;
+    }
+}

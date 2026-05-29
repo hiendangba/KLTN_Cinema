@@ -36,6 +36,9 @@ public class PaymentTransaction {
     @Column(name = "cinema_id", columnDefinition = "uuid")
     private UUID cinemaId;
 
+    @Column(name = "film_id", columnDefinition = "uuid")
+    private UUID filmId;
+
     @Column(name = "user_id", columnDefinition = "uuid")
     private UUID userId;
 

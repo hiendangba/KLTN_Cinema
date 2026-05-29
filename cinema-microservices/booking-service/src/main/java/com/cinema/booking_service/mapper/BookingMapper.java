@@ -12,6 +12,7 @@ import org.mapstruct.ReportingPolicy;
 public interface BookingMapper {
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "userId", ignore = true)
+    @Mapping(target = "filmId", ignore = true)
     @Mapping(target = "filmTitle", ignore = true)
     @Mapping(target = "showtimeStartDateTime", ignore = true)
     @Mapping(target = "showtimeEndDateTime", ignore = true)

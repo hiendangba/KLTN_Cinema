@@ -31,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -251,6 +252,37 @@ class ShowTimeServiceImplTest {
 
         FilmResponse filmResponse = FilmResponse.builder().id(filmId).build();
         HallResponse hallResponse = HallResponse.builder().id(hallId).build();
+        SeatGrpcClient.LayoutBundle layoutBundle = SeatGrpcClient.LayoutBundle.builder()
+                .totalRows(2)
+                .totalCols(3)
+                .screenPosition("TOP")
+                .seats(List.of(
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("A1")
+                                .setRow(1)
+                                .setCol(1)
+                                .setSeatType("STANDARD")
+                                .build(),
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("A2")
+                                .setRow(1)
+                                .setCol(2)
+                                .setSeatType("STANDARD")
+                                .build(),
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("B1")
+                                .setRow(2)
+                                .setCol(1)
+                                .setSeatType("VIP")
+                                .build(),
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("B2")
+                                .setRow(2)
+                                .setCol(2)
+                                .setSeatType("VIP")
+                                .build()))
+                .cells(List.<com.cinema.grpc.seat.LayoutCellPayload>of())
+                .build();
 
         when(showTimeRepositoryImpl.countWithFilter(eq(null), any())).thenReturn(1L);
         when(showTimeRepositoryImpl.searchWithPageAndSortAndFilter(eq(null), eq(1), eq(20), any(), any()))
@@ -260,6 +292,13 @@ class ShowTimeServiceImplTest {
         when(pricingPolicyMapper.toResponse(policy)).thenReturn(policyResponse);
         when(filmGrpcClient.getFilmsByIds(List.of(filmId))).thenReturn(java.util.Map.of(filmId, filmResponse));
         when(hallGrpcClient.getHallById(hallId)).thenReturn(hallResponse);
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1", "A2", "B1", "B2"))))
+                .thenReturn(Map.of(
+                        "A1", "BOOKED",
+                        "A2", "LOCKED",
+                        "B1", "AVAILABLE",
+                        "B2", "AVAILABLE"));
 
         var result = showTimeService.getActiveShowtimesByFilmId(filmId, null, null);
 
@@ -270,6 +309,9 @@ class ShowTimeServiceImplTest {
         assertNotNull(result.getData().get(0).getFilm());
         assertNotNull(result.getData().get(0).getHall());
         assertNotNull(result.getData().get(0).getPricingPolicy());
+        assertEquals(4, result.getData().get(0).getTotalSeatCapacity());
+        assertEquals(2, result.getData().get(0).getOccupiedSeats());
+        assertEquals(2, result.getData().get(0).getAvailableSeats());
     }
 
     private HttpServletRequest managerRequest(UUID userId) {

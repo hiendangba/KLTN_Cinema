@@ -3,10 +3,12 @@ package com.cinema.booking_service.controller;
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
+import com.cinema.booking_service.dto.request.ShowtimePerformanceReportRequest;
 import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.BookingResponse;
 import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
 import com.cinema.booking_service.dto.response.CheckoutContextResponse;
+import com.cinema.booking_service.dto.response.ShowtimePerformanceReportResponse;
 import com.cinema.booking_service.services.BookingService;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
@@ -93,6 +95,24 @@ public class BookingController extends BaseController {
             @Valid @RequestBody BookingRevenueReportRequest request) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
         BookingRevenueReportResponse response = bookingService.getMyCinemaRevenueReport(request, httpRequest);
+        return ok(response);
+    }
+
+    @PostMapping("/reports/showtimes/search")
+    public ResponseEntity<APIResponse<ShowtimePerformanceReportResponse>> getAllShowtimePerformanceReport(
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody ShowtimePerformanceReportRequest request) {
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN);
+        ShowtimePerformanceReportResponse response = bookingService.getAllShowtimePerformanceReport(request);
+        return ok(response);
+    }
+
+    @PostMapping("/reports/showtimes/me/search")
+    public ResponseEntity<APIResponse<ShowtimePerformanceReportResponse>> getMyShowtimePerformanceReport(
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody ShowtimePerformanceReportRequest request) {
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
+        ShowtimePerformanceReportResponse response = bookingService.getMyShowtimePerformanceReport(request, httpRequest);
         return ok(response);
     }
 

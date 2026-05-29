@@ -122,3 +122,19 @@
 - Report này dùng cùng pattern `dateRange` + `pageRequest` + `items/page/total` để FE render thống nhất.
 - Nếu frontend không truyền `dateRange` thì report booking cũng lấy toàn bộ dữ liệu.
 
+## Cập nhật mới 2026-05-29
+
+- `booking-service`:
+  - `Booking` snapshot thêm `filmId`.
+  - Report booking theo rạp đã lọc được đồng thời `cinemaIds` và `filmIds`.
+  - Query report lọc ở mức `booking` trước khi aggregate theo rạp.
+- `payment-service`:
+  - `payment_transaction` snapshot thêm `filmId`.
+  - `BookingPaymentContext` gRPC từ `booking-service` trả thêm `filmId`.
+  - Report doanh thu theo rạp đã lọc được đồng thời `cinemaIds` và `filmIds`.
+  - Query report lọc ở mức `payment_transaction` trước khi aggregate theo rạp.
+- Ý nghĩa nghiệp vụ:
+  - booking report dùng để xem "đã bán bao nhiêu booking".
+  - payment report dùng để xem "đã thu bao nhiêu tiền thực tế".
+  - cả hai report đều có thể lọc theo cinema và film mà không cần join ngược khi chạy report.
+

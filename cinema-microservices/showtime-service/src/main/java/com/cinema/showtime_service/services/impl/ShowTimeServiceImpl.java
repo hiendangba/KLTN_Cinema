@@ -51,6 +51,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -133,6 +134,9 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     private PageResponse<ShowTimeResponse> enrichShowtimePage(PageResponse<ShowTimeResponse> base) {
         List<ShowTimeResponse> showtimes = new ArrayList<>(base.getData());
+        if (showtimes.isEmpty()) {
+            return base;
+        }
 
         List<UUID> filmIds = showtimes.stream()
                 .map(ShowTimeResponse::getFilmId)
@@ -144,10 +148,17 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 : filmGrpcClient.getFilmsByIds(filmIds);
 
         Map<UUID, HallResponse> hallMap = getHallResponseMap(showtimes);
+        Map<UUID, SeatGrpcClient.LayoutBundle> hallLayoutMap = getHallLayoutMap(showtimes);
 
         showtimes.forEach(showtime -> {
             showtime.setFilm(filmMap.get(showtime.getFilmId()));
             showtime.setHall(hallMap.get(showtime.getHallId()));
+            SeatAvailabilityStats stats = resolveSeatAvailability(
+                    showtime.getId(),
+                    hallLayoutMap.get(showtime.getHallId()));
+            showtime.setTotalSeatCapacity(stats.totalSeatCapacity());
+            showtime.setOccupiedSeats(stats.occupiedSeats());
+            showtime.setAvailableSeats(stats.availableSeats());
         });
 
         return PageResponse.<ShowTimeResponse>builder()
@@ -169,9 +180,15 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         FilmResponse film = filmGrpcClient.getFilmById(showTime.getFilmId());
         PricingPolicyResponse pricingPolicy = getPricingPolicyResponse(showTime.getPricingPolicyId());
         HallResponse hall = hallGrpcClient.getHallById(showTime.getHallId());
+        SeatAvailabilityStats stats = resolveSeatAvailability(
+                showTime.getId(),
+                seatGrpcClient.getLayoutByHallId(showTime.getHallId()));
         ShowTimeResponse response = toShowTimeResponse(showTime, pricingPolicy);
         response.setFilm(film);
         response.setHall(hall);
+        response.setTotalSeatCapacity(stats.totalSeatCapacity());
+        response.setOccupiedSeats(stats.occupiedSeats());
+        response.setAvailableSeats(stats.availableSeats());
         return response;
     }
 
@@ -442,6 +459,37 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         return hallMap;
     }
 
+    private Map<UUID, SeatGrpcClient.LayoutBundle> getHallLayoutMap(List<ShowTimeResponse> showtimes) {
+        Map<UUID, SeatGrpcClient.LayoutBundle> hallLayoutMap = new HashMap<>();
+        for (UUID hallId : showtimes.stream().map(ShowTimeResponse::getHallId).distinct().toList()) {
+            hallLayoutMap.put(hallId, seatGrpcClient.getLayoutByHallId(hallId));
+        }
+        return hallLayoutMap;
+    }
+
+    private SeatAvailabilityStats resolveSeatAvailability(UUID showtimeId, SeatGrpcClient.LayoutBundle layout) {
+        if (layout == null || layout.getSeats() == null || layout.getSeats().isEmpty()) {
+            return new SeatAvailabilityStats(0, 0, 0);
+        }
+
+        List<String> seatCodes = layout.getSeats().stream()
+                .map(com.cinema.grpc.seat.LayoutSeatPayload::getSeatCode)
+                .filter(code -> code != null && !code.isBlank())
+                .map(code -> code.trim().toUpperCase(Locale.ROOT))
+                .toList();
+        if (seatCodes.isEmpty()) {
+            return new SeatAvailabilityStats(0, 0, 0);
+        }
+
+        Map<String, String> seatStates = bookingGrpcClient.getSeatRuntimeStates(showtimeId, seatCodes);
+        int totalSeatCapacity = seatCodes.size();
+        int occupiedSeats = (int) seatStates.values().stream()
+                .filter(state -> state != null && !"AVAILABLE".equalsIgnoreCase(state))
+                .count();
+        int availableSeats = Math.max(0, totalSeatCapacity - occupiedSeats);
+        return new SeatAvailabilityStats(totalSeatCapacity, occupiedSeats, availableSeats);
+    }
+
     private Set<UUID> resolveAccessibleCinemaIdsByUser(HttpServletRequest httpRequest) {
         try {
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
@@ -467,5 +515,8 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             case "COUPLE" -> pricingPolicy.getCouplePrice();
             default -> pricingPolicy.getStandardPrice();
         };
+    }
+
+    private record SeatAvailabilityStats(int totalSeatCapacity, int occupiedSeats, int availableSeats) {
     }
 }

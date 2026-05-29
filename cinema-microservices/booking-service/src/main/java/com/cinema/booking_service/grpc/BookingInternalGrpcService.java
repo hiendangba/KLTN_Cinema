@@ -358,6 +358,7 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                 .setBookingId(booking.getId() == null ? "" : booking.getId().toString())
                 .setShowtimeId(booking.getShowtimeId() == null ? "" : booking.getShowtimeId().toString())
                 .setCinemaId(booking.getCinemaId() == null ? "" : booking.getCinemaId().toString())
+                .setFilmId(booking.getFilmId() == null ? "" : booking.getFilmId().toString())
                 .setUserId(booking.getUserId() == null ? "" : booking.getUserId().toString())
                 .setFinalAmount(booking.getFinalAmount() == null ? "0" : booking.getFinalAmount().toPlainString())
                 .setReservedUntil(booking.getReservedUntil() == null ? "" : booking.getReservedUntil().toString())

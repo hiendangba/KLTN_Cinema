@@ -39,6 +39,9 @@ public class Booking {
     @Column(name = "cinema_id", columnDefinition = "uuid", nullable = false)
     private UUID cinemaId;
 
+    @Column(name = "film_id", columnDefinition = "uuid")
+    private UUID filmId;
+
     @Column(name = "film_title", length = 255)
     private String filmTitle;
 

@@ -330,12 +330,12 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/showtimes/search` | ❌ Public | Lấy danh sách suất chiếu theo `PageRequest` và trả full thông tin `film`, `hall`, `pricingPolicy`. |
+| `POST` | `/api/showtimes/search` | ❌ Public | Lấy danh sách suất chiếu theo `PageRequest`, trả full thông tin `film`, `hall`, `pricingPolicy` và thêm `totalSeatCapacity`, `occupiedSeats`, `availableSeats` để FE render trạng thái chỗ trống. |
 | `POST` | `/api/showtimes` | ✅ MGMT | Tạo lịch chiếu hàng loạt theo khung giờ và gắn `pricingPolicyId` cho toàn bộ batch. |
 | `PUT` | `/api/showtimes/{id}` | ✅ MGMT | Cập nhật chi tiết một showtime gồm thời gian, trạng thái và `pricingPolicyId`. |
 | `PATCH` | `/api/showtimes/{id}` | ✅ MGMT | Tinh chỉnh nhanh trạng thái showtime. |
 | `DELETE` | `/api/showtimes/{id}` | ✅ ADMIN | Bỏ lịch chiếu hệ thống (Cũng dùng Xóa Mềm). |
-| `GET` | `/api/showtimes/{id}` | ❌ Public | Lấy chi tiết suất chiếu và trả full thông tin `film`, `hall`, `pricingPolicy`. |
+| `GET` | `/api/showtimes/{id}` | ❌ Public | Lấy chi tiết suất chiếu và trả full thông tin `film`, `hall`, `pricingPolicy` và trạng thái chỗ còn trống. |
 
 ### 4.1. Showtime Pricing Policy (`/api/showtimes/pricing-policies`)
 
@@ -1045,11 +1045,13 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - Ghi chú:
     - Báo cáo tính theo lúc thực thu, không theo thời điểm tạo giao dịch.
     - `paidAt` là sự kiện tiền vào, `refundedAt` là sự kiện tiền ra.
+    - Request report bổ sung `cinemaIds` và `filmIds` để lọc trước khi aggregate theo rạp.
     - Frontend gửi `dateRange` riêng, tách khỏi `pageRequest`.
     - Nếu không truyền `dateRange` thì report lấy toàn bộ dữ liệu.
     - `page` là summary của các rạp đang hiển thị ở trang hiện tại.
   - `total` là summary của toàn bộ phạm vi đã lọc.
   - Phạm vi rạp lấy từ gRPC `cinema-service`, và các rạp không có doanh thu trong khoảng lọc vẫn phải được hiển thị với giá trị 0.
+  - `payment_transaction` snapshot thêm `filmId` lấy từ booking context để report không phải join ngược sang booking khi chạy.
   - Tài liệu giải thích đầy đủ và danh sách file liên quan: [REVENUE_REPORT_RULES.md](./REVENUE_REPORT_RULES.md)
 
 ### 2026-05-29 Tìm kiếm film giữ cursor và ưu tiên phim mới nhất
@@ -1067,88 +1069,18 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - Mở `POST /api/bookings/revenues/cinemas/me/search` cho `MANAGER`.
   - Dữ liệu báo cáo lấy từ `Booking`, không lấy từ `PaymentTransaction`.
   - Mốc thời gian của báo cáo là `Booking.timeCreated`.
+  - Request report bổ sung `cinemaIds` và `filmIds` để lọc trước khi aggregate theo rạp.
   - Booking chưa thanh toán vẫn được tính vào giá trị đơn hàng; chỉ loại các booking đã `CANCELLED` hoặc `EXPIRED`.
   - Ghi chú:
     - Response dùng cùng kiểu `items` + `page` + `total` như báo cáo bên payment để FE render thống nhất.
     - `pageRequest` giữ vai trò phân trang/lọc/sắp xếp theo rạp.
     - Nếu frontend không truyền `dateRange` thì report lấy toàn bộ dữ liệu.
+    - `Booking` snapshot thêm `filmId` để report theo phim dùng được trực tiếp từ booking data.
   - `dateRange` gửi riêng trong body request, không nhét vào `PageRequest`.
 
 ### Mẫu request gửi FE
 - Nếu không lọc theo ngày thì bỏ hẳn `dateRange` khỏi body.
 - Nếu có lọc theo ngày thì `dateRange` phải có đủ `from` và `to`.
-
-#### Báo cáo doanh thu thực tế ở payment-service
-```json
-{
-  "pageRequest": {
-    "page": 1,
-    "size": 20,
-    "keyword": "",
-    "sortBy": [],
-    "filterBy": []
-  }
-}
-```
-
-```json
-{
-  "dateRange": {
-    "from": "2026-05-01T00:00:00",
-    "to": "2026-05-31T23:59:59"
-  },
-  "pageRequest": {
-    "page": 1,
-    "size": 20,
-    "keyword": "",
-    "sortBy": [],
-    "filterBy": []
-  }
-}
-```
-
-#### Báo cáo bán hàng ở booking-service
-```json
-{
-  "pageRequest": {
-    "page": 1,
-    "size": 20,
-    "keyword": "",
-    "sortBy": [],
-    "filterBy": []
-  }
-}
-```
-
-```json
-{
-  "dateRange": {
-    "from": "2026-05-01T00:00:00",
-    "to": "2026-05-31T23:59:59"
-  },
-  "pageRequest": {
-    "page": 1,
-    "size": 20,
-    "keyword": "",
-    "sortBy": [],
-    "filterBy": []
-  }
-}
-```
-
-#### Tìm kiếm film
-```json
-{
-  "cursor": null,
-  "size": 20,
-  "keyword": "",
-  "sortBy": [],
-  "filterBy": [],
-  "dateRange": {
-    "from": "2026-01-01T00:00:00",
-    "to": "2026-05-31T23:59:59"
-  }
-}
-```
+- Toàn bộ payload request mẫu cho frontend đã được gom vào [API_PAYLOAD_SAMPLES.md](API_PAYLOAD_SAMPLES.md).
 
 

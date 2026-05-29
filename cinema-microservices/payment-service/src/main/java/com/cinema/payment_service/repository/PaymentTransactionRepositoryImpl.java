@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.lang.reflect.Array;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -69,8 +70,9 @@ public class PaymentTransactionRepositoryImpl {
 
     public List<PaymentTransaction> findAllForRevenueReport(
             Collection<UUID> cinemaIds,
-            java.time.LocalDateTime from,
-            java.time.LocalDateTime to) {
+            Collection<UUID> filmIds,
+            LocalDateTime from,
+            LocalDateTime to) {
         if (cinemaIds == null || cinemaIds.isEmpty()) {
             return List.of();
         }
@@ -81,6 +83,9 @@ public class PaymentTransactionRepositoryImpl {
 
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(root.get("cinemaId").in(cinemaIds));
+        if (filmIds != null && !filmIds.isEmpty()) {
+            predicates.add(root.get("filmId").in(filmIds));
+        }
 
         List<Predicate> eventPredicates = new ArrayList<>();
         Predicate paidPredicate = buildEventTimePredicate(cb, root, "paidAt", from, to);
@@ -97,6 +102,13 @@ public class PaymentTransactionRepositoryImpl {
 
         cq.where(predicates.toArray(new Predicate[0]));
         return entityManager.createQuery(cq).getResultList();
+    }
+
+    public List<PaymentTransaction> findAllForRevenueReport(
+            Collection<UUID> cinemaIds,
+            LocalDateTime from,
+            LocalDateTime to) {
+        return findAllForRevenueReport(cinemaIds, null, from, to);
     }
 
     private List<Predicate> buildPredicates(
