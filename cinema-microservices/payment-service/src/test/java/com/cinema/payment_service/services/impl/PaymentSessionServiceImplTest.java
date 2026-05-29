@@ -1,6 +1,6 @@
 package com.cinema.payment_service.services.impl;
 
-import com.cinema.payment_service.config.SePayGatewayProperties;
+import com.cinema.payment_service.config.MomoGatewayProperties;
 import com.cinema.payment_service.dto.request.CinemaRevenueField;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
@@ -12,6 +12,7 @@ import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
+import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.dto.request.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,7 +51,10 @@ class PaymentSessionServiceImplTest {
     private CinemaGrpcClient cinemaGrpcClient;
 
     @Mock
-    private SePayGatewayProperties sePayGatewayProperties;
+    private MomoGatewayProperties momoGatewayProperties;
+
+    @Mock
+    private MomoPaymentGatewayClient momoPaymentGatewayClient;
 
     @Spy
     private com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -84,11 +88,12 @@ class PaymentSessionServiceImplTest {
                 .thenReturn(Optional.empty());
         when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
-        when(sePayGatewayProperties.getBaseUrl()).thenReturn("https://sepay.example.com");
-        when(sePayGatewayProperties.getMerchantId()).thenReturn("merchant");
-        when(sePayGatewayProperties.getSecretKey()).thenReturn("secret");
-        when(sePayGatewayProperties.getPaymentMethod()).thenReturn("QR_DONG_THEO_DON_HANG");
-        when(sePayGatewayProperties.getReturnUrl()).thenReturn("https://app.example.com/return");
+        when(momoPaymentGatewayClient.createCheckout(any(PaymentTransaction.class), any()))
+                .thenReturn(new MomoPaymentGatewayClient.MomoCheckoutResult(
+                        "https://momo.example.com/pay",
+                        "https://momo.example.com/qr",
+                        "{}",
+                        "{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}"));
 
         CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
         request.setBookingId(bookingId);
@@ -102,7 +107,8 @@ class PaymentSessionServiceImplTest {
         assertNotNull(response);
         assertEquals(bookingId, response.getBookingId());
         assertEquals(filmId, saved.getFilmId());
-        assertNotNull(response.getCheckoutUrl());
+        assertEquals("https://momo.example.com/pay", response.getPayUrl());
+        assertEquals("https://momo.example.com/pay", saved.getPayUrl());
     }
 
     @Test
@@ -190,9 +196,9 @@ class PaymentSessionServiceImplTest {
         transaction.setTicketSubtotalSnapshot(amount);
         transaction.setProductSubtotalSnapshot(BigDecimal.ZERO);
         transaction.setCurrency("VND");
-        transaction.setPaymentMethod("QR_DONG_THEO_DON_HANG");
+        transaction.setPaymentMethod("MOMO_QR");
         transaction.setOrderInvoiceNumber("INV-" + UUID.randomUUID());
-        transaction.setCheckoutUrl("https://sepay.example.com/v1/checkout/init");
+        transaction.setPayUrl("https://momo.example.com/pay");
         transaction.setCheckoutPayloadJson("{}");
         transaction.setStatus(status);
         transaction.setExpiresAt(LocalDateTime.now().plusHours(1));

@@ -14,7 +14,7 @@ public class PaymentSessionSnapshotResponse {
     private String paymentMethod;
     private String orderInvoiceNumber;
     private String providerRef;
-    private String checkoutUrl;
+    private String payUrl;
     private String status;
     private LocalDateTime expiresAt;
     private LocalDateTime paidAt;

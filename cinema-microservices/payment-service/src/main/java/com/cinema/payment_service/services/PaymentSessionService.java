@@ -9,7 +9,7 @@ import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.payment_service.dto.response.PaymentReconciliationResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
-import com.cinema.payment_service.dto.webhook.SePayIpnRequest;
+import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,7 +40,7 @@ public interface PaymentSessionService {
 
     PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId);
 
-    WebhookProcessingResult handleSePayWebhook(String secretKey, SePayIpnRequest request);
+    WebhookProcessingResult handleMomoWebhook(MomoIpnRequest request);
 
     void expireDueSessions();
 

@@ -35,13 +35,15 @@ vietqr:
   secret-key: ${VIETQR_SECRET_KEY}
   sync-cron: ${VIETQR_SYNC_CRON:0 0 3 1 * *}
 
-sepay:
-  base-url: ${SEPAY_BASE_URL:https://pgapi-sandbox.sepay.vn}
-  merchant-id: ${SEPAY_MERCHANT_ID:replace_me_merchant_id}
-  secret-key: ${SEPAY_SECRET_KEY:replace_me_secret_key}
-  payment-method: ${SEPAY_PAYMENT_METHOD:QR_DONG_THEO_DON_HANG}
-  return-url: ${SEPAY_RETURN_URL:http://localhost:3000/payment/result}
-  ipn-url: ${SEPAY_IPN_URL:http://localhost:8098/api/payments/webhooks/sepay}
+momo:
+  base-url: ${MOMO_BASE_URL:https://test-payment.momo.vn}
+  partner-code: ${MOMO_PARTNER_CODE:replace_me_partner_code}
+  access-key: ${MOMO_ACCESS_KEY:replace_me_access_key}
+  secret-key: ${MOMO_SECRET_KEY:replace_me_secret_key}
+  redirect-url: ${MOMO_RETURN_URL:http://localhost:3000/payment/result}
+  ipn-url: ${MOMO_IPN_URL:http://localhost:8098/api/payments/webhooks/momo}
+  request-type: ${MOMO_REQUEST_TYPE:captureWallet}
+  lang: ${MOMO_LANG:vi}
 
 payment:
   expiration-scheduler-delay-ms: ${PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS:60000}

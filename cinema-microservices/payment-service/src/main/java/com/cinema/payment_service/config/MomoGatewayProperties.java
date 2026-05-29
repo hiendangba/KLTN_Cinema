@@ -8,23 +8,25 @@ import org.springframework.util.StringUtils;
 
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "sepay")
-public class SePayGatewayProperties {
+@ConfigurationProperties(prefix = "momo")
+public class MomoGatewayProperties {
     private String baseUrl;
-    private String merchantId;
+    private String partnerCode;
+    private String accessKey;
     private String secretKey;
-    private String paymentMethod;
-    private String returnUrl;
+    private String redirectUrl;
     private String ipnUrl;
+    private String requestType = "captureWallet";
+    private String lang = "vi";
 
     @PostConstruct
     void validate() {
-        requireText(baseUrl, "SEPAY_BASE_URL");
-        requireText(merchantId, "SEPAY_MERCHANT_ID");
-        requireText(secretKey, "SEPAY_SECRET_KEY");
-        requireText(paymentMethod, "SEPAY_PAYMENT_METHOD");
-        requireText(returnUrl, "SEPAY_RETURN_URL");
-        requireText(ipnUrl, "SEPAY_IPN_URL");
+        requireText(baseUrl, "MOMO_BASE_URL");
+        requireText(partnerCode, "MOMO_PARTNER_CODE");
+        requireText(accessKey, "MOMO_ACCESS_KEY");
+        requireText(secretKey, "MOMO_SECRET_KEY");
+        requireText(redirectUrl, "MOMO_RETURN_URL");
+        requireText(ipnUrl, "MOMO_IPN_URL");
     }
 
     private void requireText(String value, String envName) {

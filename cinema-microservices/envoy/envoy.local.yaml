@@ -152,7 +152,7 @@ static_resources:
                               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                               disabled: true
                         - match:
-                            path: /api/payments/webhooks/sepay
+                            path: /api/payments/webhooks/momo
                           route:
                             cluster: payment-service
                             timeout: 30s
@@ -161,7 +161,7 @@ static_resources:
                               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                               disabled: true
                         - match:
-                            prefix: /api/payments/webhooks/sepay/
+                            prefix: /api/payments/webhooks/momo/
                           route:
                             cluster: payment-service
                             timeout: 30s

@@ -64,7 +64,7 @@ public class PaymentTransaction {
     private String providerRef;
 
     @Column(name = "checkout_url", nullable = false, length = 255)
-    private String checkoutUrl;
+    private String payUrl;
 
     @Column(name = "checkout_payload_json", columnDefinition = "text")
     private String checkoutPayloadJson;

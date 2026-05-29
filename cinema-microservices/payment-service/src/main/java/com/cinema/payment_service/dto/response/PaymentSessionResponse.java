@@ -24,7 +24,7 @@ public class PaymentSessionResponse {
     private String paymentMethod;
     private String orderInvoiceNumber;
     private String providerRef;
-    private String checkoutUrl;
+    private String payUrl;
     private Map<String, String> checkoutFields;
     private PaymentTransactionStatus status;
     private LocalDateTime expiresAt;

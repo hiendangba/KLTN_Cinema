@@ -131,7 +131,7 @@ docker compose -f compose.prod.yaml down -v
 - `Cinema`: quản lý rạp, tọa độ, giờ mở/đóng cửa và staff mapping theo rạp.
 - `Hall`: quản lý phòng chiếu và sơ đồ ghế.
 - `Booking`: giữ chỗ ghế, booking và sản phẩm đi kèm.
-- `Payment`: tạo session thanh toán, xử lý webhook SePay, đối soát cơ bản.
+- `Payment`: tạo session thanh toán, xử lý webhook MoMo, đối soát cơ bản.
 - `Email`: gửi thông báo bất đồng bộ.
 
 ## Câu Hỏi Thường Gặp

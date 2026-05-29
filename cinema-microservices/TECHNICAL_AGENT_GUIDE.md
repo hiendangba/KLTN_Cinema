@@ -215,7 +215,7 @@ cinema-microservices/
 │       └── services/              # Xử lý gửi email bất đồng bộ qua Gmail SMTP (@EnableAsync)
 │
 ├── booking-service/               # 🎟️ Booking core service (seat lock + booking/product APIs + internal gRPC)
-├── payment-service/               # 💳 Payment service (session + SePay webhook + VietQR bank catalog)
+├── payment-service/               # 💳 Payment service (session + MoMo webhook + VietQR bank catalog)
 │
 ├── envoy/
 │   ├── envoy.local.yaml           # 🔀 Envoy local (route tới host.docker.internal)
@@ -359,7 +359,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `POST` | `/api/payments/revenues/cinemas/search` | ✅ ADMIN/MGMT | Báo cáo doanh thu payment theo rạp, cho phép lọc `cinemaIds`, `filmIds`. |
 | `POST` | `/api/payments/revenues/cinemas/export` | ✅ ADMIN/MGMT | Xuất Excel báo cáo doanh thu payment theo rạp, hỗ trợ `selectedIds` theo `cinemaId`. |
 | `POST` | `/api/payments/promotions/preview` | ✅ Authenticated | Ước tính giảm giá từ promo code trước checkout. |
-| `POST` | `/api/payments/webhooks/sepay` | ❌ Public (secret header) | Nhận webhook từ SePay, idempotent theo event key. |
+| `POST` | `/api/payments/webhooks/momo` | ❌ Public | Nhận webhook từ MoMo, verify chữ ký IPN, idempotent theo event key. |
 
 ### 6. Hall Service (`/api/halls`)
 
@@ -614,7 +614,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 |---|---|---|
 | **Hall Service (Rạp & Ghế)** | ✅ Hoàn thành | Đã có sơ đồ rạp, phòng chiếu, layout ghế và route gateway đồng bộ. |
 | **Booking Core Service** | ✅ Hoàn thành | Xương sống đặt vé, giữ ghế Redis, booking/product APIs, gRPC nội bộ và rule tối đa 5 vé. |
-| **Payment Integration** | ✅ Hoàn thành core | Đã có session thanh toán, webhook SePay, confirm booking qua gRPC, refund/reconciliation/promotion preview. |
+| **Payment Integration** | ✅ Hoàn thành core | Đã có session thanh toán, webhook MoMo, confirm booking qua gRPC, refund/reconciliation/promotion preview. |
 
 ### 🗓️ 02/04/2026 — Nâng cấp Phân trang (Offset Pagination)
 **Nội dung cập nhật:**

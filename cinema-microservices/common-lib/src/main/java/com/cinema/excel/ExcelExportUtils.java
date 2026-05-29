@@ -33,7 +33,7 @@ public final class ExcelExportUtils {
     private ExcelExportUtils() {
     }
 
-    public static byte[] exportSingleSheet(String sheetName, List<String> headers, List<List<?>> rows) {
+    public static byte[] exportSingleSheet(String sheetName, List<String> headers, List<? extends List<?>> rows) {
         try (Workbook workbook = new XSSFWorkbook();
                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet(normalizeSheetName(sheetName));
@@ -71,7 +71,7 @@ public final class ExcelExportUtils {
         }
     }
 
-    private static void writeRows(Sheet sheet, List<List<?>> rows) {
+    private static void writeRows(Sheet sheet, List<? extends List<?>> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
