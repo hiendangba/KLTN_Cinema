@@ -26,7 +26,7 @@ public class HallResponse {
     List<SeatResponse> seats = new ArrayList<>();
     List<HallImageResponse> images = new ArrayList<>();
     HallEnum.HallStatus status;
-    boolean isDeleted;
+    Boolean isDeleted;
     LocalDateTime timeCreated;
     LocalDateTime timeUpdated;
 }
