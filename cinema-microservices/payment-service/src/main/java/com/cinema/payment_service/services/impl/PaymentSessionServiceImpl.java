@@ -21,6 +21,7 @@ import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.PageResponse;
+import com.cinema.excel.ExcelExportUtils;
 import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
@@ -34,6 +35,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,13 +44,14 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Collection;
 import java.util.UUID;
 
 @Service
@@ -284,6 +287,74 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 requesterUserId,
                 HeaderNames.ROLE_MANAGER);
         return buildCinemaRevenueReport(cinemas, request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportCinemaRevenueReport(CinemaRevenueReportRequest request, HttpServletRequest httpRequest) {
+        validateRevenueReportRequest(request);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+
+        List<CinemaGrpcClient.CinemaSummary> cinemas;
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            cinemas = cinemaGrpcClient.getAllActiveCinemas();
+        } else if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
+            List<UUID> accessibleCinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(
+                    requesterUserId,
+                    HeaderNames.ROLE_MANAGER);
+            if (accessibleCinemaIds == null || accessibleCinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            cinemas = cinemaGrpcClient.getAllActiveCinemas().stream()
+                    .filter(cinema -> cinema != null
+                            && cinema.id() != null
+                            && accessibleCinemaIds.contains(cinema.id()))
+                    .toList();
+        } else {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        List<CinemaRevenueItemResponse> items = filterSelectedCinemaRevenueItems(
+                aggregateCinemaRevenueItems(cinemas, request),
+                request.getSelectedIds());
+
+        return ExcelExportUtils.exportSingleSheet(
+                "Payment Revenue",
+                List.of(
+                        "Cinema ID",
+                        "Cinema Name",
+                        "Total Transactions",
+                        "Pending Count",
+                        "Paid Count",
+                        "Failed Count",
+                        "Expired Count",
+                        "Refund Pending Count",
+                        "Refunded Count",
+                        "Ticket Subtotal Amount",
+                        "Product Subtotal Amount",
+                        "Paid Amount",
+                        "Refunded Amount",
+                        "Gross Amount",
+                        "Net Amount"),
+                items.stream()
+                        .map(item -> Arrays.asList(
+                                item.cinemaId(),
+                                item.cinemaName(),
+                                item.totalTransactions(),
+                                item.pendingCount(),
+                                item.paidCount(),
+                                item.failedCount(),
+                                item.expiredCount(),
+                                item.refundPendingCount(),
+                                item.refundedCount(),
+                                item.ticketSubtotalAmount(),
+                                item.productSubtotalAmount(),
+                                item.paidAmount(),
+                                item.refundedAmount(),
+                                item.grossAmount(),
+                                item.netAmount()))
+                        .toList());
     }
 
     @Override
@@ -698,44 +769,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
         LocalDateTime to = dateRange == null ? null : dateRange.getTo();
         PageRequest<CinemaRevenueField> pageRequest = request.getPageRequest();
-        List<UUID> requestedCinemaIds = normalizeUuidList(request.getCinemaIds());
-        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
-        List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
-        scopeCinemas = scopeCinemas.stream()
-                .filter(cinema -> cinema != null && cinema.id() != null)
-                .filter(cinema -> requestedCinemaIds == null || requestedCinemaIds.contains(cinema.id()))
-                .distinct()
-                .toList();
-
-        List<CinemaRevenueItemResponse> allItems = initializeRevenueItems(scopeCinemas);
-        if (!allItems.isEmpty()) {
-            Map<UUID, CinemaRevenueAccumulator> accumulatorMap = allItems.stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            CinemaRevenueItemResponse::cinemaId,
-                            item -> new CinemaRevenueAccumulator(item.cinemaId(), item.cinemaName()),
-                            (left, right) -> left,
-                            LinkedHashMap::new));
-
-            List<PaymentTransaction> revenueTransactions = paymentTransactionRepositoryImpl.findAllForRevenueReport(
-                    scopeCinemas.stream().map(CinemaGrpcClient.CinemaSummary::id).toList(),
-                    requestedFilmIds,
-                    from,
-                    to);
-
-            for (PaymentTransaction transaction : revenueTransactions) {
-                CinemaRevenueAccumulator accumulator = accumulatorMap.get(transaction.getCinemaId());
-                if (accumulator == null) {
-                    continue;
-                }
-                applyTransactionToAccumulator(accumulator, transaction, from, to);
-            }
-
-            allItems = accumulatorMap.values().stream()
-                    .map(CinemaRevenueAccumulator::toResponse)
-                    .toList();
-        }
-
-        List<CinemaRevenueItemResponse> filteredItems = applyCinemaRevenuePageRequest(allItems, pageRequest);
+        List<CinemaRevenueItemResponse> filteredItems = aggregateCinemaRevenueItems(cinemas, request);
         int page = pageRequest.getPageOrDefault();
         int size = pageRequest.getSizeOrDefault();
         long totalElements = filteredItems.size();
@@ -756,6 +790,70 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .page(toSummary(pageItems))
                 .total(toSummary(filteredItems))
                 .build();
+    }
+
+    private List<CinemaRevenueItemResponse> aggregateCinemaRevenueItems(
+            List<CinemaGrpcClient.CinemaSummary> cinemas,
+            CinemaRevenueReportRequest request) {
+        DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
+        List<UUID> requestedCinemaIds = normalizeUuidList(request.getCinemaIds());
+        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
+        List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
+        scopeCinemas = scopeCinemas.stream()
+                .filter(cinema -> cinema != null && cinema.id() != null)
+                .filter(cinema -> requestedCinemaIds == null || requestedCinemaIds.contains(cinema.id()))
+                .distinct()
+                .toList();
+
+        List<CinemaRevenueItemResponse> allItems = initializeRevenueItems(scopeCinemas);
+        if (allItems.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, CinemaRevenueAccumulator> accumulatorMap = allItems.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        CinemaRevenueItemResponse::cinemaId,
+                        item -> new CinemaRevenueAccumulator(item.cinemaId(), item.cinemaName()),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+
+        List<PaymentTransaction> revenueTransactions = paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                scopeCinemas.stream().map(CinemaGrpcClient.CinemaSummary::id).toList(),
+                requestedFilmIds,
+                from,
+                to);
+
+        for (PaymentTransaction transaction : revenueTransactions) {
+            CinemaRevenueAccumulator accumulator = accumulatorMap.get(transaction.getCinemaId());
+            if (accumulator == null) {
+                continue;
+            }
+            applyTransactionToAccumulator(accumulator, transaction, from, to);
+        }
+
+        List<CinemaRevenueItemResponse> allFilteredItems = accumulatorMap.values().stream()
+                .map(CinemaRevenueAccumulator::toResponse)
+                .toList();
+        return applyCinemaRevenuePageRequest(allFilteredItems, request.getPageRequest());
+    }
+
+    private List<CinemaRevenueItemResponse> filterSelectedCinemaRevenueItems(
+            List<CinemaRevenueItemResponse> items,
+            List<UUID> selectedIds) {
+        List<UUID> normalizedSelectedIds = normalizeUuidList(selectedIds);
+        if (normalizedSelectedIds == null) {
+            return items == null ? List.of() : new ArrayList<>(items);
+        }
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .filter(item -> item != null
+                        && item.cinemaId() != null
+                        && normalizedSelectedIds.contains(item.cinemaId()))
+                .toList();
     }
 
     private List<UUID> normalizeUuidList(Collection<UUID> values) {

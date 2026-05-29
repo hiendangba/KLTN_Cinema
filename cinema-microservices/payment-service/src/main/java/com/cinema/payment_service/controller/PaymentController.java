@@ -17,6 +17,7 @@ import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.PageResponse;
+import com.cinema.excel.ExcelExportUtils;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -105,6 +106,15 @@ public class PaymentController extends BaseController {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
         RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_MANAGER);
         return ok(paymentSessionService.getMyCinemaRevenueReport(request, requesterUserId));
+    }
+
+    @PostMapping("/revenues/cinemas/export")
+    public ResponseEntity<byte[]> exportCinemaRevenueReport(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody CinemaRevenueReportRequest request) {
+        RequestAuthUtils.requireAnyRole(servletRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
+        byte[] file = paymentSessionService.exportCinemaRevenueReport(request, servletRequest);
+        return ExcelExportUtils.buildDownloadResponse(file, "payment_revenue_report.xlsx");
     }
 
     @PostMapping("/promotions/preview")

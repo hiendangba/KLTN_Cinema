@@ -356,6 +356,8 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `GET` | `/api/payments/sessions/{bookingId}` | ✅ Authenticated | Lấy phiên thanh toán mới nhất theo booking (scope theo user). |
 | `POST` | `/api/payments/sessions/{bookingId}/refund` | ✅ Authenticated | Tạo yêu cầu hoàn tiền nội bộ (trạng thái `REFUND_PENDING`). |
 | `GET` | `/api/payments/reconciliation` | ✅ Authenticated | Tổng hợp đối soát theo khoảng thời gian (`from`, `to`). |
+| `POST` | `/api/payments/revenues/cinemas/search` | ✅ ADMIN/MGMT | Báo cáo doanh thu payment theo rạp, cho phép lọc `cinemaIds`, `filmIds`. |
+| `POST` | `/api/payments/revenues/cinemas/export` | ✅ ADMIN/MGMT | Xuất Excel báo cáo doanh thu payment theo rạp, hỗ trợ `selectedIds` theo `cinemaId`. |
 | `POST` | `/api/payments/promotions/preview` | ✅ Authenticated | Ước tính giảm giá từ promo code trước checkout. |
 | `POST` | `/api/payments/webhooks/sepay` | ❌ Public (secret header) | Nhận webhook từ SePay, idempotent theo event key. |
 
@@ -736,11 +738,11 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Build check đã pass bằng Maven Wrapper:
   - `booking-service\\mvnw.cmd -DskipTests compile`
   - `booking-service\\mvnw.cmd -DskipTests test-compile`
-- Mở rộng booking core cho phase đặt vé:
-  - Bổ sung entity:
-    - `Booking`
-    - `BookingSeatItem`
-    - `BookingProductItem`
+  - Mở rộng booking core cho phase đặt vé:
+    - Bổ sung entity:
+      - `Booking`
+      - `BookingSeatItem`
+      - `BookingProductItem`
     - `CustomerInfo` (embedded)
   - Bổ sung enums:
     - `BookingStatus` (`PENDING`, `RESERVED`, `CONFIRMED`, `CANCELLED`, `EXPIRED`)
@@ -751,6 +753,9 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
     - `POST /api/bookings/me/search`
     - `POST /api/bookings/cinemas/me/search`
     - `GET /api/bookings/me/active`
+    - `POST /api/bookings/revenues/cinemas/search`
+    - `POST /api/bookings/revenues/cinemas/me/search`
+    - `POST /api/bookings/revenues/cinemas/export`
     - `PATCH /api/bookings/{id}/status`
     - `POST /api/bookings/{id}/cancel`
   - Booking snapshot:
@@ -1052,6 +1057,7 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - `total` là summary của toàn bộ phạm vi đã lọc.
   - Phạm vi rạp lấy từ gRPC `cinema-service`, và các rạp không có doanh thu trong khoảng lọc vẫn phải được hiển thị với giá trị 0.
   - `payment_transaction` snapshot thêm `filmId` lấy từ booking context để report không phải join ngược sang booking khi chạy.
+  - Có thêm endpoint export Excel `POST /api/payments/revenues/cinemas/export`; frontend gửi cùng body như report JSON, cộng `selectedIds` là danh sách `cinemaId` cần export. Nếu không gửi `selectedIds` thì backend export toàn bộ dòng đang khớp filter.
   - Tài liệu giải thích đầy đủ và danh sách file liên quan: [REVENUE_REPORT_RULES.md](./REVENUE_REPORT_RULES.md)
 
 ### 2026-05-29 Tìm kiếm film giữ cursor và ưu tiên phim mới nhất
@@ -1076,6 +1082,7 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
     - `pageRequest` giữ vai trò phân trang/lọc/sắp xếp theo rạp.
     - Nếu frontend không truyền `dateRange` thì report lấy toàn bộ dữ liệu.
     - `Booking` snapshot thêm `filmId` để report theo phim dùng được trực tiếp từ booking data.
+  - Có thêm endpoint export Excel `POST /api/bookings/revenues/cinemas/export`; frontend gửi cùng body như report JSON, cộng `selectedIds` là danh sách `cinemaId` cần export. Nếu không gửi `selectedIds` thì backend export toàn bộ dòng đang khớp filter.
   - `dateRange` gửi riêng trong body request, không nhét vào `PageRequest`.
 
 ### Mẫu request gửi FE

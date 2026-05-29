@@ -15,6 +15,7 @@ import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
+import com.cinema.excel.ExcelExportUtils;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -96,6 +97,15 @@ public class BookingController extends BaseController {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
         BookingRevenueReportResponse response = bookingService.getMyCinemaRevenueReport(request, httpRequest);
         return ok(response);
+    }
+
+    @PostMapping("/revenues/cinemas/export")
+    public ResponseEntity<byte[]> exportCinemaRevenueReport(
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody BookingRevenueReportRequest request) {
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
+        byte[] file = bookingService.exportCinemaRevenueReport(request, httpRequest);
+        return ExcelExportUtils.buildDownloadResponse(file, "booking_revenue_report.xlsx");
     }
 
     @PostMapping("/reports/showtimes/search")

@@ -12,6 +12,7 @@ import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.webhook.SePayIpnRequest;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.PageResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
@@ -34,6 +35,8 @@ public interface PaymentSessionService {
     CinemaRevenueReportResponse getAllCinemaRevenueReport(CinemaRevenueReportRequest request);
 
     CinemaRevenueReportResponse getMyCinemaRevenueReport(CinemaRevenueReportRequest request, UUID requesterUserId);
+
+    byte[] exportCinemaRevenueReport(CinemaRevenueReportRequest request, HttpServletRequest httpRequest);
 
     PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId);
 

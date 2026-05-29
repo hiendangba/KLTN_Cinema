@@ -33,6 +33,8 @@ public interface BookingService {
 
     BookingRevenueReportResponse getMyCinemaRevenueReport(BookingRevenueReportRequest request, HttpServletRequest httpRequest);
 
+    byte[] exportCinemaRevenueReport(BookingRevenueReportRequest request, HttpServletRequest httpRequest);
+
     ShowtimePerformanceReportResponse getAllShowtimePerformanceReport(ShowtimePerformanceReportRequest request);
 
     ShowtimePerformanceReportResponse getMyShowtimePerformanceReport(

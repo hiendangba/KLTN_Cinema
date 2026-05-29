@@ -1,6 +1,11 @@
 # API Payload Samples
 
-Tài liệu này gom các payload request mẫu mà frontend có thể gửi cho các API report hiện có.
+Tài liệu này gom các payload request mẫu để frontend gọi các API report và export report.
+
+Quy ước chung:
+- Nếu `selectedIds` không gửi hoặc gửi rỗng, backend export toàn bộ dữ liệu đang khớp filter.
+- Nếu `selectedIds` có giá trị, backend chỉ export các dòng có `cinemaId` nằm trong danh sách đó.
+- `selectedIds` áp dụng cho các report group theo rạp.
 
 ## Payment Revenue Report
 
@@ -9,8 +14,12 @@ Tài liệu này gom các payload request mẫu mà frontend có thể gửi cho
 ### Không lọc theo ngày
 ```json
 {
-  "cinemaIds": ["d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"],
-  "filmIds": ["a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"],
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
   "pageRequest": {
     "page": 1,
     "size": 20,
@@ -28,8 +37,65 @@ Tài liệu này gom các payload request mẫu mà frontend có thể gửi cho
     "from": "2026-05-01T00:00:00",
     "to": "2026-05-31T23:59:59"
   },
-  "cinemaIds": ["d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"],
-  "filmIds": ["a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"],
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
+  "pageRequest": {
+    "page": 1,
+    "size": 20,
+    "keyword": "",
+    "sortBy": [],
+    "filterBy": []
+  }
+}
+```
+
+### Export Excel
+`POST /api/payments/revenues/cinemas/export`
+
+#### Export toàn bộ theo filter
+```json
+{
+  "dateRange": {
+    "from": "2026-05-01T00:00:00",
+    "to": "2026-05-31T23:59:59"
+  },
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
+  "pageRequest": {
+    "page": 1,
+    "size": 20,
+    "keyword": "",
+    "sortBy": [],
+    "filterBy": []
+  }
+}
+```
+
+#### Export đúng các dòng đã chọn
+```json
+{
+  "dateRange": {
+    "from": "2026-05-01T00:00:00",
+    "to": "2026-05-31T23:59:59"
+  },
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
+  "selectedIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001",
+    "f4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a222"
+  ],
   "pageRequest": {
     "page": 1,
     "size": 20,
@@ -47,8 +113,12 @@ Tài liệu này gom các payload request mẫu mà frontend có thể gửi cho
 ### Không lọc theo ngày
 ```json
 {
-  "cinemaIds": ["d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"],
-  "filmIds": ["a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"],
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
   "pageRequest": {
     "page": 1,
     "size": 20,
@@ -66,8 +136,65 @@ Tài liệu này gom các payload request mẫu mà frontend có thể gửi cho
     "from": "2026-05-01T00:00:00",
     "to": "2026-05-31T23:59:59"
   },
-  "cinemaIds": ["d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"],
-  "filmIds": ["a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"],
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
+  "pageRequest": {
+    "page": 1,
+    "size": 20,
+    "keyword": "",
+    "sortBy": [],
+    "filterBy": []
+  }
+}
+```
+
+### Export Excel
+`POST /api/bookings/revenues/cinemas/export`
+
+#### Export toàn bộ theo filter
+```json
+{
+  "dateRange": {
+    "from": "2026-05-01T00:00:00",
+    "to": "2026-05-31T23:59:59"
+  },
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
+  "pageRequest": {
+    "page": 1,
+    "size": 20,
+    "keyword": "",
+    "sortBy": [],
+    "filterBy": []
+  }
+}
+```
+
+#### Export đúng các dòng đã chọn
+```json
+{
+  "dateRange": {
+    "from": "2026-05-01T00:00:00",
+    "to": "2026-05-31T23:59:59"
+  },
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
+  "selectedIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001",
+    "f4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a222"
+  ],
   "pageRequest": {
     "page": 1,
     "size": 20,
@@ -85,8 +212,12 @@ Tài liệu này gom các payload request mẫu mà frontend có thể gửi cho
 ### Không lọc theo ngày
 ```json
 {
-  "cinemaIds": ["d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"],
-  "filmIds": ["a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"],
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
   "pageRequest": {
     "page": 1,
     "size": 20,
@@ -104,8 +235,12 @@ Tài liệu này gom các payload request mẫu mà frontend có thể gửi cho
     "from": "2026-05-01T00:00:00",
     "to": "2026-05-31T23:59:59"
   },
-  "cinemaIds": ["d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"],
-  "filmIds": ["a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"],
+  "cinemaIds": [
+    "d7c5d0d8-6f1c-4f5e-9db1-4a8b3f4cf001"
+  ],
+  "filmIds": [
+    "a4a7d2b8-7a1d-4c17-8c7f-f0d0f1c0a111"
+  ],
   "pageRequest": {
     "page": 1,
     "size": 20,
@@ -159,6 +294,7 @@ Tài liệu này gom các payload request mẫu mà frontend có thể gửi cho
 - `dateRange` là payload riêng, chỉ gửi khi muốn lọc theo thời gian.
 - `pageRequest` luôn giữ phần phân trang, keyword, sort và filter.
 - `cinemaIds` và `filmIds` là mảng optional, có thể bỏ trống nếu muốn xem toàn scope.
+- `selectedIds` chỉ dùng cho export Excel, không bắt buộc ở report JSON.
 
 ## Film Search
 

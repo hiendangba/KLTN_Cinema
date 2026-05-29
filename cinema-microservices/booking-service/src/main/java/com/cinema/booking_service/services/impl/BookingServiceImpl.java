@@ -45,6 +45,7 @@ import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.excel.ExcelExportUtils;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.github.f4b6a3.uuid.UuidCreator;
@@ -61,6 +62,7 @@ import java.math.RoundingMode;
 import java.time.temporal.ChronoUnit;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -296,9 +298,64 @@ public class BookingServiceImpl implements BookingService {
         List<CinemaGrpcClient.CinemaSummary> cinemas = cinemaGrpcClient.getAllActiveCinemas().stream()
                 .filter(cinema -> cinema != null
                         && cinema.id() != null
-                        && accessibleCinemaIds.contains(cinema.id()))
+                && accessibleCinemaIds.contains(cinema.id()))
                 .toList();
         return buildBookingRevenueReport(cinemas, request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportCinemaRevenueReport(BookingRevenueReportRequest request, HttpServletRequest httpRequest) {
+        validateRevenueReportRequest(request);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        List<CinemaGrpcClient.CinemaSummary> cinemas;
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            cinemas = cinemaGrpcClient.getAllActiveCinemas();
+        } else if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            UUID requesterUserId = resolveUserId(httpRequest);
+            List<UUID> accessibleCinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(
+                    requesterUserId,
+                    HeaderNames.ROLE_MANAGER);
+            if (accessibleCinemaIds == null || accessibleCinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            cinemas = cinemaGrpcClient.getAllActiveCinemas().stream()
+                    .filter(cinema -> cinema != null
+                            && cinema.id() != null
+                            && accessibleCinemaIds.contains(cinema.id()))
+                    .toList();
+        } else {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        List<BookingRevenueItemResponse> items = filterSelectedBookingRevenueItems(
+                aggregateBookingRevenueItems(cinemas, request),
+                request.getSelectedIds());
+
+        return ExcelExportUtils.exportSingleSheet(
+                "Booking Revenue",
+                List.of(
+                        "Cinema ID",
+                        "Cinema Name",
+                        "Total Bookings",
+                        "Pending Count",
+                        "Reserved Count",
+                        "Confirmed Count",
+                        "Ticket Subtotal Amount",
+                        "Product Subtotal Amount",
+                        "Gross Amount"),
+                items.stream()
+                        .map(item -> Arrays.asList(
+                                item.cinemaId(),
+                                item.cinemaName(),
+                                item.totalBookings(),
+                                item.pendingCount(),
+                                item.reservedCount(),
+                                item.confirmedCount(),
+                                item.ticketSubtotalAmount(),
+                                item.productSubtotalAmount(),
+                                item.grossAmount()))
+                        .toList());
     }
 
     @Override
@@ -456,55 +513,7 @@ public class BookingServiceImpl implements BookingService {
         LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
         LocalDateTime to = dateRange == null ? null : dateRange.getTo();
         PageRequest<BookingRevenueField> pageRequest = request.getPageRequest();
-        List<UUID> requestedCinemaIds = normalizeUuidList(request.getCinemaIds());
-        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
-
-        List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
-        scopeCinemas = scopeCinemas.stream()
-                .filter(cinema -> cinema != null && cinema.id() != null)
-                .filter(cinema -> requestedCinemaIds == null || requestedCinemaIds.contains(cinema.id()))
-                .distinct()
-                .toList();
-
-        List<BookingRevenueItemResponse> allItems = initializeBookingRevenueItems(scopeCinemas);
-        if (!allItems.isEmpty()) {
-            Map<UUID, BookingRevenueAccumulator> accumulatorMap = allItems.stream()
-                    .collect(java.util.stream.Collectors.toMap(
-                            BookingRevenueItemResponse::cinemaId,
-                            item -> new BookingRevenueAccumulator(item.cinemaId(), item.cinemaName()),
-                            (left, right) -> left,
-                            LinkedHashMap::new));
-
-            List<UUID> scopedCinemaIds = scopeCinemas.stream()
-                    .map(CinemaGrpcClient.CinemaSummary::id)
-                    .toList();
-            List<Booking> bookings = requestedFilmIds == null
-                    ? bookingRepository.findAllForBookingRevenueReport(
-                            scopedCinemaIds,
-                            from,
-                            to,
-                            EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED))
-                    : bookingRepository.findAllForBookingRevenueReport(
-                            scopedCinemaIds,
-                            requestedFilmIds,
-                            from,
-                            to,
-                            EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED));
-
-            for (Booking booking : bookings) {
-                BookingRevenueAccumulator accumulator = accumulatorMap.get(booking.getCinemaId());
-                if (accumulator == null) {
-                    continue;
-                }
-                accumulator.addBooking(booking);
-            }
-
-            allItems = accumulatorMap.values().stream()
-                    .map(BookingRevenueAccumulator::toResponse)
-                    .toList();
-        }
-
-        List<BookingRevenueItemResponse> filteredItems = applyBookingRevenuePageRequest(allItems, pageRequest);
+        List<BookingRevenueItemResponse> filteredItems = aggregateBookingRevenueItems(cinemas, request);
         int page = pageRequest.getPageOrDefault();
         int size = pageRequest.getSizeOrDefault();
         long totalElements = filteredItems.size();
@@ -525,6 +534,81 @@ public class BookingServiceImpl implements BookingService {
                 .page(toSummary(pageItems))
                 .total(toSummary(filteredItems))
                 .build();
+    }
+
+    private List<BookingRevenueItemResponse> aggregateBookingRevenueItems(
+            List<CinemaGrpcClient.CinemaSummary> cinemas,
+            BookingRevenueReportRequest request) {
+        DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
+        List<UUID> requestedCinemaIds = normalizeUuidList(request.getCinemaIds());
+        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
+
+        List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
+        scopeCinemas = scopeCinemas.stream()
+                .filter(cinema -> cinema != null && cinema.id() != null)
+                .filter(cinema -> requestedCinemaIds == null || requestedCinemaIds.contains(cinema.id()))
+                .distinct()
+                .toList();
+
+        List<BookingRevenueItemResponse> allItems = initializeBookingRevenueItems(scopeCinemas);
+        if (allItems.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, BookingRevenueAccumulator> accumulatorMap = allItems.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        BookingRevenueItemResponse::cinemaId,
+                        item -> new BookingRevenueAccumulator(item.cinemaId(), item.cinemaName()),
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+
+        List<UUID> scopedCinemaIds = scopeCinemas.stream()
+                .map(CinemaGrpcClient.CinemaSummary::id)
+                .toList();
+        List<Booking> bookings = requestedFilmIds == null
+                ? bookingRepository.findAllForBookingRevenueReport(
+                        scopedCinemaIds,
+                        from,
+                        to,
+                        EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED))
+                : bookingRepository.findAllForBookingRevenueReport(
+                        scopedCinemaIds,
+                        requestedFilmIds,
+                        from,
+                        to,
+                        EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED));
+
+        for (Booking booking : bookings) {
+            BookingRevenueAccumulator accumulator = accumulatorMap.get(booking.getCinemaId());
+            if (accumulator == null) {
+                continue;
+            }
+            accumulator.addBooking(booking);
+        }
+
+        List<BookingRevenueItemResponse> allFilteredItems = accumulatorMap.values().stream()
+                .map(BookingRevenueAccumulator::toResponse)
+                .toList();
+        return applyBookingRevenuePageRequest(allFilteredItems, request.getPageRequest());
+    }
+
+    private List<BookingRevenueItemResponse> filterSelectedBookingRevenueItems(
+            List<BookingRevenueItemResponse> items,
+            List<UUID> selectedIds) {
+        List<UUID> normalizedSelectedIds = normalizeUuidList(selectedIds);
+        if (normalizedSelectedIds == null) {
+            return items == null ? List.of() : new ArrayList<>(items);
+        }
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .filter(item -> item != null
+                        && item.cinemaId() != null
+                        && normalizedSelectedIds.contains(item.cinemaId()))
+                .toList();
     }
 
     private ShowtimePerformanceReportResponse buildShowtimePerformanceReport(
