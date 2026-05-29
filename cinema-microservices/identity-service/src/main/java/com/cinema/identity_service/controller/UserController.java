@@ -5,6 +5,7 @@ import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.identity_service.dto.request.ChangePasswordRequest;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
+import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
@@ -63,6 +64,14 @@ public class UserController extends BaseController {
     public ResponseEntity<APIResponse<ActionMessageResponse>> login(@Valid @RequestBody LoginRequest loginRequest,
                                                                     HttpServletResponse response) {
         ActionMessageResponse actionMessageResponse = userService.login(loginRequest, response);
+        return ok(actionMessageResponse);
+    }
+
+    @PostMapping("/google/login")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> googleLogin(
+            @Valid @RequestBody GoogleLoginRequest googleLoginRequest,
+            HttpServletResponse response) {
+        ActionMessageResponse actionMessageResponse = userService.googleLogin(googleLoginRequest, response);
         return ok(actionMessageResponse);
     }
 

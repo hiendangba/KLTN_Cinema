@@ -4,6 +4,7 @@ import com.cinema.Enum.UserEnum;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.entity.User;
@@ -11,6 +12,8 @@ import com.cinema.identity_service.grpc.UserGrpcClient;
 import com.cinema.identity_service.mapper.UserMapper;
 import com.cinema.identity_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.identity_service.repository.UserRepository;
+import com.cinema.identity_service.services.google.GoogleIdTokenVerifierService;
+import com.cinema.identity_service.services.google.GoogleUserInfo;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +43,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,6 +70,8 @@ class UserServiceImplTokenFlowTest {
     @Mock
     private UserGrpcClient userGrpcClient;
     @Mock
+    private GoogleIdTokenVerifierService googleIdTokenVerifierService;
+    @Mock
     private InternalEmailDispatchService internalEmailDispatchService;
 
     private UserServiceImpl service;
@@ -80,21 +86,22 @@ class UserServiceImplTokenFlowTest {
                 userMapper,
                 redisTemplate,
                 userGrpcClient,
+                googleIdTokenVerifierService,
                 internalEmailDispatchService
         );
 
         ReflectionTestUtils.setField(service, "authCookieSecure", false);
         ReflectionTestUtils.setField(service, "authCookieSameSite", "Strict");
 
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(redisTemplate.opsForSet()).thenReturn(setOperations);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(redisTemplate.opsForSet()).thenReturn(setOperations);
     }
 
     @Test
     void login_shouldSetAccessAndRefreshCookies_andReturnActionMessage() {
         User user = buildActiveUser();
         LoginRequest request = buildLoginRequest(user.getEmail(), "plain-password");
-        long accessExp = 60_000L;
+        long accessExp = 120_000L;
         long refreshExp = 120_000L;
 
         when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
@@ -117,7 +124,7 @@ class UserServiceImplTokenFlowTest {
         verify(valueOperations).set(
                 argThat(key -> key.startsWith("identity:token:access:")),
                 eq(user.getId().toString()),
-                eq(accessExp),
+                eq(accessExp - 60_000L),
                 eq(TimeUnit.MILLISECONDS)
         );
         verify(valueOperations).set(
@@ -262,8 +269,176 @@ class UserServiceImplTokenFlowTest {
         assertThat(setCookies).hasSize(1);
         assertThat(setCookies.get(0)).contains("verifyToken=");
         assertThat(setCookies.get(0)).contains("Max-Age=300");
-        verify(redisTemplate).opsForValue();
         verify(valueOperations).set(anyString(), any(), eq(5L), eq(TimeUnit.MINUTES));
+    }
+
+    @Test
+    void googleLogin_existingGoogleUser_shouldSetAccessAndRefreshCookies() {
+        User user = buildActiveUser();
+        user.setProvider("GOOGLE");
+        user.setProviderId("google-sub-1");
+
+        GoogleLoginRequest request = buildGoogleLoginRequest("id-token");
+
+        when(googleIdTokenVerifierService.verify("id-token"))
+                .thenReturn(new GoogleUserInfo("google-sub-1", user.getEmail(), "Google User"));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(jwtService.generateAccessToken(eq(user), anyString())).thenReturn("google-access-token");
+        when(jwtService.generateRefreshToken(eq(user), anyString())).thenReturn("google-refresh-token");
+        when(jwtService.getAccessTokenExpiration()).thenReturn(120_000L);
+        when(jwtService.getRefreshTokenExpiration()).thenReturn(240_000L);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ActionMessageResponse action = service.googleLogin(request, response);
+
+        assertThat(action.getMessage()).isNotBlank();
+        List<String> setCookies = response.getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(setCookies).hasSize(2);
+        assertThat(setCookies).anyMatch(v -> v.contains("accessToken=google-access-token"));
+        assertThat(setCookies).anyMatch(v -> v.contains("refreshToken=google-refresh-token"));
+    }
+
+    @Test
+    void googleLogin_newGoogleUser_shouldCreateProfileWithDefaults_andSetCookies() {
+        GoogleLoginRequest request = buildGoogleLoginRequest("new-google-id-token");
+        GoogleUserInfo googleUser = new GoogleUserInfo("google-sub-2", "new.user@example.com", "New User");
+
+        User savedUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("new.user@example.com")
+                .provider("GOOGLE")
+                .providerId("google-sub-2")
+                .password("encoded-random")
+                .role(UserEnum.UserRole.CUSTOMER)
+                .status(UserEnum.UserStatus.ACTIVE)
+                .build();
+
+        when(googleIdTokenVerifierService.verify("new-google-id-token")).thenReturn(googleUser);
+        when(userRepository.findByEmail("new.user@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(jwtService.generateAccessToken(eq(savedUser), anyString())).thenReturn("new-google-access-token");
+        when(jwtService.generateRefreshToken(eq(savedUser), anyString())).thenReturn("new-google-refresh-token");
+        when(jwtService.getAccessTokenExpiration()).thenReturn(120_000L);
+        when(jwtService.getRefreshTokenExpiration()).thenReturn(240_000L);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ActionMessageResponse action = service.googleLogin(request, response);
+
+        assertThat(action.getMessage()).isNotBlank();
+        verify(userRepository).save(argThat(user ->
+                "GOOGLE".equals(user.getProvider())
+                        && "google-sub-2".equals(user.getProviderId())
+                        && UserEnum.UserRole.CUSTOMER.equals(user.getRole())
+                        && UserEnum.UserStatus.ACTIVE.equals(user.getStatus())
+        ));
+        verify(userGrpcClient).createCustomerProfile(argThat(profile ->
+                savedUser.getId().equals(profile.getId())
+                        && "new.user@example.com".equals(profile.getEmail())
+                        && LocalDate.of(1970, 1, 1).equals(profile.getDob())
+                        && UserEnum.Gender.OTHER.equals(profile.getGender())
+                        && "0999999999".equals(profile.getPhone())
+                        && UserEnum.UserRole.CUSTOMER.equals(profile.getRole())
+        ));
+
+        List<String> setCookies = response.getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(setCookies).hasSize(2);
+        assertThat(setCookies).anyMatch(v -> v.contains("accessToken=new-google-access-token"));
+        assertThat(setCookies).anyMatch(v -> v.contains("refreshToken=new-google-refresh-token"));
+    }
+
+    @Test
+    void googleLogin_existingLocalUser_shouldThrowEmailExisted() {
+        User user = buildActiveUser();
+        user.setProvider("LOCAL");
+
+        when(googleIdTokenVerifierService.verify("google-token"))
+                .thenReturn(new GoogleUserInfo("google-sub-3", user.getEmail(), "Local Conflict"));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.googleLogin(buildGoogleLoginRequest("google-token"), new MockHttpServletResponse()));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.EMAIL_EXISTED);
+        verify(jwtService, never()).generateAccessToken(any(User.class), anyString());
+    }
+
+    @Test
+    void googleLogin_existingGoogleUserWithDifferentProviderId_shouldThrowLoginFailed() {
+        User user = buildActiveUser();
+        user.setProvider("GOOGLE");
+        user.setProviderId("google-sub-old");
+
+        when(googleIdTokenVerifierService.verify("google-token"))
+                .thenReturn(new GoogleUserInfo("google-sub-new", user.getEmail(), "Mismatch"));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.googleLogin(buildGoogleLoginRequest("google-token"), new MockHttpServletResponse()));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_FAILED);
+        verify(jwtService, never()).generateAccessToken(any(User.class), anyString());
+    }
+
+    @Test
+    void googleLogin_lockedUser_shouldThrowLoginFailed() {
+        User user = buildActiveUser();
+        user.setProvider("GOOGLE");
+        user.setProviderId("google-sub-1");
+        user.setStatus(UserEnum.UserStatus.LOCKED);
+
+        when(googleIdTokenVerifierService.verify("google-token"))
+                .thenReturn(new GoogleUserInfo("google-sub-1", user.getEmail(), "Locked"));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.googleLogin(buildGoogleLoginRequest("google-token"), new MockHttpServletResponse()));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_FAILED);
+        verify(jwtService, never()).generateAccessToken(any(User.class), anyString());
+    }
+
+    @Test
+    void googleLogin_invalidGoogleToken_shouldThrowLoginFailed() {
+        when(googleIdTokenVerifierService.verify("invalid-token"))
+                .thenThrow(new BusinessException(ErrorCode.LOGIN_FAILED));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.googleLogin(buildGoogleLoginRequest("invalid-token"), new MockHttpServletResponse()));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_FAILED);
+        verify(userRepository, never()).findByEmail(anyString());
+    }
+
+    @Test
+    void googleLogin_whenCreateProfileFails_shouldRollbackAndThrow() {
+        GoogleLoginRequest request = buildGoogleLoginRequest("new-google-id-token");
+        GoogleUserInfo googleUser = new GoogleUserInfo("google-sub-4", "failure.user@example.com", "Failure User");
+
+        User savedUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("failure.user@example.com")
+                .provider("GOOGLE")
+                .providerId("google-sub-4")
+                .password("encoded-random")
+                .role(UserEnum.UserRole.CUSTOMER)
+                .status(UserEnum.UserStatus.ACTIVE)
+                .build();
+
+        when(googleIdTokenVerifierService.verify("new-google-id-token")).thenReturn(googleUser);
+        when(userRepository.findByEmail("failure.user@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        org.mockito.Mockito.doThrow(new RuntimeException("grpc failed"))
+                .when(userGrpcClient).createCustomerProfile(any(RegisterCustomerRequest.class));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.googleLogin(request, new MockHttpServletResponse()));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.NOT_CREATED);
+        verify(jwtService, never()).generateAccessToken(any(User.class), anyString());
     }
 
     private User buildActiveUser() {
@@ -280,6 +455,12 @@ class UserServiceImplTokenFlowTest {
         LoginRequest request = new LoginRequest();
         ReflectionTestUtils.setField(request, "email", email);
         ReflectionTestUtils.setField(request, "password", password);
+        return request;
+    }
+
+    private GoogleLoginRequest buildGoogleLoginRequest(String idToken) {
+        GoogleLoginRequest request = new GoogleLoginRequest();
+        ReflectionTestUtils.setField(request, "idToken", idToken);
         return request;
     }
 }

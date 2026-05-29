@@ -9,6 +9,7 @@ import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.cinema.identity_service.dto.request.ChangePasswordRequest;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
+import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
@@ -21,6 +22,8 @@ import com.cinema.identity_service.mapper.UserMapper;
 import com.cinema.identity_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.identity_service.repository.UserRepository;
 import com.cinema.identity_service.services.UserService;
+import com.cinema.identity_service.services.google.GoogleIdTokenVerifierService;
+import com.cinema.identity_service.services.google.GoogleUserInfo;
 import com.cinema.identity_service.utils.OTPGenerator;
 import com.cinema.identity_service.utils.VerifyTokenUtils;
 import jakarta.servlet.http.Cookie;
@@ -45,6 +48,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -66,6 +70,7 @@ public class UserServiceImpl implements UserService {
     final UserMapper userMapper;
     final RedisTemplate<String, Object> redisTemplate;
     final UserGrpcClient userGrpcClient;
+    final GoogleIdTokenVerifierService googleIdTokenVerifierService;
     final InternalEmailDispatchService internalEmailDispatchService;
     @Value("${app.auth.cookie.secure:true}")
     boolean authCookieSecure;
@@ -82,6 +87,10 @@ public class UserServiceImpl implements UserService {
     static String REFRESH_TOKEN_PREFIX = "identity:token:refresh:";
     static String USER_TOKENS_PREFIX = "identity:user_tokens:";
     private static final long TOKEN_EXPIRY_BUFFER = 60_000L;
+    private static final String GOOGLE_PROVIDER = "GOOGLE";
+    private static final LocalDate DEFAULT_GOOGLE_DOB = LocalDate.of(1970, 1, 1);
+    private static final UserEnum.Gender DEFAULT_GOOGLE_GENDER = UserEnum.Gender.OTHER;
+    private static final String DEFAULT_GOOGLE_PHONE = "0999999999";
 
     static Pattern STRONG_PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,32}$");
@@ -583,6 +592,109 @@ public class UserServiceImpl implements UserService {
         return ActionMessageResponse.builder()
                 .message("Đăng nhập thành công")
                 .build();
+    }
+
+    @Override
+    public ActionMessageResponse googleLogin(GoogleLoginRequest googleLoginRequest, HttpServletResponse response) {
+        GoogleUserInfo googleUserInfo = googleIdTokenVerifierService.verify(googleLoginRequest.getIdToken());
+        Optional<User> existingUser = userRepository.findByEmail(googleUserInfo.email());
+
+        User user;
+        if (existingUser.isPresent()) {
+            user = existingUser.get();
+            if (user.getStatus().equals(UserEnum.UserStatus.LOCKED)) {
+                throw new BusinessException(LOGIN_FAILED);
+            }
+            if (!GOOGLE_PROVIDER.equalsIgnoreCase(user.getProvider())) {
+                throw new BusinessException(EMAIL_EXISTED);
+            }
+            if (user.getProviderId() == null || !user.getProviderId().equals(googleUserInfo.providerId())) {
+                throw new BusinessException(LOGIN_FAILED);
+            }
+        } else {
+            user = registerGoogleCustomer(googleUserInfo);
+        }
+
+        issueAuthTokens(user, response);
+        return ActionMessageResponse.builder()
+                .message("ÄÄƒng nháº­p thÃ nh cÃ´ng")
+                .build();
+    }
+
+    private User registerGoogleCustomer(GoogleUserInfo googleUserInfo) {
+        User newUser = User.builder()
+                .email(googleUserInfo.email())
+                .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                .provider(GOOGLE_PROVIDER)
+                .providerId(googleUserInfo.providerId())
+                .role(UserEnum.UserRole.CUSTOMER)
+                .status(UserEnum.UserStatus.ACTIVE)
+                .build();
+        User savedUser = userRepository.save(newUser);
+
+        try {
+            RegisterCustomerRequest userServiceRequest = RegisterCustomerRequest.builder()
+                    .id(savedUser.getId())
+                    .name(resolveGoogleDisplayName(googleUserInfo))
+                    .email(savedUser.getEmail())
+                    .dob(DEFAULT_GOOGLE_DOB)
+                    .gender(DEFAULT_GOOGLE_GENDER)
+                    .phone(DEFAULT_GOOGLE_PHONE)
+                    .role(savedUser.getRole())
+                    .build();
+
+            userGrpcClient.createCustomerProfile(userServiceRequest);
+            log.info("Google user created in user-service: userId={}, email={}", savedUser.getId(), savedUser.getEmail());
+        } catch (BusinessException e) {
+            log.error("Failed to create Google user profile in user-service: email={}", savedUser.getEmail(), e);
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to create Google user profile in user-service: email={}", savedUser.getEmail(), e);
+            throw new BusinessException(ErrorCode.NOT_CREATED);
+        }
+
+        return savedUser;
+    }
+
+    private String resolveGoogleDisplayName(GoogleUserInfo googleUserInfo) {
+        String googleName = googleUserInfo.name();
+        if (googleName != null && !googleName.isBlank()) {
+            return googleName;
+        }
+
+        String email = googleUserInfo.email();
+        int atIndex = email.indexOf('@');
+        if (atIndex > 0) {
+            return email.substring(0, atIndex);
+        }
+        return email;
+    }
+
+    private void issueAuthTokens(User user, HttpServletResponse response) {
+        String tokenId = UUID.randomUUID().toString();
+        String accessToken = jwtServiceImpl.generateAccessToken(user, tokenId);
+        String refreshToken = jwtServiceImpl.generateRefreshToken(user, tokenId);
+
+        String accessTokenKey = ACCESS_TOKEN_PREFIX + tokenId;
+        String refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenId;
+
+        redisTemplate.opsForValue().set(
+                accessTokenKey,
+                user.getId().toString(),
+                jwtServiceImpl.getAccessTokenExpiration() - TOKEN_EXPIRY_BUFFER,
+                TimeUnit.MILLISECONDS);
+        redisTemplate.opsForValue().set(
+                refreshTokenKey,
+                user.getId().toString(),
+                jwtServiceImpl.getRefreshTokenExpiration(),
+                TimeUnit.MILLISECONDS);
+
+        String userTokensKey = USER_TOKENS_PREFIX + user.getId();
+        redisTemplate.opsForSet().add(userTokensKey, tokenId);
+        redisTemplate.expire(userTokensKey, jwtServiceImpl.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
+
+        setTokenCookie(response, AccessToken, accessToken, jwtServiceImpl.getAccessTokenExpiration());
+        setTokenCookie(response, RefreshToken, refreshToken, jwtServiceImpl.getRefreshTokenExpiration());
     }
 
     // Revoke all active tokens for current user session scope.

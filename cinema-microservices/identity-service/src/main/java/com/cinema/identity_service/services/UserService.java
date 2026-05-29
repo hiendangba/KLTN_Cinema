@@ -3,6 +3,7 @@ package com.cinema.identity_service.services;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.identity_service.dto.request.ChangePasswordRequest;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
+import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
@@ -27,6 +28,8 @@ public interface UserService {
     ActionMessageResponse changePassword(ChangePasswordRequest changePasswordRequest, HttpServletRequest request);
 
     ActionMessageResponse login(LoginRequest loginRequest, HttpServletResponse response);
+
+    ActionMessageResponse googleLogin(GoogleLoginRequest googleLoginRequest, HttpServletResponse response);
 
     ActionMessageResponse logout(HttpServletRequest request, HttpServletResponse response);
 
