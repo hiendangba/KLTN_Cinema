@@ -11,6 +11,7 @@ service BookingInternalService {
   rpc GetSeatRuntimeStates(GetSeatRuntimeStatesRequest) returns (GetSeatRuntimeStatesReply);
   rpc HasActiveBookingByShowtimeIds(HasActiveBookingByShowtimeIdsRequest) returns (HasActiveBookingByShowtimeIdsReply);
   rpc GetBookingPaymentContext(GetBookingPaymentContextRequest) returns (GetBookingPaymentContextReply);
+  rpc UpsertBookingPromotionSnapshot(UpsertBookingPromotionSnapshotRequest) returns (UpsertBookingPromotionSnapshotReply);
   rpc ConfirmBookingPayment(ConfirmBookingPaymentRequest) returns (ConfirmBookingPaymentReply);
 }
 
@@ -69,9 +70,30 @@ message BookingPaymentContextPayload {
   string ticket_subtotal = 9;
   string product_subtotal = 10;
   string film_id = 11;
+  string promotion_id = 12;
+  string promotion_code = 13;
+  string promotion_name = 14;
+  string promotion_discount_amount = 15;
+  string payable_amount = 16;
 }
 
 message GetBookingPaymentContextReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  BookingPaymentContextPayload booking = 4;
+}
+
+message UpsertBookingPromotionSnapshotRequest {
+  string booking_id = 1;
+  string promotion_id = 2;
+  string promotion_code = 3;
+  string promotion_name = 4;
+  string promotion_discount_amount = 5;
+  string payable_amount = 6;
+}
+
+message UpsertBookingPromotionSnapshotReply {
   bool success = 1;
   string error_key = 2;
   string message = 3;

@@ -91,7 +91,12 @@ class PaymentSessionServiceImplTest {
                 "PENDING",
                 "UNPAID",
                 BigDecimal.valueOf(150000),
-                BigDecimal.valueOf(30000));
+                BigDecimal.valueOf(30000),
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(180000));
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
@@ -119,6 +124,13 @@ class PaymentSessionServiceImplTest {
         assertEquals(filmId, saved.getFilmId());
         assertEquals("https://momo.example.com/pay", response.getPayUrl());
         assertEquals("https://momo.example.com/pay", saved.getPayUrl());
+        verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
+                bookingId,
+                null,
+                null,
+                null,
+                BigDecimal.ZERO.setScale(0),
+                BigDecimal.valueOf(180000).setScale(0));
     }
 
     @Test
@@ -140,7 +152,12 @@ class PaymentSessionServiceImplTest {
                 "PENDING",
                 "UNPAID",
                 BigDecimal.valueOf(150000),
-                BigDecimal.valueOf(30000));
+                BigDecimal.valueOf(30000),
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(180000));
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
@@ -153,6 +170,7 @@ class PaymentSessionServiceImplTest {
                         "https://momo.example.com/qr",
                         "{}",
                         "{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}"));
+        UUID promotionId = UUID.randomUUID();
         when(promotionEngine.resolvePromotionForCheckout(
                 "CINEMASTAR10",
                 BigDecimal.valueOf(180000),
@@ -163,7 +181,7 @@ class PaymentSessionServiceImplTest {
                         "CinemaStar 10%",
                         BigDecimal.valueOf(18000),
                         "Applied 10% discount",
-                        UUID.randomUUID()));
+                        promotionId));
 
         CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
         request.setBookingId(bookingId);
@@ -181,6 +199,13 @@ class PaymentSessionServiceImplTest {
         assertEquals(BigDecimal.valueOf(18000), saved.getPromotionDiscountAmount());
         assertEquals(BigDecimal.valueOf(162000), saved.getAmount());
         assertEquals(BigDecimal.valueOf(162000), response.getAmount());
+        verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
+                bookingId,
+                promotionId,
+                "CINEMASTAR10",
+                "CinemaStar 10%",
+                BigDecimal.valueOf(18000).setScale(0),
+                BigDecimal.valueOf(162000).setScale(0));
     }
 
     @Test

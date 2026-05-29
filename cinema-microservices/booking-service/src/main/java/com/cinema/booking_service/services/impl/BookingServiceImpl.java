@@ -159,6 +159,8 @@ public class BookingServiceImpl implements BookingService {
         booking.setProductSubtotal(productSubtotal);
 
         booking.setFinalAmount(ticketSubtotal.add(productSubtotal));
+        booking.setPromotionDiscountAmount(BigDecimal.ZERO);
+        booking.setPayableAmount(booking.getFinalAmount());
 
         Duration ttl = Duration.ofMinutes(seatLockMinutes);
         boolean locked = seatLockService.tryLockSeats(request.getShowtimeId(), normalizedSeatCodes, booking.getId(), ttl);
@@ -343,7 +345,9 @@ public class BookingServiceImpl implements BookingService {
                         "Confirmed Count",
                         "Ticket Subtotal Amount",
                         "Product Subtotal Amount",
-                        "Gross Amount"),
+                        "Gross Amount",
+                        "Promotion Discount Amount",
+                        "Payable Amount"),
                 items.stream()
                         .map(item -> Arrays.asList(
                                 item.cinemaId(),
@@ -354,7 +358,9 @@ public class BookingServiceImpl implements BookingService {
                                 item.confirmedCount(),
                                 item.ticketSubtotalAmount(),
                                 item.productSubtotalAmount(),
-                                item.grossAmount()))
+                                item.grossAmount(),
+                                item.promotionDiscountAmount(),
+                                item.payableAmount()))
                         .toList());
     }
 
@@ -1082,6 +1088,8 @@ public class BookingServiceImpl implements BookingService {
                         .ticketSubtotalAmount(BigDecimal.ZERO)
                         .productSubtotalAmount(BigDecimal.ZERO)
                         .grossAmount(BigDecimal.ZERO)
+                        .promotionDiscountAmount(BigDecimal.ZERO)
+                        .payableAmount(BigDecimal.ZERO)
                         .build())
                 .toList();
     }
@@ -1258,6 +1266,8 @@ public class BookingServiceImpl implements BookingService {
             case TICKET_SUBTOTAL_AMOUNT -> item.ticketSubtotalAmount();
             case PRODUCT_SUBTOTAL_AMOUNT -> item.productSubtotalAmount();
             case GROSS_AMOUNT -> item.grossAmount();
+            case PROMOTION_DISCOUNT_AMOUNT -> item.promotionDiscountAmount();
+            case PAYABLE_AMOUNT -> item.payableAmount();
         };
     }
 
@@ -1312,6 +1322,8 @@ public class BookingServiceImpl implements BookingService {
                     .ticketSubtotalAmount(BigDecimal.ZERO)
                     .productSubtotalAmount(BigDecimal.ZERO)
                     .grossAmount(BigDecimal.ZERO)
+                    .promotionDiscountAmount(BigDecimal.ZERO)
+                    .payableAmount(BigDecimal.ZERO)
                     .build();
         }
 
@@ -1322,6 +1334,8 @@ public class BookingServiceImpl implements BookingService {
         BigDecimal ticketSubtotalAmount = BigDecimal.ZERO;
         BigDecimal productSubtotalAmount = BigDecimal.ZERO;
         BigDecimal grossAmount = BigDecimal.ZERO;
+        BigDecimal promotionDiscountAmount = BigDecimal.ZERO;
+        BigDecimal payableAmount = BigDecimal.ZERO;
 
         for (BookingRevenueItemResponse item : items) {
             if (item == null) {
@@ -1334,6 +1348,8 @@ public class BookingServiceImpl implements BookingService {
             ticketSubtotalAmount = ticketSubtotalAmount.add(nvl(item.ticketSubtotalAmount()));
             productSubtotalAmount = productSubtotalAmount.add(nvl(item.productSubtotalAmount()));
             grossAmount = grossAmount.add(nvl(item.grossAmount()));
+            promotionDiscountAmount = promotionDiscountAmount.add(nvl(item.promotionDiscountAmount()));
+            payableAmount = payableAmount.add(nvl(item.payableAmount()));
         }
 
         return BookingRevenueSummaryResponse.builder()
@@ -1344,11 +1360,23 @@ public class BookingServiceImpl implements BookingService {
                 .ticketSubtotalAmount(ticketSubtotalAmount)
                 .productSubtotalAmount(productSubtotalAmount)
                 .grossAmount(grossAmount)
+                .promotionDiscountAmount(promotionDiscountAmount)
+                .payableAmount(payableAmount)
                 .build();
     }
 
     private static BigDecimal nvl(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
+    }
+
+    private static BigDecimal resolvePayableAmount(Booking booking) {
+        if (booking == null) {
+            return BigDecimal.ZERO;
+        }
+        if (booking.getPayableAmount() != null) {
+            return booking.getPayableAmount();
+        }
+        return nvl(booking.getFinalAmount()).subtract(nvl(booking.getPromotionDiscountAmount()));
     }
 
     private List<UUID> normalizeUuidList(Collection<UUID> values) {
@@ -1372,6 +1400,8 @@ public class BookingServiceImpl implements BookingService {
         private BigDecimal ticketSubtotalAmount = BigDecimal.ZERO;
         private BigDecimal productSubtotalAmount = BigDecimal.ZERO;
         private BigDecimal grossAmount = BigDecimal.ZERO;
+        private BigDecimal promotionDiscountAmount = BigDecimal.ZERO;
+        private BigDecimal payableAmount = BigDecimal.ZERO;
 
         private BookingRevenueAccumulator(UUID cinemaId, String cinemaName) {
             this.cinemaId = cinemaId;
@@ -1393,6 +1423,8 @@ public class BookingServiceImpl implements BookingService {
             ticketSubtotalAmount = ticketSubtotalAmount.add(BookingServiceImpl.nvl(booking.getTicketSubtotal()));
             productSubtotalAmount = productSubtotalAmount.add(BookingServiceImpl.nvl(booking.getProductSubtotal()));
             grossAmount = grossAmount.add(BookingServiceImpl.nvl(booking.getFinalAmount()));
+            promotionDiscountAmount = promotionDiscountAmount.add(BookingServiceImpl.nvl(booking.getPromotionDiscountAmount()));
+            payableAmount = payableAmount.add(BookingServiceImpl.resolvePayableAmount(booking));
         }
 
         private BookingRevenueItemResponse toResponse() {
@@ -1406,6 +1438,8 @@ public class BookingServiceImpl implements BookingService {
                     .ticketSubtotalAmount(ticketSubtotalAmount)
                     .productSubtotalAmount(productSubtotalAmount)
                     .grossAmount(grossAmount)
+                    .promotionDiscountAmount(promotionDiscountAmount)
+                    .payableAmount(payableAmount)
                     .build();
         }
     }
@@ -1608,5 +1642,3 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 }
-
-

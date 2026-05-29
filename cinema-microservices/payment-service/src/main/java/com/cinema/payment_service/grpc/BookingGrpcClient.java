@@ -9,6 +9,8 @@ import com.cinema.grpc.booking.ConfirmBookingPaymentReply;
 import com.cinema.grpc.booking.ConfirmBookingPaymentRequest;
 import com.cinema.grpc.booking.GetBookingPaymentContextReply;
 import com.cinema.grpc.booking.GetBookingPaymentContextRequest;
+import com.cinema.grpc.booking.UpsertBookingPromotionSnapshotReply;
+import com.cinema.grpc.booking.UpsertBookingPromotionSnapshotRequest;
 import io.grpc.StatusRuntimeException;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.stereotype.Component;
@@ -68,6 +70,33 @@ public class BookingGrpcClient {
         }
     }
 
+    public BookingPaymentContext upsertBookingPromotionSnapshot(UUID bookingId,
+                                                                UUID promotionId,
+                                                                String promotionCode,
+                                                                String promotionName,
+                                                                BigDecimal promotionDiscountAmount,
+                                                                BigDecimal payableAmount) {
+        try {
+            UpsertBookingPromotionSnapshotReply reply = bookingBlockingStub.upsertBookingPromotionSnapshot(
+                    UpsertBookingPromotionSnapshotRequest.newBuilder()
+                            .setBookingId(bookingId == null ? "" : bookingId.toString())
+                            .setPromotionId(promotionId == null ? "" : promotionId.toString())
+                            .setPromotionCode(promotionCode == null ? "" : promotionCode)
+                            .setPromotionName(promotionName == null ? "" : promotionName)
+                            .setPromotionDiscountAmount(promotionDiscountAmount == null ? "0" : promotionDiscountAmount.toPlainString())
+                            .setPayableAmount(payableAmount == null ? "0" : payableAmount.toPlainString())
+                            .build());
+
+            if (!reply.getSuccess()) {
+                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.BOOKING_SERVICE_ERROR));
+            }
+
+            return toContext(reply.getBooking());
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
+        }
+    }
+
     private BookingPaymentContext toContext(BookingPaymentContextPayload payload) {
         if (payload == null || payload.getBookingId().isBlank()) {
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
@@ -85,7 +114,12 @@ public class BookingGrpcClient {
                     payload.getBookingStatus(),
                     payload.getPaymentStatus(),
                     parseAmount(payload.getTicketSubtotal()),
-                    parseAmount(payload.getProductSubtotal()));
+                    parseAmount(payload.getProductSubtotal()),
+                    parseNullableUuid(payload.getPromotionId()),
+                    blankToNull(payload.getPromotionCode()),
+                    blankToNull(payload.getPromotionName()),
+                    parseAmount(payload.getPromotionDiscountAmount()),
+                    parseAmount(payload.getPayableAmount()));
         } catch (Exception ex) {
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
@@ -110,6 +144,10 @@ public class BookingGrpcClient {
         }
     }
 
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
     public record BookingPaymentContext(
             UUID bookingId,
             UUID showtimeId,
@@ -121,7 +159,12 @@ public class BookingGrpcClient {
             String bookingStatus,
             String paymentStatus,
             BigDecimal ticketSubtotal,
-            BigDecimal productSubtotal) {
+            BigDecimal productSubtotal,
+            UUID promotionId,
+            String promotionCode,
+            String promotionName,
+            BigDecimal promotionDiscountAmount,
+            BigDecimal payableAmount) {
     }
 
     public record BookingPaymentConfirmation(BookingPaymentContext booking) {

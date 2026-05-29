@@ -2,6 +2,7 @@ package com.cinema.booking_service.dto.response;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -16,6 +17,10 @@ public class PaymentSessionSnapshotResponse {
     private String providerRef;
     private String payUrl;
     private String status;
+    private BigDecimal amount;
+    private String promotionCode;
+    private String promotionName;
+    private BigDecimal promotionDiscountAmount;
     private LocalDateTime expiresAt;
     private LocalDateTime paidAt;
     private LocalDateTime expiredAt;

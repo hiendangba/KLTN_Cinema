@@ -12,6 +12,8 @@ public interface PaymentTransactionPromotionRepository extends JpaRepository<Pay
 
     List<PaymentTransactionPromotion> findAllByPaymentTransactionId(UUID paymentTransactionId);
 
+    List<PaymentTransactionPromotion> findAllByPaymentTransactionIdOrderByApplyOrderAsc(UUID paymentTransactionId);
+
     List<PaymentTransactionPromotion> findAllByPaymentTransactionIdIn(Collection<UUID> paymentTransactionIds, Sort sort);
 
     void deleteByPaymentTransactionId(UUID paymentTransactionId);

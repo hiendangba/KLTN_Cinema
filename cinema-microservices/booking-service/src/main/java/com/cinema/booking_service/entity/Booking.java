@@ -74,6 +74,21 @@ public class Booking {
     @Column(name = "final_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal finalAmount;
 
+    @Column(name = "promotion_id", columnDefinition = "uuid")
+    private UUID promotionId;
+
+    @Column(name = "promotion_code", length = 80)
+    private String promotionCode;
+
+    @Column(name = "promotion_name", length = 120)
+    private String promotionName;
+
+    @Column(name = "promotion_discount_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal promotionDiscountAmount;
+
+    @Column(name = "payable_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal payableAmount;
+
     @Column(name = "is_deleted", nullable = false)
     private Boolean isDeleted;
 
@@ -111,6 +126,12 @@ public class Booking {
         }
         if (finalAmount == null) {
             finalAmount = BigDecimal.ZERO;
+        }
+        if (promotionDiscountAmount == null) {
+            promotionDiscountAmount = BigDecimal.ZERO;
+        }
+        if (payableAmount == null) {
+            payableAmount = finalAmount.subtract(promotionDiscountAmount);
         }
         if (isDeleted == null) {
             isDeleted = false;

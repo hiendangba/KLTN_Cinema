@@ -112,6 +112,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         if (latest != null) {
             ensureRequesterOwnsTransaction(latest, requesterUserId);
             if (isReusable(latest, bookingContext) && canReuseLatestTransaction(latest, requestedPromotionCode)) {
+                syncBookingPromotionSnapshot(bookingContext, latest, null);
                 return toResponse(latest);
             }
         }
@@ -136,6 +137,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 requestedPromotionCode,
                 bookingContext,
                 requesterUserId);
+        syncBookingPromotionSnapshot(bookingContext, transaction, appliedPromotions);
 
         MomoPaymentGatewayClient.MomoCheckoutResult checkoutResult = momoPaymentGatewayClient.createCheckout(
                 transaction,
@@ -625,6 +627,40 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setPromotionDiscountAmount(sumPromotionDiscountQuotes(appliedPromotions));
         transaction.setAmount(normalizeAmount(baseAmount.subtract(transaction.getPromotionDiscountAmount())));
         return appliedPromotions;
+    }
+
+    private void syncBookingPromotionSnapshot(BookingGrpcClient.BookingPaymentContext bookingContext,
+                                              PaymentTransaction transaction,
+                                              List<PromotionQuote> appliedPromotions) {
+        if (bookingContext == null || transaction == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        UUID promotionId = resolvePromotionIdForSnapshot(transaction, appliedPromotions);
+        bookingGrpcClient.upsertBookingPromotionSnapshot(
+                bookingContext.bookingId(),
+                promotionId,
+                transaction.getPromotionCode(),
+                transaction.getPromotionName(),
+                normalizeAmount(transaction.getPromotionDiscountAmount()),
+                normalizeAmount(transaction.getAmount()));
+    }
+
+    private UUID resolvePromotionIdForSnapshot(PaymentTransaction transaction, List<PromotionQuote> appliedPromotions) {
+        if (appliedPromotions != null) {
+            return appliedPromotions.stream()
+                    .filter(quote -> quote != null && StringUtils.hasText(quote.promotionCode()))
+                    .map(PromotionQuote::promotionId)
+                    .filter(id -> id != null)
+                    .findFirst()
+                    .orElse(null);
+        }
+        List<PaymentTransactionPromotion> snapshots = paymentTransactionPromotionRepository
+                .findAllByPaymentTransactionIdOrderByApplyOrderAsc(transaction.getId());
+        return snapshots.stream()
+                .map(PaymentTransactionPromotion::getPromotionId)
+                .filter(id -> id != null)
+                .findFirst()
+                .orElse(null);
     }
 
     private void savePromotionSnapshots(PaymentTransaction transaction, List<PromotionQuote> appliedPromotions) {

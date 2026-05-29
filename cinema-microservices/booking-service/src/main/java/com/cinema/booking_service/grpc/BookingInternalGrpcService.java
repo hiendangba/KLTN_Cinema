@@ -19,6 +19,8 @@ import com.cinema.grpc.booking.GetBookingPaymentContextRequest;
 import com.cinema.grpc.booking.HasActiveBookingByShowtimeIdsReply;
 import com.cinema.grpc.booking.HasActiveBookingByShowtimeIdsRequest;
 import com.cinema.grpc.booking.SeatRuntimeStatePayload;
+import com.cinema.grpc.booking.UpsertBookingPromotionSnapshotReply;
+import com.cinema.grpc.booking.UpsertBookingPromotionSnapshotRequest;
 import com.cinema.booking_service.entity.Booking;
 import com.cinema.booking_service.services.SeatLockService;
 import io.grpc.BindableService;
@@ -137,9 +139,7 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                 return;
             }
 
-            BigDecimal expectedAmount = booking.getFinalAmount() == null
-                    ? BigDecimal.ZERO
-                    : booking.getFinalAmount().setScale(0, RoundingMode.HALF_UP);
+            BigDecimal expectedAmount = resolvePayableAmount(booking);
             BigDecimal normalizedTransactionAmount = transactionAmount.setScale(0, RoundingMode.HALF_UP);
             if (expectedAmount.compareTo(normalizedTransactionAmount) != 0) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST);
@@ -166,6 +166,64 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while confirming booking payment", ex);
             responseObserver.onNext(ConfirmBookingPaymentReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    @Transactional
+    public void upsertBookingPromotionSnapshot(UpsertBookingPromotionSnapshotRequest request,
+                                               StreamObserver<UpsertBookingPromotionSnapshotReply> responseObserver) {
+        UUID bookingId;
+        try {
+            bookingId = UUID.fromString(request.getBookingId());
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(buildPromotionSnapshotError(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+            return;
+        }
+
+        try {
+            Booking booking = bookingRepository.findLockedByIdAndIsDeletedFalse(bookingId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+
+            BigDecimal grossAmount = normalizeAmount(booking.getFinalAmount());
+            BigDecimal discountAmount = parseAmount(request.getPromotionDiscountAmount()).setScale(0, RoundingMode.HALF_UP);
+            BigDecimal payableAmount = parseAmount(request.getPayableAmount()).setScale(0, RoundingMode.HALF_UP);
+
+            if (discountAmount.compareTo(BigDecimal.ZERO) < 0
+                    || payableAmount.compareTo(BigDecimal.ZERO) < 0
+                    || grossAmount.subtract(discountAmount).setScale(0, RoundingMode.HALF_UP).compareTo(payableAmount) != 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST);
+            }
+
+            booking.setPromotionId(parseNullableUuid(request.getPromotionId()));
+            booking.setPromotionCode(blankToNull(request.getPromotionCode()));
+            booking.setPromotionName(blankToNull(request.getPromotionName()));
+            booking.setPromotionDiscountAmount(discountAmount);
+            booking.setPayableAmount(payableAmount);
+            bookingRepository.save(booking);
+
+            responseObserver.onNext(UpsertBookingPromotionSnapshotReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Booking promotion snapshot updated successfully")
+                    .setBooking(toPaymentContextPayload(booking))
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(UpsertBookingPromotionSnapshotReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while updating booking promotion snapshot", ex);
+            responseObserver.onNext(UpsertBookingPromotionSnapshotReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
@@ -353,6 +411,14 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                 .build();
     }
 
+    private UpsertBookingPromotionSnapshotReply buildPromotionSnapshotError(ErrorCode errorCode) {
+        return UpsertBookingPromotionSnapshotReply.newBuilder()
+                .setSuccess(false)
+                .setErrorKey(errorCode.name())
+                .setMessage(errorCode.getMessage())
+                .build();
+    }
+
     private BookingPaymentContextPayload toPaymentContextPayload(Booking booking) {
         return BookingPaymentContextPayload.newBuilder()
                 .setBookingId(booking.getId() == null ? "" : booking.getId().toString())
@@ -366,7 +432,49 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                 .setPaymentStatus(booking.getPaymentStatus() == null ? "" : booking.getPaymentStatus().name())
                 .setTicketSubtotal(booking.getTicketSubtotal() == null ? "0" : booking.getTicketSubtotal().toPlainString())
                 .setProductSubtotal(booking.getProductSubtotal() == null ? "0" : booking.getProductSubtotal().toPlainString())
+                .setPromotionId(booking.getPromotionId() == null ? "" : booking.getPromotionId().toString())
+                .setPromotionCode(booking.getPromotionCode() == null ? "" : booking.getPromotionCode())
+                .setPromotionName(booking.getPromotionName() == null ? "" : booking.getPromotionName())
+                .setPromotionDiscountAmount(booking.getPromotionDiscountAmount() == null ? "0" : booking.getPromotionDiscountAmount().toPlainString())
+                .setPayableAmount(resolvePayableAmount(booking).toPlainString())
                 .build();
+    }
+
+    private BigDecimal parseAmount(String rawAmount) {
+        try {
+            return rawAmount == null || rawAmount.isBlank() ? BigDecimal.ZERO : new BigDecimal(rawAmount);
+        } catch (Exception ex) {
+            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+        }
+    }
+
+    private BigDecimal normalizeAmount(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount.setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private BigDecimal resolvePayableAmount(Booking booking) {
+        if (booking == null) {
+            return BigDecimal.ZERO;
+        }
+        if (booking.getPayableAmount() != null) {
+            return normalizeAmount(booking.getPayableAmount());
+        }
+        return normalizeAmount(booking.getFinalAmount()).subtract(normalizeAmount(booking.getPromotionDiscountAmount()));
+    }
+
+    private UUID parseNullableUuid(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (Exception ex) {
+            throw new BusinessException(ErrorCode.INVALID_FORMAT);
+        }
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private List<String> extractSeatCodes(List<com.cinema.booking_service.entity.BookingSeatItem> seatItems) {

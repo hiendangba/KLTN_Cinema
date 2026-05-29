@@ -26,6 +26,11 @@ public class BookingResponse {
     private BigDecimal ticketSubtotal;
     private BigDecimal productSubtotal;
     private BigDecimal finalAmount;
+    private UUID promotionId;
+    private String promotionCode;
+    private String promotionName;
+    private BigDecimal promotionDiscountAmount;
+    private BigDecimal payableAmount;
     private LocalDateTime reservedUntil;
     private List<BookingSeatItemResponse> seatItems;
     private List<BookingProductItemResponse> productItems;

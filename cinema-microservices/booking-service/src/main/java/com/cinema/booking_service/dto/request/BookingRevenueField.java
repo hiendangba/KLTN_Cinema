@@ -18,7 +18,9 @@ public enum BookingRevenueField {
     CONFIRMED_COUNT("confirmedCount", Long.class),
     TICKET_SUBTOTAL_AMOUNT("ticketSubtotalAmount", BigDecimal.class),
     PRODUCT_SUBTOTAL_AMOUNT("productSubtotalAmount", BigDecimal.class),
-    GROSS_AMOUNT("grossAmount", BigDecimal.class);
+    GROSS_AMOUNT("grossAmount", BigDecimal.class),
+    PROMOTION_DISCOUNT_AMOUNT("promotionDiscountAmount", BigDecimal.class),
+    PAYABLE_AMOUNT("payableAmount", BigDecimal.class);
 
     private final String reportField;
     private final Class<?> dataType;

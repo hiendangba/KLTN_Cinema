@@ -12,5 +12,7 @@ public record BookingRevenueSummaryResponse(
         long confirmedCount,
         BigDecimal ticketSubtotalAmount,
         BigDecimal productSubtotalAmount,
-        BigDecimal grossAmount) {
+        BigDecimal grossAmount,
+        BigDecimal promotionDiscountAmount,
+        BigDecimal payableAmount) {
 }
