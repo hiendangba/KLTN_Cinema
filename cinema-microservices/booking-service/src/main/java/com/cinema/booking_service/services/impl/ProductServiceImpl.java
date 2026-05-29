@@ -118,7 +118,10 @@ public class ProductServiceImpl implements ProductService {
         }
 
         validateOperatorRole(httpRequest);
-        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUserForRead(httpRequest);
+        if (accessibleCinemaIds.isEmpty()) {
+            return emptyProductPageResponse(request);
+        }
         return getPagedProductsByCinemaIds(accessibleCinemaIds, request);
     }
 
@@ -177,6 +180,20 @@ public class ProductServiceImpl implements ProductService {
                 .size(size)
                 .hasNext(productPage.hasNext())
                 .hasPrevious(productPage.hasPrevious())
+                .build();
+    }
+
+    private PageResponse<ProductResponse> emptyProductPageResponse(PageRequest<ProductField> request) {
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        return PageResponse.<ProductResponse>builder()
+                .data(List.of())
+                .currentPage(page)
+                .totalPages(0)
+                .totalElements(0)
+                .size(size)
+                .hasNext(false)
+                .hasPrevious(page > 1)
                 .build();
     }
 
@@ -240,6 +257,22 @@ public class ProductServiceImpl implements ProductService {
                     || ex.getErrorCode() == ErrorCode.NOT_FOUND
                     || ex.getErrorCode() == ErrorCode.USER_NOT_FOUND) {
                 throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            throw ex;
+        }
+    }
+
+    private Set<UUID> resolveAccessibleCinemaIdsByUserForRead(HttpServletRequest httpRequest) {
+        try {
+            UUID userId = RequestAuthUtils.requireUserId(httpRequest);
+            String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+            List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
+            return new HashSet<>(cinemaIds == null ? List.of() : cinemaIds);
+        } catch (BusinessException ex) {
+            if (ex.getErrorCode() == ErrorCode.CINEMA_NOT_FOUND
+                    || ex.getErrorCode() == ErrorCode.NOT_FOUND
+                    || ex.getErrorCode() == ErrorCode.USER_NOT_FOUND) {
+                return Set.of();
             }
             throw ex;
         }
