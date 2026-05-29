@@ -39,8 +39,9 @@ public class ShowTimeController extends BaseController {
 
     @PostMapping("/search")
     public ResponseEntity<APIResponse<PageResponse<ShowTimeResponse>>> searchShowtimes(
-            @Valid @RequestBody PageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request) {
-        PageResponse<ShowTimeResponse> response = showTimeService.searchShowtimes(request);
+            @Valid @RequestBody PageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request,
+            HttpServletRequest httpRequest) {
+        PageResponse<ShowTimeResponse> response = showTimeService.searchShowtimes(request, httpRequest);
         return ok(response);
     }
 

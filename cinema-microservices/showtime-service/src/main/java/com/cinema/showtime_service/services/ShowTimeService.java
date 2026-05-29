@@ -27,7 +27,8 @@ public interface ShowTimeService {
     ActionMessageResponse deleteShowTime(UUID id, HttpServletRequest httpRequest);
 
     PageResponse<ShowTimeResponse> searchShowtimes(
-            PageRequest<ShowTimeField> request);
+            PageRequest<ShowTimeField> request,
+            HttpServletRequest httpRequest);
 
     ShowTimeResponse getShowTimeById(UUID id);
 

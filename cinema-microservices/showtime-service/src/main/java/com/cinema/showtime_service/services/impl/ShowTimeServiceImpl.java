@@ -75,8 +75,13 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ShowTimeResponse> searchShowtimes(PageRequest<ShowTimeField> request) {
-        return enrichShowtimePage(searchShowtimesBase(request));
+    public PageResponse<ShowTimeResponse> searchShowtimes(PageRequest<ShowTimeField> request,
+                                                          HttpServletRequest httpRequest) {
+        PageRequest<ShowTimeField> scopedRequest = scopeShowtimeSearchRequest(request, httpRequest);
+        if (scopedRequest == null) {
+            return emptyShowtimePageResponse(request);
+        }
+        return enrichShowtimePage(searchShowtimesBase(scopedRequest));
     }
 
     @Override
@@ -128,6 +133,63 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 .totalElements(totalElements)
                 .size(size)
                 .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .build();
+    }
+
+    private PageRequest<ShowTimeField> scopeShowtimeSearchRequest(PageRequest<ShowTimeField> request,
+                                                                  HttpServletRequest httpRequest) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        RequestAuthUtils.requireAnyRole(
+                httpRequest,
+                log,
+                "showtime_read_action",
+                HeaderNames.ROLE_ADMIN,
+                HeaderNames.ROLE_MANAGER,
+                HeaderNames.ROLE_STAFF);
+
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return request;
+        }
+
+        Set<UUID> accessibleHallIds = resolveAccessibleHallIdsByUser(httpRequest);
+        if (accessibleHallIds.isEmpty()) {
+            return null;
+        }
+
+        List<FilterField<ShowTimeField>> filters = new ArrayList<>();
+        if (request.getFilterBy() != null) {
+            filters.addAll(request.getFilterBy());
+        }
+        filters.add(FilterField.<ShowTimeField>builder()
+                .field(ShowTimeField.HALL_ID)
+                .operator("IN")
+                .value(accessibleHallIds.stream().map(UUID::toString).toList())
+                .build());
+
+        return PageRequest.<ShowTimeField>builder()
+                .page(request.getPage())
+                .size(request.getSize())
+                .keyword(request.getKeyword())
+                .sortBy(request.getSortBy())
+                .filterBy(filters)
+                .build();
+    }
+
+    private PageResponse<ShowTimeResponse> emptyShowtimePageResponse(PageRequest<ShowTimeField> request) {
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        return PageResponse.<ShowTimeResponse>builder()
+                .data(List.of())
+                .currentPage(page)
+                .totalPages(0)
+                .totalElements(0)
+                .size(size)
+                .hasNext(false)
                 .hasPrevious(page > 1)
                 .build();
     }
@@ -501,6 +563,24 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             }
             throw ex;
         }
+    }
+
+    private Set<UUID> resolveAccessibleHallIdsByUser(HttpServletRequest httpRequest) {
+        UUID userId = RequestAuthUtils.requireUserId(httpRequest);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
+        if (cinemaIds == null || cinemaIds.isEmpty()) {
+            return Set.of();
+        }
+
+        Set<UUID> hallIds = new HashSet<>();
+        for (UUID cinemaId : cinemaIds) {
+            if (cinemaId == null) {
+                continue;
+            }
+            hallIds.addAll(hallGrpcClient.listActiveHallIdsByCinema(cinemaId));
+        }
+        return hallIds;
     }
 
     private Long resolvePriceBySeatType(String seatType, PricingPolicy pricingPolicy) {
