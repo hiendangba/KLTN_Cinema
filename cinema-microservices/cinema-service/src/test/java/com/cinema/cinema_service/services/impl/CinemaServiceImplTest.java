@@ -6,6 +6,7 @@ import com.cinema.cinema_service.dto.request.UpdateCinemaRequest;
 import com.cinema.cinema_service.dto.response.CinemaResponse;
 import com.cinema.cinema_service.entity.Cinema;
 import com.cinema.cinema_service.entity.CinemaStaff;
+import com.cinema.cinema_service.enums.CinemaStatus;
 import com.cinema.cinema_service.grpc.UserGrpcClient;
 import com.cinema.cinema_service.mapper.CinemaMapper;
 import com.cinema.cinema_service.repository.CinemaRepository;
@@ -104,6 +105,8 @@ class CinemaServiceImplTest {
         MockHttpServletRequest request = managerRequest(managerId);
         Cinema first = cinema("CINEMA-1", managerId);
         Cinema second = cinema("CINEMA-2", managerId);
+        first.setStatus(CinemaStatus.ACTIVE);
+        second.setStatus(CinemaStatus.ACTIVE);
         first.setCreatedAt(LocalDateTime.now().minusDays(1));
         second.setCreatedAt(LocalDateTime.now());
 
@@ -132,6 +135,37 @@ class CinemaServiceImplTest {
     }
 
     @Test
+    void getMyManagedCinemas_excludesInactiveCinemasForManager() {
+        UUID managerId = UUID.randomUUID();
+        MockHttpServletRequest request = managerRequest(managerId);
+        Cinema activeCinema = cinema("ACTIVE-CINEMA", managerId);
+        Cinema inactiveCinema = cinema("INACTIVE-CINEMA", managerId);
+        activeCinema.setStatus(CinemaStatus.ACTIVE);
+        inactiveCinema.setStatus(CinemaStatus.INACTIVE);
+        activeCinema.setCreatedAt(LocalDateTime.now());
+        inactiveCinema.setCreatedAt(LocalDateTime.now().minusDays(1));
+
+        when(cinemaRepository.findAllByManagerIdAndIsDeletedFalseOrderByCreatedAtDesc(managerId))
+                .thenReturn(List.of(activeCinema, inactiveCinema));
+        when(cinemaStaffRepository.findByCinemaIdInAndActiveTrue(anyList())).thenReturn(List.of());
+        when(cinemaMapper.toResponse(any(Cinema.class), anyList())).thenAnswer(invocation -> {
+            Cinema cinema = invocation.getArgument(0);
+            return CinemaResponse.builder()
+                    .id(cinema.getId())
+                    .code(cinema.getCode())
+                    .name(cinema.getName())
+                    .managerId(cinema.getManagerId())
+                    .build();
+        });
+        when(userGrpcClient.getUserNameById(managerId)).thenReturn("Manager One");
+
+        List<CinemaResponse> responses = cinemaService.getMyManagedCinemas(request);
+
+        assertThat(responses).hasSize(1);
+        assertThat(responses.get(0).getName()).isEqualTo("ACTIVE-CINEMA");
+    }
+
+    @Test
     void getMyManagedCinemas_returnsAssignedCinemaForStaff() {
         UUID managerId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
@@ -139,6 +173,7 @@ class CinemaServiceImplTest {
         MockHttpServletRequest request = staffRequest(staffId);
         Cinema cinema = cinema("STAFF-CINEMA", managerId);
         cinema.setId(cinemaId);
+        cinema.setStatus(CinemaStatus.ACTIVE);
         CinemaStaff staffLink = cinemaStaff(cinemaId, staffId, true);
 
         when(cinemaStaffRepository.findByStaffId(staffId)).thenReturn(Optional.of(staffLink));
@@ -157,6 +192,32 @@ class CinemaServiceImplTest {
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getId()).isEqualTo(cinemaId);
         assertThat(responses.get(0).getManagerName()).isEqualTo("Manager One");
+    }
+
+    @Test
+    void getMyManagedCinemas_excludesInactiveCinemaForStaff() {
+        UUID managerId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        MockHttpServletRequest request = staffRequest(staffId);
+        Cinema cinema = cinema("STAFF-CINEMA", managerId);
+        cinema.setId(cinemaId);
+        cinema.setStatus(CinemaStatus.INACTIVE);
+        CinemaStaff staffLink = cinemaStaff(cinemaId, staffId, true);
+
+        when(cinemaStaffRepository.findByStaffId(staffId)).thenReturn(Optional.of(staffLink));
+        when(cinemaRepository.findByIdAndIsDeletedFalse(cinemaId)).thenReturn(Optional.of(cinema));
+        when(cinemaMapper.toResponse(any(Cinema.class), anyList())).thenReturn(CinemaResponse.builder()
+                .id(cinemaId)
+                .code(cinema.getCode())
+                .name(cinema.getName())
+                .managerId(managerId)
+                .build());
+        when(userGrpcClient.getUserNameById(managerId)).thenReturn("Manager One");
+
+        List<CinemaResponse> responses = cinemaService.getMyManagedCinemas(request);
+
+        assertThat(responses).isEmpty();
     }
 
     @Test
@@ -368,6 +429,7 @@ class CinemaServiceImplTest {
         cinema.setPhone("0912345678");
         cinema.setOpenTime(LocalTime.of(8, 0));
         cinema.setCloseTime(LocalTime.of(22, 0));
+        cinema.setStatus(CinemaStatus.ACTIVE);
         cinema.setManagerId(managerId);
         cinema.setIsDeleted(false);
         cinema.setCreatedAt(LocalDateTime.now());

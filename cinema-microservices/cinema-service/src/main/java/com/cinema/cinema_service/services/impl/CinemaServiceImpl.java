@@ -9,6 +9,7 @@ import com.cinema.cinema_service.dto.response.CinemaResponse;
 import com.cinema.cinema_service.dto.response.CinemaStaffResponse;
 import com.cinema.cinema_service.entity.Cinema;
 import com.cinema.cinema_service.entity.CinemaStaff;
+import com.cinema.cinema_service.enums.CinemaStatus;
 import com.cinema.cinema_service.grpc.BookingGrpcClient;
 import com.cinema.cinema_service.grpc.HallGrpcClient;
 import com.cinema.cinema_service.grpc.ShowtimeGrpcClient;
@@ -288,7 +289,9 @@ public class CinemaServiceImpl implements CinemaService {
     @Transactional(readOnly = true)
     public List<CinemaResponse> getCinemasByManagerId(UUID managerId) {
         return mapManagedCinemasToResponses(
-                cinemaRepository.findAllByManagerIdAndIsDeletedFalseOrderByCreatedAtDesc(managerId));
+                cinemaRepository.findAllByManagerIdAndIsDeletedFalseOrderByCreatedAtDesc(managerId).stream()
+                        .filter(this::isActiveCinema)
+                        .toList());
     }
 
     // Staff xem rap dang gan, con manager xem rap do minh quan ly.
@@ -307,6 +310,7 @@ public class CinemaServiceImpl implements CinemaService {
         return cinemaStaffRepository.findByStaffId(staffId)
                 .filter(CinemaStaff::getActive)
                 .flatMap(staffLink -> cinemaRepository.findByIdAndIsDeletedFalse(staffLink.getCinemaId()))
+                .filter(this::isActiveCinema)
                 .map(this::mapCinemaToResponse)
                 .stream()
                 .toList();
@@ -342,6 +346,10 @@ public class CinemaServiceImpl implements CinemaService {
         return cinemaStaffRepository.findByCinemaIdAndActiveTrue(cinemaId).stream()
                 .map(CinemaStaff::getStaffId)
                 .toList();
+    }
+
+    private boolean isActiveCinema(Cinema cinema) {
+        return cinema != null && cinema.getStatus() == CinemaStatus.ACTIVE;
     }
 
     // Build map cinemaId -> staffIds de render list rap nhanh hon.
