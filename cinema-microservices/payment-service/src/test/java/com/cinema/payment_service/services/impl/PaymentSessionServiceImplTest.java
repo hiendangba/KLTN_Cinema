@@ -13,6 +13,8 @@ import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
+import com.cinema.payment_service.support.PromotionEngine;
+import com.cinema.payment_service.support.PromotionQuote;
 import com.cinema.dto.request.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,6 +57,9 @@ class PaymentSessionServiceImplTest {
 
     @Mock
     private MomoPaymentGatewayClient momoPaymentGatewayClient;
+
+    @Mock
+    private PromotionEngine promotionEngine;
 
     @Spy
     private com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -109,6 +114,63 @@ class PaymentSessionServiceImplTest {
         assertEquals(filmId, saved.getFilmId());
         assertEquals("https://momo.example.com/pay", response.getPayUrl());
         assertEquals("https://momo.example.com/pay", saved.getPayUrl());
+    }
+
+    @Test
+    void createSession_shouldApplyPromotionSnapshotWhenCodeIsProvided() {
+        UUID bookingId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = new BookingGrpcClient.BookingPaymentContext(
+                bookingId,
+                showtimeId,
+                cinemaId,
+                filmId,
+                userId,
+                BigDecimal.valueOf(180000),
+                LocalDateTime.now().plusMinutes(30),
+                "PENDING",
+                "UNPAID",
+                BigDecimal.valueOf(150000),
+                BigDecimal.valueOf(30000));
+
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.empty());
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(momoPaymentGatewayClient.createCheckout(any(PaymentTransaction.class), any()))
+                .thenReturn(new MomoPaymentGatewayClient.MomoCheckoutResult(
+                        "https://momo.example.com/pay",
+                        "https://momo.example.com/qr",
+                        "{}",
+                        "{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}"));
+        when(promotionEngine.resolvePromotionForCheckout(
+                "CINEMASTAR10",
+                BigDecimal.valueOf(180000),
+                bookingContext,
+                userId))
+                .thenReturn(new PromotionQuote("CINEMASTAR10", BigDecimal.valueOf(18000), "Applied 10% discount", UUID.randomUUID()));
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+        request.setPromotionCode("CINEMASTAR10");
+
+        PaymentSessionResponse response = paymentSessionService.createSession(request, userId);
+
+        ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
+        verify(paymentTransactionRepository).save(transactionCaptor.capture());
+
+        PaymentTransaction saved = transactionCaptor.getValue();
+        assertNotNull(response);
+        assertEquals(bookingId, response.getBookingId());
+        assertEquals("CINEMASTAR10", saved.getPromotionCode());
+        assertEquals(BigDecimal.valueOf(18000), saved.getPromotionDiscountAmount());
+        assertEquals(BigDecimal.valueOf(162000), saved.getAmount());
+        assertEquals(BigDecimal.valueOf(162000), response.getAmount());
     }
 
     @Test

@@ -30,6 +30,8 @@ import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
+import com.cinema.payment_service.support.PromotionEngine;
+import com.cinema.payment_service.support.PromotionQuote;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -74,6 +76,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final CinemaGrpcClient cinemaGrpcClient;
     private final MomoGatewayProperties momoGatewayProperties;
     private final MomoPaymentGatewayClient momoPaymentGatewayClient;
+    private final PromotionEngine promotionEngine;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -84,6 +87,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         UUID bookingId = request.getBookingId();
+        String requestedPromotionCode = normalizePromotionCode(request.getPromotionCode());
         BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
         ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
         ensureBookable(bookingContext);
@@ -103,7 +107,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .orElse(null);
         if (latest != null) {
             ensureRequesterOwnsTransaction(latest, requesterUserId);
-            if (isReusable(latest, bookingContext)) {
+            if (isReusable(latest, bookingContext) && canReuseLatestTransaction(latest, requestedPromotionCode)) {
                 return toResponse(latest);
             }
         }
@@ -122,6 +126,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setOrderInvoiceNumber(buildInvoiceNumber(bookingContext.bookingId()));
         transaction.setStatus(PaymentTransactionStatus.PENDING);
         transaction.setExpiresAt(bookingContext.reservedUntil());
+
+        applyPromotionIfNeeded(transaction, requestedPromotionCode, bookingContext, requesterUserId);
 
         MomoPaymentGatewayClient.MomoCheckoutResult checkoutResult = momoPaymentGatewayClient.createCheckout(
                 transaction,
@@ -369,32 +375,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     @Override
     @Transactional(readOnly = true)
     public PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId) {
-        if (request == null || requesterUserId == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
-
-        BigDecimal baseAmount = request.getOrderAmount();
-        if (baseAmount == null && request.getBookingId() != null) {
-            BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient
-                    .getBookingPaymentContext(request.getBookingId());
-            ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
-            baseAmount = bookingContext.finalAmount();
-        }
-        if (baseAmount == null || baseAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
-
-        BigDecimal normalizedBaseAmount = normalizeAmount(baseAmount);
-        String promotionCode = normalizePromotionCode(request.getPromotionCode());
-        PromotionCalculation promotion = calculatePromotion(normalizedBaseAmount, promotionCode);
-
-        return PromotionPreviewResponse.builder()
-                .promotionCode(promotion.code())
-                .originalAmount(normalizedBaseAmount)
-                .discountAmount(promotion.discount())
-                .finalAmount(normalizedBaseAmount.subtract(promotion.discount()))
-                .note(promotion.note())
-                .build();
+        return promotionEngine.previewPromotion(request, requesterUserId);
     }
 
     @Override
@@ -598,6 +579,33 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 && bookingContext.reservedUntil().isAfter(LocalDateTime.now());
     }
 
+    private boolean canReuseLatestTransaction(PaymentTransaction latest, String requestedPromotionCode) {
+        String latestPromotionCode = normalizePromotionCode(latest.getPromotionCode());
+        if (!StringUtils.hasText(requestedPromotionCode)) {
+            return true;
+        }
+        return requestedPromotionCode.equals(latestPromotionCode);
+    }
+
+    private void applyPromotionIfNeeded(PaymentTransaction transaction,
+                                        String requestedPromotionCode,
+                                        BookingGrpcClient.BookingPaymentContext bookingContext,
+                                        UUID requesterUserId) {
+        if (!StringUtils.hasText(requestedPromotionCode)) {
+            return;
+        }
+
+        BigDecimal baseAmount = normalizeAmount(bookingContext.finalAmount());
+        PromotionQuote quote = promotionEngine.resolvePromotionForCheckout(
+                requestedPromotionCode,
+                baseAmount,
+                bookingContext,
+                requesterUserId);
+        transaction.setPromotionCode(quote.promotionCode());
+        transaction.setPromotionDiscountAmount(quote.discountAmount());
+        transaction.setAmount(normalizeAmount(baseAmount.subtract(quote.discountAmount())));
+    }
+
     private PaymentSessionResponse toResponse(PaymentTransaction transaction) {
         return PaymentSessionResponse.builder()
                 .id(transaction.getId())
@@ -760,43 +768,6 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return "";
         }
         return code.trim().toUpperCase(Locale.ROOT);
-    }
-
-    private PromotionCalculation calculatePromotion(BigDecimal baseAmount, String promotionCode) {
-        if (!StringUtils.hasText(promotionCode)) {
-            return new PromotionCalculation("", ZERO, "No promotion code");
-        }
-
-        if ("CINEMASTAR10".equals(promotionCode)) {
-            if (baseAmount.compareTo(MIN_FOR_CINEMASTAR10) < 0) {
-                return new PromotionCalculation(promotionCode, ZERO, "Min order is 100000 VND");
-            }
-            BigDecimal discount = normalizeAmount(baseAmount.multiply(TEN_PERCENT));
-            if (discount.compareTo(THIRTY_THOUSAND) > 0) {
-                discount = THIRTY_THOUSAND;
-            }
-            return new PromotionCalculation(promotionCode, discount, "Applied 10% discount (max 30000 VND)");
-        }
-
-        if ("COMBO20K".equals(promotionCode)) {
-            if (baseAmount.compareTo(MIN_FOR_COMBO20K) < 0) {
-                return new PromotionCalculation(promotionCode, ZERO, "Min order is 150000 VND");
-            }
-            return new PromotionCalculation(promotionCode, TWENTY_THOUSAND, "Applied fixed 20000 VND discount");
-        }
-
-        if ("WEEKDAY15".equals(promotionCode)) {
-            BigDecimal discount = normalizeAmount(baseAmount.multiply(FIFTEEN_PERCENT));
-            if (discount.compareTo(FORTY_THOUSAND) > 0) {
-                discount = FORTY_THOUSAND;
-            }
-            return new PromotionCalculation(promotionCode, discount, "Applied 15% discount (max 40000 VND)");
-        }
-
-        return new PromotionCalculation(promotionCode, ZERO, "Promotion code is not supported");
-    }
-
-    private record PromotionCalculation(String code, BigDecimal discount, String note) {
     }
 
     private void validateRevenueReportRequest(CinemaRevenueReportRequest request) {

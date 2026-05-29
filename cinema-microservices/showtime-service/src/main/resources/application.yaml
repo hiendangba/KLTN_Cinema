@@ -1,4 +1,6 @@
 spring:
+  config:
+    import: optional:file:src/main/resources/.env[.properties]
   application:
     name: ${APP_NAME:showtime-service}
   devtools:
@@ -66,3 +68,7 @@ rabbitmq:
   password: ${SPRING_RABBITMQ_PASSWORD:admin}
 server:
   port: ${SERVER_PORT:8094}
+
+app:
+  cors:
+    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
