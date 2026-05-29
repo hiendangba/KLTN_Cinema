@@ -11,7 +11,6 @@ import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.cinema.payment_service.dto.request.PromotionField;
 import com.cinema.payment_service.dto.request.PromotionUpsertRequest;
-import com.cinema.payment_service.dto.request.UpdatePromotionStatusRequest;
 import com.cinema.payment_service.dto.response.PromotionResponse;
 import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.entity.PromotionCinema;
@@ -94,6 +93,9 @@ public class PromotionServiceImpl implements PromotionService {
 
         applyUpsertRequest(promotion, request);
         promotion.setCode(code);
+        if (request.getStatus() != null) {
+            promotion.setStatus(request.getStatus());
+        }
 
         List<UUID> cinemaIds = normalizeUuidList(request.getCinemaIds());
         List<UUID> filmIds = normalizeUuidList(request.getFilmIds());
@@ -102,27 +104,6 @@ public class PromotionServiceImpl implements PromotionService {
         promotion = promotionRepository.save(promotion);
         replaceMappings(promotion.getId(), cinemaIds, filmIds);
         return toResponse(promotion);
-    }
-
-    @Override
-    @Transactional
-    public ActionMessageResponse updatePromotionStatus(UUID id, UpdatePromotionStatusRequest request,
-            HttpServletRequest httpRequest) {
-        if (request == null || request.getActive() == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
-
-        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
-        UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
-        Promotion promotion = getPromotionEntity(id);
-        ensureCanManagePromotion(role, requesterUserId, promotion);
-
-        promotion.setStatus(request.getActive() ? PromotionStatus.ACTIVE : PromotionStatus.INACTIVE);
-        promotionRepository.save(promotion);
-
-        return new ActionMessageResponse(request.getActive()
-                ? "Promotion activated successfully"
-                : "Promotion deactivated successfully");
     }
 
     @Override
@@ -222,7 +203,7 @@ public class PromotionServiceImpl implements PromotionService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
-        List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId);
+        List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId, role);
         if (accessibleCinemaIds.isEmpty()) {
             throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
         }
@@ -245,15 +226,12 @@ public class PromotionServiceImpl implements PromotionService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
 
-        List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId);
+        List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId, role);
         if (accessibleCinemaIds.isEmpty()) {
             throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
         }
         List<UUID> promotionCinemaIds = loadCinemaIds(promotion.getId());
         if (promotionCinemaIds.isEmpty()) {
-            if (promotion.getCreatedByUserId() != null && promotion.getCreatedByUserId().equals(requesterUserId)) {
-                return;
-            }
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         if (!accessibleCinemaIds.containsAll(promotionCinemaIds)) {
@@ -265,10 +243,17 @@ public class PromotionServiceImpl implements PromotionService {
         if (HeaderNames.ROLE_ADMIN.equals(role)) {
             return;
         }
-        if (!HeaderNames.ROLE_MANAGER.equals(role)) {
+        if (!HeaderNames.ROLE_MANAGER.equals(role) && !HeaderNames.ROLE_STAFF.equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        ensureCanManagePromotion(role, requesterUserId, promotion);
+
+        List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId, role);
+        if (accessibleCinemaIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (!isVisibleToCinemaScope(promotion, accessibleCinemaIds)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private Promotion getPromotionEntity(UUID id) {
@@ -308,40 +293,29 @@ public class PromotionServiceImpl implements PromotionService {
         if (promotions == null || promotions.isEmpty() || HeaderNames.ROLE_ADMIN.equals(role)) {
             return promotions == null ? List.of() : promotions;
         }
-        if (!HeaderNames.ROLE_MANAGER.equals(role)) {
+        if (!HeaderNames.ROLE_MANAGER.equals(role) && !HeaderNames.ROLE_STAFF.equals(role)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
-        List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId);
+        List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId, role);
         if (accessibleCinemaIds.isEmpty()) {
-            return promotions.stream()
-                    .filter(promotion -> promotion.getCreatedByUserId() != null
-                            && promotion.getCreatedByUserId().equals(requesterUserId))
-                    .toList();
+            return List.of();
         }
 
         return promotions.stream()
-                .filter(promotion -> isVisibleToManager(promotion, requesterUserId, accessibleCinemaIds))
+                .filter(promotion -> isVisibleToCinemaScope(promotion, accessibleCinemaIds))
                 .toList();
     }
 
-    private boolean isVisibleToManager(Promotion promotion, UUID requesterUserId, List<UUID> accessibleCinemaIds) {
+    private boolean isVisibleToCinemaScope(Promotion promotion, List<UUID> accessibleCinemaIds) {
         if (promotion == null) {
             return false;
-        }
-        if (promotion.getCreatedByUserId() != null && promotion.getCreatedByUserId().equals(requesterUserId)) {
-            return true;
         }
         List<UUID> promotionCinemaIds = loadCinemaIds(promotion.getId());
         if (promotionCinemaIds.isEmpty()) {
             return true;
         }
-        for (UUID cinemaId : promotionCinemaIds) {
-            if (accessibleCinemaIds.contains(cinemaId)) {
-                return true;
-            }
-        }
-        return false;
+        return accessibleCinemaIds.stream().anyMatch(promotionCinemaIds::contains);
     }
 
     private List<Promotion> applyPromotionPageRequest(List<Promotion> items, PageRequest<PromotionField> request) {
@@ -708,11 +682,11 @@ public class PromotionServiceImpl implements PromotionService {
                 .toList();
     }
 
-    private List<UUID> loadAccessibleCinemaIds(UUID requesterUserId) {
+    private List<UUID> loadAccessibleCinemaIds(UUID requesterUserId, String role) {
         if (requesterUserId == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
-        return cinemaGrpcClient.getCinemasByUserId(requesterUserId, HeaderNames.ROLE_MANAGER).stream()
+        return cinemaGrpcClient.getCinemasByUserId(requesterUserId, role).stream()
                 .map(CinemaGrpcClient.CinemaSummary::id)
                 .filter(java.util.Objects::nonNull)
                 .distinct()

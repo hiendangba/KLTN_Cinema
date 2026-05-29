@@ -4,7 +4,6 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.dto.request.PromotionUpsertRequest;
-import com.cinema.payment_service.dto.request.UpdatePromotionStatusRequest;
 import com.cinema.payment_service.dto.response.PromotionResponse;
 import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.enums.PromotionDiscountType;
@@ -122,7 +121,7 @@ class PromotionServiceImplTest {
     }
 
     @Test
-    void updatePromotionStatus_shouldToggleStatus() {
+    void updatePromotion_shouldToggleStatus() {
         UUID promotionId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         Promotion promotion = new Promotion();
@@ -137,14 +136,26 @@ class PromotionServiceImplTest {
         when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
         when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
         when(promotionRepository.findById(promotionId)).thenReturn(Optional.of(promotion));
+        when(promotionRepository.existsByCodeIgnoreCaseAndIsDeletedFalseAndIdNot("SALE10", promotionId))
+                .thenReturn(false);
         when(promotionRepository.save(any(Promotion.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActionMessageResponse response = promotionService.updatePromotionStatus(
+        PromotionUpsertRequest request = PromotionUpsertRequest.builder()
+                .code("SALE10")
+                .name("Sale")
+                .discountType(PromotionDiscountType.PERCENT)
+                .discountValue(BigDecimal.TEN)
+                .startAt(LocalDateTime.now().minusDays(1))
+                .endAt(LocalDateTime.now().plusDays(7))
+                .status(PromotionStatus.INACTIVE)
+                .build();
+
+        PromotionResponse response = promotionService.updatePromotion(
                 promotionId,
-                UpdatePromotionStatusRequest.builder().active(false).build(),
+                request,
                 httpRequest);
 
         assertEquals(PromotionStatus.INACTIVE, promotion.getStatus());
-        assertEquals("Promotion deactivated successfully", response.getMessage());
+        assertEquals(PromotionStatus.INACTIVE, response.getStatus());
     }
 }

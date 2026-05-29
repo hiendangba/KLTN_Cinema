@@ -1,6 +1,7 @@
 package com.cinema.payment_service.dto.request;
 
 import com.cinema.payment_service.enums.PromotionDiscountType;
+import com.cinema.payment_service.enums.PromotionStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -46,6 +47,8 @@ public class PromotionUpsertRequest {
 
     @NotNull(message = "Promotion end time is required")
     private LocalDateTime endAt;
+
+    private PromotionStatus status;
 
     private List<UUID> cinemaIds;
 

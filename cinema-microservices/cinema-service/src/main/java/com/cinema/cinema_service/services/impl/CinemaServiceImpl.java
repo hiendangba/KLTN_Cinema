@@ -276,7 +276,7 @@ public class CinemaServiceImpl implements CinemaService {
         UUID managerId = extractUserId(httpRequest);
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         return getAccessibleCinemasByUserId(managerId, role).stream()
-                .filter(this::isActiveCinema)
+                .filter(cinema -> cinema.getStatus() == CinemaStatus.ACTIVE)
                 .toList();
     }
 
@@ -395,7 +395,8 @@ public class CinemaServiceImpl implements CinemaService {
         response.setManagerName(resolveManagerNameSafely(response.getManagerId()));
     }
 
-    // Lay ten manager tu user-service; neu loi thi fallback null de khong fail luong chinh.
+    // Lay ten manager tu user-service; neu loi thi fallback null de khong fail
+    // luong chinh.
     private String resolveManagerNameSafely(UUID managerId) {
         try {
             return userGrpcClient.getUserNameById(managerId);
@@ -448,7 +449,8 @@ public class CinemaServiceImpl implements CinemaService {
         }
     }
 
-    // Dung chung cho create/update: null = tao moi, khac null = update va loai tru cinema hien tai.
+    // Dung chung cho create/update: null = tao moi, khac null = update va loai tru
+    // cinema hien tai.
     private void validateCinemaCodeNotExists(String code, UUID cinemaId) {
         String normalizedCode = normalizeCode(code);
         boolean existed;
