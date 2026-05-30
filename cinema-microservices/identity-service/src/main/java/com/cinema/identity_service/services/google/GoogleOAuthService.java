@@ -3,25 +3,28 @@ package com.cinema.identity_service.services.google;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeRequestUrl;
-import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeTokenRequest;
-import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
-import com.google.api.client.auth.oauth2.TokenErrorResponse;
-import com.google.api.client.auth.oauth2.TokenResponseException;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
 import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.json.JsonParserFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.RestOperations;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
+import java.util.Map;
 import java.util.List;
 import java.util.Locale;
 
 @Service
-@RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @Slf4j
 public class GoogleOAuthService {
@@ -30,6 +33,16 @@ public class GoogleOAuthService {
     private static final List<String> SCOPES = List.of("openid", "email", "profile");
 
     final GoogleIdTokenVerifierService googleIdTokenVerifierService;
+    final RestOperations restOperations;
+
+    public GoogleOAuthService(GoogleIdTokenVerifierService googleIdTokenVerifierService) {
+        this(googleIdTokenVerifierService, new RestTemplate());
+    }
+
+    GoogleOAuthService(GoogleIdTokenVerifierService googleIdTokenVerifierService, RestOperations restOperations) {
+        this.googleIdTokenVerifierService = googleIdTokenVerifierService;
+        this.restOperations = restOperations;
+    }
 
     @Value("${app.auth.google.client-id:}")
     String googleClientId;
@@ -74,17 +87,8 @@ public class GoogleOAuthService {
                 redirectUri,
                 hasText(clientSecret));
         try {
-            GoogleAuthorizationCodeTokenRequest tokenRequest = new GoogleAuthorizationCodeTokenRequest(
-                    new NetHttpTransport(),
-                    GsonFactory.getDefaultInstance(),
-                    TOKEN_SERVER_URL,
-                    clientId,
-                    clientSecret,
-                    code);
-            tokenRequest.setRedirectUri(redirectUri);
-
-            GoogleTokenResponse tokenResponse = tokenRequest.execute();
-            String idToken = tokenResponse.getIdToken();
+            ResponseEntity<String> tokenResponse = exchangeToken(code, clientId, clientSecret, redirectUri);
+            String idToken = extractIdToken(tokenResponse.getBody());
             if (idToken == null || idToken.isBlank()) {
                 throw new GoogleOAuthFlowException("token_invalid");
             }
@@ -97,24 +101,67 @@ public class GoogleOAuthService {
             log.warn("Google OAuth token verification failed: codePresent={} codeLength={} reason={}",
                     hasText(code), safeLength(code), ex.getErrorCode(), ex);
             throw new GoogleOAuthFlowException("token_invalid", ex);
-        } catch (TokenResponseException ex) {
-            TokenErrorResponse details = ex.getDetails();
-            String wwwAuthenticate = extractHeaderValue(ex, "WWW-Authenticate");
-            String rawResponseBody = sanitizeForLog(ex.getContent());
+        } catch (RestClientResponseException ex) {
+            String rawResponseBody = sanitizeForLog(ex.getResponseBodyAsString());
+            String error = extractJsonField(ex.getResponseBodyAsString(), "error");
+            String errorDescription = extractJsonField(ex.getResponseBodyAsString(), "error_description");
+            String wwwAuthenticate = extractHeaderValue(ex.getResponseHeaders(), "WWW-Authenticate");
             log.warn(
                     "Google OAuth code exchange failed: statusCode={} error={} errorDescription={} wwwAuthenticate={} rawResponseBody={} tokenEndpoint={}",
-                    ex.getStatusCode(),
-                    details == null ? null : details.getError(),
-                    details == null ? null : details.getErrorDescription(),
+                    ex.getRawStatusCode(),
+                    error,
+                    errorDescription,
                     wwwAuthenticate,
                     rawResponseBody,
                     TOKEN_SERVER_URL,
                     ex);
             throw new GoogleOAuthFlowException("code_exchange_failed", ex);
-        } catch (IOException ex) {
+        } catch (ResourceAccessException ex) {
             log.warn("Google OAuth code exchange IO failure: codePresent={} codeLength={} reason={}",
                     hasText(code), safeLength(code), ex.getMessage(), ex);
             throw new GoogleOAuthFlowException("code_exchange_failed", ex);
+        }
+    }
+
+    private ResponseEntity<String> exchangeToken(String code, String clientId, String clientSecret, String redirectUri) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("code", code);
+        formData.add("client_id", clientId);
+        formData.add("client_secret", clientSecret);
+        formData.add("redirect_uri", redirectUri);
+        formData.add("grant_type", "authorization_code");
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(formData, headers);
+        return restOperations.postForEntity(TOKEN_SERVER_URL, request, String.class);
+    }
+
+    private String extractIdToken(String responseBody) {
+        if (!hasText(responseBody)) {
+            return null;
+        }
+
+        Map<String, Object> payload = parseJsonAsMap(responseBody);
+        Object idToken = payload.get("id_token");
+        return idToken == null ? null : String.valueOf(idToken);
+    }
+
+    private String extractJsonField(String json, String field) {
+        if (!hasText(json) || !hasText(field)) {
+            return null;
+        }
+        Map<String, Object> payload = parseJsonAsMap(json);
+        Object value = payload.get(field);
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Map<String, Object> parseJsonAsMap(String json) {
+        try {
+            return JsonParserFactory.getJsonParser().parseMap(json);
+        } catch (RuntimeException ignored) {
+            return Map.of();
         }
     }
 
@@ -182,13 +229,13 @@ public class GoogleOAuthService {
         return oneLine.substring(0, 500) + "...";
     }
 
-    private String extractHeaderValue(TokenResponseException exception, String headerName) {
-        if (exception == null || exception.getHeaders() == null || headerName == null || headerName.isBlank()) {
+    private String extractHeaderValue(HttpHeaders headers, String headerName) {
+        if (headers == null || headerName == null || headerName.isBlank()) {
             return null;
         }
-        Object headerValue = exception.getHeaders().get(headerName);
+        Object headerValue = headers.get(headerName);
         if (headerValue == null) {
-            headerValue = exception.getHeaders().get(headerName.toLowerCase(Locale.ROOT));
+            headerValue = headers.get(headerName.toLowerCase(Locale.ROOT));
         }
         return headerValue == null ? null : sanitizeForLog(String.valueOf(headerValue));
     }

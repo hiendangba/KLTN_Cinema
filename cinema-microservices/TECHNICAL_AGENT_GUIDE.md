@@ -20,6 +20,22 @@
 - Mục tiêu: tránh frontend tự động gọi `refresh_token` khi lỗi xảy ra trong luồng OTP (`verify-otp`/`resend-otp`/`forgot-password`).
 - `ErrorCode 4009 (REFRESH_TOKEN_MISSING)` giữ nguyên `401 Unauthorized` để dành riêng cho ngữ cảnh phiên đăng nhập/refresh token.
 - Bổ sung log chẩn đoán Google OAuth tại `identity-service`: khi `code -> token` fail sẽ log thêm `WWW-Authenticate`, `rawResponseBody`, `tokenEndpoint` để tách nhanh lỗi `invalid_client` / `invalid_grant` / policy.
+- Google OAuth exchange đã chuyển sang HTTP form-urlencoded (theo đúng shape request `curl` chạy thành công) để tránh lỗi `401` từ client library cũ.
+- Ghi nhận bug quan trọng: request token endpoint gửi sai mẫu payload (JSON) sẽ fail; Google `/token` cần `application/x-www-form-urlencoded` với đủ field chuẩn.
+
+> [!WARNING]
+> **BUG GỐC CỦA LUỒNG GOOGLE LOGIN**
+> - Bản triển khai ban đầu đã gửi request đổi `code -> token` theo **mẫu sai** (payload kiểu JSON / client library cũ).
+> - Google `/token` chỉ ăn đúng khi request là **`application/x-www-form-urlencoded`** và có đủ field:
+>   - `code`
+>   - `client_id`
+>   - `client_secret`
+>   - `redirect_uri`
+>   - `grant_type=authorization_code`
+> - Kết quả thực tế đã kiểm chứng:
+>   - Cùng một container, `curl` form-urlencoded -> `HTTP 200`
+>   - App Java cũ -> `HTTP 401`
+> - Vì vậy nếu gặp lại lỗi này, **đừng ưu tiên nghi ngờ HTTPS/Envoy**; hãy kiểm tra ngay **request shape** trước.
 
 ## Runbook: Google OAuth `code_exchange_failed` (401)
 
@@ -37,6 +53,33 @@ Khi log callback pass state nhưng fail ở `POST https://oauth2.googleapis.com/
 5. Restart container và xác minh env trong container:
    - `docker exec -it <identity-container> sh -lc 'printenv | grep GOOGLE_'`
 6. Re-test login bằng Gmail cá nhân chưa từng là test user.
+7. Nếu `curl` đổi code trong cùng container trả `200` nhưng app Java vẫn fail, coi đây là dấu hiệu request-shape/library issue (không phải HTTPS bị chặn). Ưu tiên verify lại payload `application/x-www-form-urlencoded` theo đúng các field:
+   - `code`
+   - `client_id`
+   - `client_secret`
+   - `redirect_uri`
+   - `grant_type=authorization_code`
+8. Phân loại nhanh theo response body:
+   - `invalid_grant`: code sai, code hết hạn, code đã dùng, hoặc code bị encode/decode sai.
+   - `code_exchange_failed` từ service: lỗi HTTP khi gọi token endpoint hoặc Google trả non-2xx.
+
+### Known Issue: Google token call chậm / không ổn định
+
+- Hiện tượng: callback vào service bình thường, nhưng `code -> token` có lúc chậm hơn kỳ vọng hoặc fail ngắt quãng.
+- Nguyên nhân đã gặp trong dự án: request mẫu sai định dạng (`application/json`) dẫn tới exchange lỗi; sau khi đổi sang `application/x-www-form-urlencoded` thì flow ổn định.
+- Dấu hiệu nhận biết nhanh:
+  - `Google OAuth exchange start` có log, nhưng `Google OAuth exchange success` không xuất hiện.
+  - `curl` cùng container chạy đúng với cùng `client_id/client_secret/redirect_uri`, nhưng app Java vẫn fail.
+  - Response debug trước đó cho thấy `401` khi dùng lib cũ, còn `200` khi dùng form request trực tiếp.
+- Lưu ý quan trọng: `authorization code` là one-time token; không retry cùng một `code` vì sẽ dễ gặp `invalid_grant`.
+- Quy trình xử lý chuẩn:
+  1. So thời gian giữa log `Google OAuth exchange start` và log success/fail để đo độ trễ thực tế.
+  2. Nếu cần test tay, luôn lấy `code` mới ngay trước lúc gọi `/token`.
+  3. Nếu `curl` trong cùng container trả `200` nhưng app fail, ưu tiên kiểm tra request body/encoding thay vì nghi ngờ HTTPS hoặc Envoy.
+  4. Nếu có nhiều lần fail liên tiếp, đối chiếu response body:
+     - `invalid_grant`: lỗi vòng đời `code` (hết hạn/đã dùng/sai format).
+     - `invalid_client`: lệch `client_id`/`client_secret`.
+  5. Khi debug xong, rotate `GOOGLE_CLIENT_SECRET` nếu secret đã lộ qua terminal/log.
 
 ---
 
