@@ -35,8 +35,9 @@ public class UserController extends BaseController {
 
     @PostMapping("/verify-otp")
     public ResponseEntity<APIResponse<ActionMessageResponse>> verifyOTP(@Valid @RequestBody VerifyRequest verifyRequest,
-                                                                        HttpServletRequest request) {
-        ActionMessageResponse verifyResponse = userService.verifyOTP(verifyRequest, request);
+                                                                        HttpServletRequest request,
+                                                                        HttpServletResponse response) {
+        ActionMessageResponse verifyResponse = userService.verifyOTP(verifyRequest, request, response);
         return ok(verifyResponse);
     }
 

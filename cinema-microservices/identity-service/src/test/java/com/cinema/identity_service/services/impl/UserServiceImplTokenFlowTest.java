@@ -5,10 +5,13 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
+import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
 import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.dto.request.RegisterStaffRequest;
+import com.cinema.identity_service.dto.request.VerifyRequest;
+import com.cinema.identity_service.entity.OtpData;
 import com.cinema.identity_service.entity.User;
 import com.cinema.identity_service.grpc.UserGrpcClient;
 import com.cinema.identity_service.mapper.UserMapper;
@@ -37,6 +40,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -279,6 +283,115 @@ class UserServiceImplTokenFlowTest {
         assertThat(setCookies.get(0)).contains("verifyToken=");
         assertThat(setCookies.get(0)).contains("Max-Age=300");
         verify(valueOperations).set(anyString(), any(), eq(5L), eq(TimeUnit.MINUTES));
+    }
+
+    @Test
+    void forgotPassword_shouldSetVerifyTokenCookie_usingConfiguredSecurityAttributes() {
+        ReflectionTestUtils.setField(service, "authCookieSecure", true);
+        ReflectionTestUtils.setField(service, "authCookieSameSite", "None");
+
+        ForgotPasswordRequest request = new ForgotPasswordRequest();
+        ReflectionTestUtils.setField(request, "email", "forgot@example.com");
+
+        when(userRepository.existsByEmail(request.getEmail())).thenReturn(true);
+        when(otpEncoder.encode(anyString())).thenReturn("encoded-otp");
+        when(valueOperations.setIfAbsent(anyString(), anyString(), eq(5L), eq(TimeUnit.MINUTES))).thenReturn(true);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ActionMessageResponse action = service.forgotPassword(request, response);
+
+        assertThat(action.getMessage()).isNotBlank();
+        List<String> setCookies = response.getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(setCookies).hasSize(1);
+        assertThat(setCookies.get(0)).contains("verifyToken=");
+        assertThat(setCookies.get(0)).contains("Max-Age=300");
+        assertThat(setCookies.get(0)).contains("HttpOnly");
+        assertThat(setCookies.get(0)).contains("Secure");
+        assertThat(setCookies.get(0)).contains("SameSite=None");
+    }
+
+    @Test
+    void verifyOtp_success_shouldClearVerifyTokenCookie() {
+        String verifyToken = "verify-token-success";
+        String otpKey = "identity:otp:" + verifyToken;
+        String subjectKey = "identity:otp:subject:test@example.com";
+
+        RegisterCustomerRequest registerCustomerRequest = RegisterCustomerRequest.builder()
+                .name("Test User")
+                .email("test@example.com")
+                .password("encoded-password")
+                .dob(LocalDate.of(2000, 1, 1))
+                .gender(UserEnum.Gender.MALE)
+                .phone("0123456789")
+                .build();
+
+        OtpData otpData = OtpData.builder()
+                .verifyToken(verifyToken)
+                .subject("test@example.com")
+                .otpHash("hashed-otp")
+                .purpose(OtpData.OtpPurpose.REGISTER)
+                .registerCustomerRequest(registerCustomerRequest)
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        User userToSave = User.builder()
+                .id(UUID.randomUUID())
+                .email("test@example.com")
+                .password("encoded-password")
+                .role(UserEnum.UserRole.CUSTOMER)
+                .status(UserEnum.UserStatus.ACTIVE)
+                .build();
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setCookies(new Cookie("verifyToken", verifyToken));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        when(valueOperations.get(otpKey)).thenReturn(otpData);
+        when(valueOperations.get(subjectKey)).thenReturn(verifyToken);
+        when(otpEncoder.matches("123456", "hashed-otp")).thenReturn(true);
+        when(userMapper.toUser(registerCustomerRequest)).thenReturn(userToSave);
+        when(userRepository.save(userToSave)).thenReturn(userToSave);
+
+        ActionMessageResponse action = service.verifyOTP(new VerifyRequest("123456", null), request, response);
+
+        assertThat(action.getMessage()).isNotBlank();
+        verify(redisTemplate).delete(otpKey);
+        verify(redisTemplate).delete(subjectKey);
+        List<String> setCookies = response.getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(setCookies).anyMatch(v -> v.contains("verifyToken=") && v.contains("Max-Age=0"));
+    }
+
+    @Test
+    void verifyOtp_tokenMismatch_shouldClearVerifyTokenCookie() {
+        String cookieVerifyToken = "verify-token-cookie";
+        String redisVerifyToken = "verify-token-redis";
+        String otpKey = "identity:otp:" + cookieVerifyToken;
+        String subjectKey = "identity:otp:subject:test@example.com";
+
+        OtpData otpData = OtpData.builder()
+                .verifyToken(cookieVerifyToken)
+                .subject("test@example.com")
+                .otpHash("hashed-otp")
+                .purpose(OtpData.OtpPurpose.REGISTER)
+                .expiredAt(LocalDateTime.now().plusMinutes(5))
+                .build();
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setCookies(new Cookie("verifyToken", cookieVerifyToken));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        when(valueOperations.get(otpKey)).thenReturn(otpData);
+        when(valueOperations.get(subjectKey)).thenReturn(redisVerifyToken);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.verifyOTP(new VerifyRequest("123456", null), request, response));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.OTP_INVALID);
+        verify(redisTemplate).delete(otpKey);
+        verify(redisTemplate).delete(subjectKey);
+        List<String> setCookies = response.getHeaders(HttpHeaders.SET_COOKIE);
+        assertThat(setCookies).anyMatch(v -> v.contains("verifyToken=") && v.contains("Max-Age=0"));
     }
 
     @Test

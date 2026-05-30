@@ -19,7 +19,7 @@ public interface UserService {
 
     ActionMessageResponse createStaff(RegisterStaffRequest registerStaffRequest, HttpServletRequest request);
 
-    ActionMessageResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request);
+    ActionMessageResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request, HttpServletResponse response);
 
     ActionMessageResponse resendOTP(HttpServletRequest request);
 

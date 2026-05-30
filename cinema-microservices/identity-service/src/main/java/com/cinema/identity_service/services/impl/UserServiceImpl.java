@@ -401,12 +401,7 @@ public class UserServiceImpl implements UserService {
         }
 
         redisTemplate.opsForValue().set(otpKey, otpData, 5, TimeUnit.MINUTES);
-        Cookie refreshTokenCookie = new Cookie(VerifyToken, verifyToken);
-        refreshTokenCookie.setHttpOnly(true);
-        refreshTokenCookie.setSecure(false);
-        refreshTokenCookie.setPath("/");
-        refreshTokenCookie.setMaxAge(300);
-        response.addCookie(refreshTokenCookie);
+        setTokenCookie(response, VerifyToken, verifyToken, TimeUnit.MINUTES.toMillis(5));
         log.warn("otp forgot generate :{}", otp);
         internalEmailDispatchService.sendAsync(new SendEmailRequest(
                 forgotPasswordRequest.getEmail(),
@@ -453,7 +448,8 @@ public class UserServiceImpl implements UserService {
 
     // Verify OTP and execute follow-up action (register account or reset password).
     @Override
-    public ActionMessageResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request) {
+    public ActionMessageResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request,
+                                           HttpServletResponse response) {
         String cookieVerifyToken = null;
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
@@ -471,6 +467,7 @@ public class UserServiceImpl implements UserService {
         String otpKey = OTP_PREFIX + cookieVerifyToken;
         OtpData otpData = getOtpData(otpKey);
         if (otpData == null) {
+            clearTokenCookie(response, VerifyToken);
             throw new BusinessException(OTP_INVALID);
         }
 
@@ -479,18 +476,21 @@ public class UserServiceImpl implements UserService {
 
         if (redisVerifyToken == null) {
             redisTemplate.delete(otpKey);
+            clearTokenCookie(response, VerifyToken);
             throw new BusinessException(OTP_INVALID);
         }
 
         if (!cookieVerifyToken.equals(redisVerifyToken)) {
             redisTemplate.delete(otpKey);
             redisTemplate.delete(subjectKey);
+            clearTokenCookie(response, VerifyToken);
             throw new BusinessException(OTP_INVALID);
         }
 
         if (otpData.getExpiredAt().isBefore(LocalDateTime.now())) {
             redisTemplate.delete(otpKey);
             redisTemplate.delete(subjectKey);
+            clearTokenCookie(response, VerifyToken);
             throw new BusinessException(OTP_INVALID);
         }
 
@@ -571,6 +571,7 @@ public class UserServiceImpl implements UserService {
 
         redisTemplate.delete(otpKey);
         redisTemplate.delete(OTP_SUBJECT_PREFIX + otpData.getSubject());
+        clearTokenCookie(response, VerifyToken);
 
         return ActionMessageResponse.builder()
                 .message("Xác thực OTP thành công")
