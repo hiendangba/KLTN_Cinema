@@ -32,7 +32,7 @@ public enum ErrorCode {
 
         LOGIN_FAILED("4007", "Tên đăng nhập hoặc mật khẩu không chính xác!", HttpStatus.BAD_REQUEST),
         VERIFY_TOKEN_MISSING("4008", "Phiên xác thực OTP đã hết hạn. Vui lòng yêu cầu gửi lại mã OTP.",
-                        HttpStatus.UNAUTHORIZED),
+                        HttpStatus.BAD_REQUEST),
         REFRESH_TOKEN_MISSING("4009", "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.", HttpStatus.UNAUTHORIZED),
 
         PASSWORD_REQUIRED("4010", "Mật khẩu mới là bắt buộc khi xác nhận OTP đặt lại mật khẩu", HttpStatus.BAD_REQUEST),

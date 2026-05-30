@@ -14,6 +14,12 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-05-30)
+
+- `ErrorCode 4008 (VERIFY_TOKEN_MISSING)` đổi HTTP status từ `401 Unauthorized` sang `400 Bad Request`.
+- Mục tiêu: tránh frontend tự động gọi `refresh_token` khi lỗi xảy ra trong luồng OTP (`verify-otp`/`resend-otp`/`forgot-password`).
+- `ErrorCode 4009 (REFRESH_TOKEN_MISSING)` giữ nguyên `401 Unauthorized` để dành riêng cho ngữ cảnh phiên đăng nhập/refresh token.
+
 ---
 
 ## Nền tảng kỹ thuật cũ (chi tiết 500+ dòng)
@@ -1203,5 +1209,36 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
     - `Tests run: 7 + 4 = 11`, `Failures: 0`, `Errors: 0`
 - Ghi chú triển khai:
   - Trên Windows, `protobuf-maven-plugin` có thể giữ lock tạm trên `target/protoc-dependencies`; nếu gặp lỗi cleanup, dùng `-Dprotoc.skip=true` khi chạy test runtime trên module đã compile sẵn.
+
+### 2026-05-30 Tách auth protected của identity qua Envoy và chuẩn hóa RequestAuthUtils theo header
+- Mục tiêu:
+  - Endpoint protected của `identity-service` nhận `X-User-ID`/`X-User-Role` giống các service khác.
+  - Giữ luồng auth public riêng cho đăng ký/đăng nhập/refresh/logout.
+  - Bỏ fallback `request attribute` và `SecurityContextHolder` trong `RequestAuthUtils`.
+- Thay đổi chính:
+  - `envoy/envoy.local.yaml`, `envoy/envoy.prod.yaml`:
+    - thêm route protected đi qua ext_authz:
+      - `POST /api/auth/manager`
+      - `POST /api/auth/staff`
+      - `POST /api/auth/change-password`
+    - giữ route `prefix: /api/auth` với `ext_authz` disabled cho luồng public.
+  - `common-lib/src/main/java/com/cinema/http/RequestAuthUtils.java`:
+    - `requireUserId(...)` đọc thuần `X-User-ID`.
+    - `requireRoleHeader(...)`, `requireRole(...)`, `requireAnyRole(...)` đọc thuần `X-User-Role`.
+    - chuẩn hóa trim header rỗng bằng `trimToNull(...)`.
+  - `common-lib/src/test/java/com/cinema/http/RequestAuthUtilsTest.java`:
+    - cập nhật test sang header-only contract.
+  - `identity-service/src/test/java/com/cinema/identity_service/services/impl/UserServiceImplTokenFlowTest.java`:
+    - luồng tạo staff chuyển mock role từ request attribute sang header `X-User-Role`.
+- Test evidence:
+  - Command:
+    - `docker run --rm -v "C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices:/src" maven:3.9.9-eclipse-temurin-17 bash -lc 'mkdir -p /tmp/workspace && cp -a /src/. /tmp/workspace && cd /tmp/workspace && mvn -pl common-lib,identity-service -am -Dtest=RequestAuthUtilsTest,UserServiceImplTokenFlowTest,JwtAuthenticationFilterTest test'`
+  - Kết quả:
+    - `BUILD SUCCESS`
+    - `common-lib`: pass
+    - `identity-service`: pass cho nhóm test mục tiêu
+    - `Tests run: 27`, `Failures: 0`, `Errors: 0`
+- Ghi chú:
+  - Full suite của `identity-service` có thể fail test integration `IdentityServiceApplicationTests` nếu thiếu `DB_URL`; không ảnh hưởng tới thay đổi contract auth/header ở trên.
 
 
