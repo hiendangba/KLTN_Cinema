@@ -108,7 +108,7 @@ public class GoogleOAuthService {
             String wwwAuthenticate = extractHeaderValue(ex.getResponseHeaders(), "WWW-Authenticate");
             log.warn(
                     "Google OAuth code exchange failed: statusCode={} error={} errorDescription={} wwwAuthenticate={} rawResponseBody={} tokenEndpoint={}",
-                    ex.getRawStatusCode(),
+                    ex.getStatusCode().value(),
                     error,
                     errorDescription,
                     wwwAuthenticate,
