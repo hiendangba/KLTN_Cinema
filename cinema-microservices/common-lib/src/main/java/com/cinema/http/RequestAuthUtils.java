@@ -18,8 +18,8 @@ public final class RequestAuthUtils {
     }
 
     public static UUID requireUserId(HttpServletRequest request, ErrorCode invalidUserIdError) {
-        String userIdRaw = request.getHeader(HeaderNames.X_USER_ID);
-        if (userIdRaw == null || userIdRaw.isBlank()) {
+        String userIdRaw = trimToNull(request.getHeader(HeaderNames.X_USER_ID));
+        if (userIdRaw == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -31,8 +31,8 @@ public final class RequestAuthUtils {
     }
 
     public static String requireRoleHeader(HttpServletRequest request) {
-        String role = request.getHeader(HeaderNames.X_USER_ROLE);
-        if (role == null || role.isBlank()) {
+        String role = trimToNull(request.getHeader(HeaderNames.X_USER_ROLE));
+        if (role == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
         return role;
@@ -47,7 +47,7 @@ public final class RequestAuthUtils {
             String requiredRole,
             Logger logger,
             String action) {
-        String role = request.getHeader(HeaderNames.X_USER_ROLE);
+        String role = trimToNull(request.getHeader(HeaderNames.X_USER_ROLE));
         if (!requiredRole.equals(role)) {
             logForbiddenIfNeeded(logger, action, role, request, new String[]{requiredRole});
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -63,12 +63,20 @@ public final class RequestAuthUtils {
             Logger logger,
             String action,
             String... allowedRoles) {
-        String role = request.getHeader(HeaderNames.X_USER_ROLE);
+        String role = trimToNull(request.getHeader(HeaderNames.X_USER_ROLE));
         boolean allowed = Arrays.stream(allowedRoles).anyMatch(allowedRole -> allowedRole.equals(role));
         if (!allowed) {
             logForbiddenIfNeeded(logger, action, role, request, allowedRoles);
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private static void logForbiddenIfNeeded(
@@ -87,8 +95,12 @@ public final class RequestAuthUtils {
                 action,
                 required,
                 actualRole,
-                request.getHeader(HeaderNames.X_USER_ID),
+                resolveUserIdForLogging(request),
                 request.getMethod(),
                 request.getRequestURI());
+    }
+
+    private static String resolveUserIdForLogging(HttpServletRequest request) {
+        return trimToNull(request.getHeader(HeaderNames.X_USER_ID));
     }
 }

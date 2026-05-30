@@ -1085,96 +1085,69 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - Có thêm endpoint export Excel `POST /api/bookings/revenues/cinemas/export`; frontend gửi cùng body như report JSON, cộng `selectedIds` là danh sách `cinemaId` cần export. Nếu không gửi `selectedIds` thì backend export toàn bộ dòng đang khớp filter.
   - `dateRange` gửi riêng trong body request, không nhét vào `PageRequest`.
 
-### 2026-05-30 Google Login (idToken) cho identity-service
-- Yêu cầu: bổ sung đăng nhập Google theo rule:
-  - Nếu account Google đã có thì đăng nhập.
-  - Nếu chưa có thì tự register customer rồi đăng nhập.
-  - Nếu email đã tồn tại dưới account `LOCAL` thì không link, trả lỗi.
-- API contract (public):
-  - Endpoint: `POST /api/auth/google/login`
-  - Request body:
-    ```json
-    {
-      "idToken": "<google-id-token-from-frontend>"
-    }
-    ```
-  - Thành công:
-    - HTTP `200`
-    - Trả `ActionMessageResponse` với thông điệp đăng nhập thành công.
-    - Set `accessToken` + `refreshToken` qua `Set-Cookie` (HttpOnly, SameSite theo config hiện có của service).
-  - Lưu ý frontend:
-    - Không gửi `accessToken` Google.
-    - Chỉ gửi `idToken` do Google trả về sau sign-in.
-    - Gọi API bằng `credentials: include` để browser nhận cookie phiên đăng nhập.
+### 2026-05-30 Google OAuth Redirect Flow cho identity-service
+- Yêu cầu:
+  - FE chỉ cần redirect người dùng sang backend.
+  - Backend xử lý toàn bộ Google consent, callback, auto-register, login, rồi set cookie phiên.
+  - Nếu lỗi thì backend redirect về `https://cinema-star-ten.vercel.app/login?oauth=google&status=error&code=<reason>`.
+- API contract:
+  - `GET /api/auth/google/authorize`
+    - Sinh `state`.
+    - Lưu `state` vào Redis với TTL ngắn.
+    - `302` sang Google consent screen.
+  - `GET /api/auth/google/callback`
+    - Verify `state`.
+    - Đổi `code` lấy token từ Google.
+    - Verify `id_token` server-side và lấy `sub/email/name/email_verified`.
+    - Áp rule:
+      - account `GOOGLE` có sẵn -> login.
+      - chưa có -> auto-register customer rồi login.
+      - email đã tồn tại `LOCAL` -> không link, trả lỗi.
+    - Thành công: set `accessToken` + `refreshToken` bằng cookie hiện có rồi redirect về FE callback route.
+  - `POST /api/auth/google/login`
+    - Giữ lại để backward compatibility, nhưng FE không dùng nữa.
 - Quyết định kỹ thuật:
-  - Backend verify `idToken` ở server bằng `GoogleIdTokenVerifierService`.
-  - Điều kiện pass verify:
-    - `aud` phải thuộc danh sách client IDs cấu hình.
-    - `iss` thuộc `accounts.google.com` hoặc `https://accounts.google.com`.
-    - `exp` còn hạn tại thời điểm verify.
-    - `sub`, `email` không rỗng.
-    - `email_verified=true`.
-- Luồng xử lý chi tiết trong `UserServiceImpl.googleLogin(...)`:
-  - Bước 1: Verify token và lấy payload chuẩn hóa `GoogleUserInfo(providerId, email, name)`.
-  - Bước 2: `findByEmail(email)` trong bảng identity.
-  - Bước 3A: Nếu user đã tồn tại:
-    - `status=LOCKED` -> từ chối (`LOGIN_FAILED`).
-    - `provider != GOOGLE` -> từ chối (`EMAIL_EXISTED`) theo rule không link LOCAL.
-    - `provider == GOOGLE` nhưng `providerId` khác `sub` -> từ chối (`LOGIN_FAILED`).
-    - `provider == GOOGLE` và `providerId` khớp -> cho login.
-  - Bước 3B: Nếu user chưa tồn tại:
-    - Tạo identity user mới:
-      - `provider=GOOGLE`
-      - `providerId=sub`
-      - `role=CUSTOMER`
-      - `status=ACTIVE`
-      - `password` random đã hash (để thỏa ràng buộc schema hiện tại).
-    - Gọi gRPC sang `user-service` để tạo customer profile.
-  - Bước 4: Phát token nội bộ (`accessToken`, `refreshToken`) và lưu Redis/session giống login thường.
-- Giá trị default cho profile customer Google mới:
+  - Thêm `GoogleOAuthService` để build authorize URL và exchange code.
+  - Vẫn dùng `GoogleIdTokenVerifierService` để verify signature/claims của `id_token`.
+  - State OAuth là one-time token, lưu Redis theo key `identity:oauth:google:state:<state>`.
+  - Luồng phát token nội bộ vẫn dùng chung helper `issueAuthTokens(...)`.
+  - Success redirect mặc định: `https://cinema-star-ten.vercel.app/auth/callback?oauth=google&status=success`.
+- Default profile cho Google customer mới:
   - `dob=1970-01-01`
   - `gender=OTHER`
   - `phone=0999999999`
-  - `name`: ưu tiên claim `name` của Google, nếu thiếu thì lấy local-part của email.
-- Ma trận lỗi nghiệp vụ:
-  - `idToken` sai định dạng/hết hạn/verify thất bại -> `LOGIN_FAILED`.
-  - `GOOGLE_CLIENT_IDS` chưa cấu hình -> `LOGIN_FAILED`.
-  - Email đã có account `LOCAL` -> `EMAIL_EXISTED`.
-  - Account `GOOGLE` nhưng `providerId` mismatch -> `LOGIN_FAILED`.
-  - Account bị khóa -> `LOGIN_FAILED`.
-  - Lỗi khi create profile bên `user-service` -> `NOT_CREATED` (transaction identity rollback).
+  - `name`: ưu tiên claim `name` của Google, fallback local-part của email.
+- Ma trận lỗi redirect:
+  - `state_invalid`
+  - `code_exchange_failed`
+  - `token_invalid`
+  - `email_conflict`
+  - `login_failed`
+  - `profile_creation_failed`
+  - `oauth_denied`
 - Cấu hình deploy/runtime:
-  - Thêm config:
-    - `app.auth.google.client-ids: ${GOOGLE_CLIENT_IDS:}`
-  - Biến môi trường bắt buộc:
-    - `GOOGLE_CLIENT_IDS=<web-client-id-1>,<web-client-id-2>`
-  - Khuyến nghị:
-    - Tách client ID theo môi trường dev/staging/prod.
-    - Không commit cứng client ID vào source.
+  - `app.auth.google.client-ids`
+  - `app.auth.google.client-id`
+  - `app.auth.google.client-secret`
+  - `app.auth.google.redirect-uri`
+  - `app.auth.google.success-redirect-url`
+  - `app.auth.google.failure-redirect-url`
+  - `app.auth.google.state-ttl-minutes`
+  - Env prod trong `compose.prod.yaml` đã được đồng bộ.
 - File đã cập nhật:
   - `identity-service/src/main/java/com/cinema/identity_service/controller/UserController.java`
   - `identity-service/src/main/java/com/cinema/identity_service/services/UserService.java`
   - `identity-service/src/main/java/com/cinema/identity_service/services/impl/UserServiceImpl.java`
-  - `identity-service/src/main/java/com/cinema/identity_service/dto/request/GoogleLoginRequest.java`
-  - `identity-service/src/main/java/com/cinema/identity_service/services/google/GoogleIdTokenVerifierService.java`
-  - `identity-service/src/main/java/com/cinema/identity_service/services/google/GoogleUserInfo.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/services/google/GoogleOAuthService.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/services/google/GoogleOAuthFlowException.java`
   - `identity-service/src/main/resources/application.yaml`
-  - `identity-service/pom.xml`
+  - `compose.prod.yaml`
   - `identity-service/src/test/java/com/cinema/identity_service/services/impl/UserServiceImplTokenFlowTest.java`
-- Test evidence:
-  - Command:
-    - `./mvnw -f ..\\pom.xml -pl identity-service -am -Dtest=UserServiceImplTokenFlowTest "-Dsurefire.failIfNoSpecifiedTests=false" test`
-  - Kết quả:
-    - `BUILD SUCCESS`
-    - `Tests run: 13, Failures: 0, Errors: 0`
-  - Các case đã cover:
-    - Existing Google user login success.
-    - New Google user auto-register + login success.
-    - Existing LOCAL email bị chặn (`EMAIL_EXISTED`).
-    - ProviderId mismatch bị chặn (`LOGIN_FAILED`).
-    - Locked account bị chặn.
-    - Invalid token bị chặn.
-    - gRPC create profile fail trả lỗi và không phát token.
+- Test plan:
+  - `authorize` trả `302` và lưu `state`.
+  - `callback` success với user Google đã có.
+  - `callback` success với user mới và tạo profile gRPC.
+  - `callback` fail quay về login fallback cho state sai/hết hạn, code exchange fail, token invalid, local conflict, provider mismatch, locked account, gRPC fail.
 
 ### Mẫu request gửi FE
 - Nếu không lọc theo ngày thì bỏ hẳn `dateRange` khỏi body.

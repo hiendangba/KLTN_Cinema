@@ -23,6 +23,8 @@ import com.cinema.identity_service.messaging.publisher.InternalEmailDispatchServ
 import com.cinema.identity_service.repository.UserRepository;
 import com.cinema.identity_service.services.UserService;
 import com.cinema.identity_service.services.google.GoogleIdTokenVerifierService;
+import com.cinema.identity_service.services.google.GoogleOAuthFlowException;
+import com.cinema.identity_service.services.google.GoogleOAuthService;
 import com.cinema.identity_service.services.google.GoogleUserInfo;
 import com.cinema.identity_service.utils.OTPGenerator;
 import com.cinema.identity_service.utils.VerifyTokenUtils;
@@ -41,6 +43,9 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.NoTransactionException;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -71,11 +76,18 @@ public class UserServiceImpl implements UserService {
     final RedisTemplate<String, Object> redisTemplate;
     final UserGrpcClient userGrpcClient;
     final GoogleIdTokenVerifierService googleIdTokenVerifierService;
+    final GoogleOAuthService googleOAuthService;
     final InternalEmailDispatchService internalEmailDispatchService;
     @Value("${app.auth.cookie.secure:true}")
     boolean authCookieSecure;
     @Value("${app.auth.cookie.same-site:None}")
     String authCookieSameSite;
+    @Value("${app.auth.google.state-ttl-minutes:5}")
+    long googleStateTtlMinutes;
+    @Value("${app.auth.google.success-redirect-url:https://cinema-star-ten.vercel.app/auth/callback}")
+    String googleSuccessRedirectUrl;
+    @Value("${app.auth.google.failure-redirect-url:https://cinema-star-ten.vercel.app/login}")
+    String googleFailureRedirectUrl;
 
     static String VerifyToken = "verifyToken";
     static String AccessToken = "accessToken";
@@ -86,11 +98,24 @@ public class UserServiceImpl implements UserService {
     static String ACCESS_TOKEN_PREFIX = "identity:token:access:";
     static String REFRESH_TOKEN_PREFIX = "identity:token:refresh:";
     static String USER_TOKENS_PREFIX = "identity:user_tokens:";
+    private static final String GOOGLE_STATE_PREFIX = "identity:oauth:google:state:";
     private static final long TOKEN_EXPIRY_BUFFER = 60_000L;
     private static final String GOOGLE_PROVIDER = "GOOGLE";
     private static final LocalDate DEFAULT_GOOGLE_DOB = LocalDate.of(1970, 1, 1);
     private static final UserEnum.Gender DEFAULT_GOOGLE_GENDER = UserEnum.Gender.OTHER;
     private static final String DEFAULT_GOOGLE_PHONE = "0999999999";
+    private static final String GOOGLE_OAUTH_PARAM = "oauth";
+    private static final String GOOGLE_OAUTH_PARAM_VALUE = "google";
+    private static final String GOOGLE_STATUS_PARAM = "status";
+    private static final String GOOGLE_STATUS_SUCCESS = "success";
+    private static final String GOOGLE_STATUS_ERROR = "error";
+    private static final String GOOGLE_ERROR_REASON_STATE_INVALID = "state_invalid";
+    private static final String GOOGLE_ERROR_REASON_CODE_EXCHANGE_FAILED = "code_exchange_failed";
+    private static final String GOOGLE_ERROR_REASON_TOKEN_INVALID = "token_invalid";
+    private static final String GOOGLE_ERROR_REASON_EMAIL_CONFLICT = "email_conflict";
+    private static final String GOOGLE_ERROR_REASON_LOGIN_FAILED = "login_failed";
+    private static final String GOOGLE_ERROR_REASON_PROFILE_CREATION_FAILED = "profile_creation_failed";
+    private static final String GOOGLE_ERROR_REASON_OAUTH_DENIED = "oauth_denied";
 
     static Pattern STRONG_PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,32}$");
@@ -621,6 +646,94 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
+    @Override
+    public void googleAuthorize(HttpServletResponse response) {
+        String state = UUID.randomUUID().toString();
+        String stateKey = GOOGLE_STATE_PREFIX + state;
+
+        try {
+            redisTemplate.opsForValue().set(stateKey, state, googleStateTtlMinutes, TimeUnit.MINUTES);
+            String authorizationUrl = googleOAuthService.buildAuthorizationUrl(state);
+            redirect(response, authorizationUrl);
+        } catch (Exception ex) {
+            log.error("Failed to start Google OAuth flow", ex);
+            redisTemplate.delete(stateKey);
+            redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_LOGIN_FAILED));
+        }
+    }
+
+    @Override
+    public void googleCallback(String code, String state, String error, HttpServletResponse response) {
+        String stateKey = validateGoogleState(state);
+        if (stateKey == null) {
+            redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_STATE_INVALID));
+            return;
+        }
+
+        try {
+            redisTemplate.delete(stateKey);
+
+            if (error != null && !error.isBlank()) {
+                redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_OAUTH_DENIED));
+                return;
+            }
+
+            if (code == null || code.isBlank()) {
+                redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_CODE_EXCHANGE_FAILED));
+                return;
+            }
+
+            GoogleUserInfo googleUserInfo = googleOAuthService.exchangeCode(code);
+            User user = resolveGoogleUser(googleUserInfo);
+            issueAuthTokens(user, response);
+            redirect(response, buildGoogleSuccessRedirectUrl());
+        } catch (GoogleOAuthFlowException ex) {
+            markRollbackOnlyIfPossible();
+            redirect(response, buildGoogleFailureRedirectUrl(ex.getReason()));
+        } catch (BusinessException ex) {
+            markRollbackOnlyIfPossible();
+            redirect(response, buildGoogleFailureRedirectUrl(mapGoogleLoginFailureReason(ex)));
+        } catch (Exception ex) {
+            markRollbackOnlyIfPossible();
+            log.error("Google OAuth callback failed", ex);
+            redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_LOGIN_FAILED));
+        }
+    }
+
+    private User resolveGoogleUser(GoogleUserInfo googleUserInfo) {
+        Optional<User> existingUser = userRepository.findByEmail(googleUserInfo.email());
+
+        if (existingUser.isPresent()) {
+            User user = existingUser.get();
+            if (user.getStatus().equals(UserEnum.UserStatus.LOCKED)) {
+                throw new BusinessException(LOGIN_FAILED);
+            }
+            if (!GOOGLE_PROVIDER.equalsIgnoreCase(user.getProvider())) {
+                throw new BusinessException(EMAIL_EXISTED);
+            }
+            if (user.getProviderId() == null || !user.getProviderId().equals(googleUserInfo.providerId())) {
+                throw new BusinessException(LOGIN_FAILED);
+            }
+            return user;
+        }
+
+        return registerGoogleCustomer(googleUserInfo);
+    }
+
+    private String validateGoogleState(String state) {
+        if (state == null || state.isBlank()) {
+            return null;
+        }
+
+        String stateKey = GOOGLE_STATE_PREFIX + state;
+        Object storedState = redisTemplate.opsForValue().get(stateKey);
+        if (storedState == null || !state.equals(storedState.toString())) {
+            return null;
+        }
+
+        return stateKey;
+    }
+
     private User registerGoogleCustomer(GoogleUserInfo googleUserInfo) {
         User newUser = User.builder()
                 .email(googleUserInfo.email())
@@ -695,6 +808,52 @@ public class UserServiceImpl implements UserService {
 
         setTokenCookie(response, AccessToken, accessToken, jwtServiceImpl.getAccessTokenExpiration());
         setTokenCookie(response, RefreshToken, refreshToken, jwtServiceImpl.getRefreshTokenExpiration());
+    }
+
+    private void redirect(HttpServletResponse response, String url) {
+        try {
+            response.sendRedirect(url);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Failed to redirect response", ex);
+        }
+    }
+
+    private String buildGoogleSuccessRedirectUrl() {
+        return UriComponentsBuilder.fromUriString(googleSuccessRedirectUrl)
+                .queryParam(GOOGLE_OAUTH_PARAM, GOOGLE_OAUTH_PARAM_VALUE)
+                .queryParam(GOOGLE_STATUS_PARAM, GOOGLE_STATUS_SUCCESS)
+                .build()
+                .encode()
+                .toUriString();
+    }
+
+    private String buildGoogleFailureRedirectUrl(String reason) {
+        return UriComponentsBuilder.fromUriString(googleFailureRedirectUrl)
+                .queryParam(GOOGLE_OAUTH_PARAM, GOOGLE_OAUTH_PARAM_VALUE)
+                .queryParam(GOOGLE_STATUS_PARAM, GOOGLE_STATUS_ERROR)
+                .queryParam("code", reason)
+                .build()
+                .encode()
+                .toUriString();
+    }
+
+    private String mapGoogleLoginFailureReason(BusinessException exception) {
+        ErrorCode errorCode = exception.getErrorCode();
+        if (errorCode == EMAIL_EXISTED) {
+            return GOOGLE_ERROR_REASON_EMAIL_CONFLICT;
+        }
+        if (errorCode == NOT_CREATED) {
+            return GOOGLE_ERROR_REASON_PROFILE_CREATION_FAILED;
+        }
+        return GOOGLE_ERROR_REASON_LOGIN_FAILED;
+    }
+
+    private void markRollbackOnlyIfPossible() {
+        try {
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        } catch (NoTransactionException ignored) {
+            // No active transaction in unit tests or non-transactional callers.
+        }
     }
 
     // Revoke all active tokens for current user session scope.

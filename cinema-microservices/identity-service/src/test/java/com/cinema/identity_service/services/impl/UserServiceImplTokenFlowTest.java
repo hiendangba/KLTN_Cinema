@@ -4,15 +4,18 @@ import com.cinema.Enum.UserEnum;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.http.HeaderNames;
 import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
+import com.cinema.identity_service.dto.request.RegisterStaffRequest;
 import com.cinema.identity_service.entity.User;
 import com.cinema.identity_service.grpc.UserGrpcClient;
 import com.cinema.identity_service.mapper.UserMapper;
 import com.cinema.identity_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.identity_service.repository.UserRepository;
 import com.cinema.identity_service.services.google.GoogleIdTokenVerifierService;
+import com.cinema.identity_service.services.google.GoogleOAuthService;
 import com.cinema.identity_service.services.google.GoogleUserInfo;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +75,8 @@ class UserServiceImplTokenFlowTest {
     @Mock
     private GoogleIdTokenVerifierService googleIdTokenVerifierService;
     @Mock
+    private GoogleOAuthService googleOAuthService;
+    @Mock
     private InternalEmailDispatchService internalEmailDispatchService;
 
     private UserServiceImpl service;
@@ -87,11 +92,15 @@ class UserServiceImplTokenFlowTest {
                 redisTemplate,
                 userGrpcClient,
                 googleIdTokenVerifierService,
+                googleOAuthService,
                 internalEmailDispatchService
         );
 
         ReflectionTestUtils.setField(service, "authCookieSecure", false);
         ReflectionTestUtils.setField(service, "authCookieSameSite", "Strict");
+        ReflectionTestUtils.setField(service, "googleStateTtlMinutes", 5L);
+        ReflectionTestUtils.setField(service, "googleSuccessRedirectUrl", "https://cinema-star-ten.vercel.app/auth/callback");
+        ReflectionTestUtils.setField(service, "googleFailureRedirectUrl", "https://cinema-star-ten.vercel.app/login");
 
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         lenient().when(redisTemplate.opsForSet()).thenReturn(setOperations);
@@ -441,6 +450,262 @@ class UserServiceImplTokenFlowTest {
         verify(jwtService, never()).generateAccessToken(any(User.class), anyString());
     }
 
+    @Test
+    void createStaff_shouldAcceptRoleFromHeader() {
+        RegisterStaffRequest requestBody = RegisterStaffRequest.builder()
+                .name("Staff User")
+                .email("staff@example.com")
+                .password("Password@123")
+                .dob(LocalDate.of(2000, 1, 1))
+                .gender(UserEnum.Gender.MALE)
+                .phone("0123456789")
+                .build();
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HeaderNames.X_USER_ROLE, HeaderNames.ROLE_MANAGER);
+
+        UUID staffId = UUID.randomUUID();
+        User mappedStaff = User.builder()
+                .id(staffId)
+                .role(UserEnum.UserRole.STAFF)
+                .build();
+        User savedStaff = User.builder()
+                .id(staffId)
+                .role(UserEnum.UserRole.STAFF)
+                .build();
+
+        when(userRepository.existsByEmail(requestBody.getEmail())).thenReturn(false);
+        when(passwordEncoder.encode(requestBody.getPassword())).thenReturn("encoded-password");
+        when(userMapper.toUser(any(RegisterStaffRequest.class))).thenReturn(mappedStaff);
+        when(userRepository.save(any(User.class))).thenReturn(savedStaff);
+
+        ActionMessageResponse action = service.createStaff(requestBody, request);
+
+        assertThat(action.getMessage()).isNotBlank();
+        verify(userGrpcClient).createStaffProfile(any(RegisterStaffRequest.class));
+    }
+
+    @Test
+    void googleAuthorize_shouldStoreStateAndRedirectToGoogle() {
+        when(googleOAuthService.buildAuthorizationUrl(anyString())).thenReturn("https://accounts.google.com/o/oauth2/v2/auth?mock=1");
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleAuthorize(response);
+
+        assertThat(response.getStatus()).isEqualTo(302);
+        assertThat(response.getRedirectedUrl()).isEqualTo("https://accounts.google.com/o/oauth2/v2/auth?mock=1");
+
+        var stateCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(googleOAuthService).buildAuthorizationUrl(stateCaptor.capture());
+        String state = stateCaptor.getValue();
+        verify(valueOperations).set(
+                eq("identity:oauth:google:state:" + state),
+                eq(state),
+                eq(5L),
+                eq(TimeUnit.MINUTES)
+        );
+    }
+
+    @Test
+    void googleCallback_existingGoogleUser_shouldSetCookies_andRedirectSuccess() {
+        String state = "state-existing-google";
+        String stateKey = "identity:oauth:google:state:" + state;
+        User user = buildActiveUser();
+        user.setProvider("GOOGLE");
+        user.setProviderId("google-sub-1");
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code")).thenReturn(new GoogleUserInfo("google-sub-1", user.getEmail(), "Google User"));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+        when(jwtService.generateAccessToken(eq(user), anyString())).thenReturn("google-access-token");
+        when(jwtService.generateRefreshToken(eq(user), anyString())).thenReturn("google-refresh-token");
+        when(jwtService.getAccessTokenExpiration()).thenReturn(120_000L);
+        when(jwtService.getRefreshTokenExpiration()).thenReturn(240_000L);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleSuccessRedirect());
+        verify(redisTemplate).delete(stateKey);
+        assertThat(response.getHeaders(HttpHeaders.SET_COOKIE)).hasSize(2);
+    }
+
+    @Test
+    void googleCallback_invalidState_shouldRedirectWithStateInvalid() {
+        String state = "state-missing";
+        String stateKey = "identity:oauth:google:state:" + state;
+        when(valueOperations.get(stateKey)).thenReturn(null);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleFailureRedirect("state_invalid"));
+        verify(googleOAuthService, never()).exchangeCode(anyString());
+    }
+
+    @Test
+    void googleCallback_newGoogleUser_shouldCreateProfileAndRedirectSuccess() {
+        String state = "state-new-google";
+        String stateKey = "identity:oauth:google:state:" + state;
+        GoogleUserInfo googleUser = new GoogleUserInfo("google-sub-2", "new.user@example.com", "New User");
+        User savedUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("new.user@example.com")
+                .provider("GOOGLE")
+                .providerId("google-sub-2")
+                .password("encoded-random")
+                .role(UserEnum.UserRole.CUSTOMER)
+                .status(UserEnum.UserStatus.ACTIVE)
+                .build();
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code")).thenReturn(googleUser);
+        when(userRepository.findByEmail("new.user@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(jwtService.generateAccessToken(eq(savedUser), anyString())).thenReturn("new-google-access-token");
+        when(jwtService.generateRefreshToken(eq(savedUser), anyString())).thenReturn("new-google-refresh-token");
+        when(jwtService.getAccessTokenExpiration()).thenReturn(120_000L);
+        when(jwtService.getRefreshTokenExpiration()).thenReturn(240_000L);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleSuccessRedirect());
+        verify(userGrpcClient).createCustomerProfile(argThat(profile ->
+                savedUser.getId().equals(profile.getId())
+                        && "new.user@example.com".equals(profile.getEmail())
+                        && LocalDate.of(1970, 1, 1).equals(profile.getDob())
+                        && UserEnum.Gender.OTHER.equals(profile.getGender())
+                        && "0999999999".equals(profile.getPhone())
+                        && UserEnum.UserRole.CUSTOMER.equals(profile.getRole())
+        ));
+    }
+
+    @Test
+    void googleCallback_existingLocalUser_shouldRedirectWithEmailConflict() {
+        String state = "state-local-conflict";
+        String stateKey = "identity:oauth:google:state:" + state;
+        User user = buildActiveUser();
+        user.setProvider("LOCAL");
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code")).thenReturn(new GoogleUserInfo("google-sub-3", user.getEmail(), "Local Conflict"));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleFailureRedirect("email_conflict"));
+        verify(jwtService, never()).generateAccessToken(any(User.class), anyString());
+    }
+
+    @Test
+    void googleCallback_existingGoogleUserWithDifferentProviderId_shouldRedirectWithLoginFailed() {
+        String state = "state-provider-mismatch";
+        String stateKey = "identity:oauth:google:state:" + state;
+        User user = buildActiveUser();
+        user.setProvider("GOOGLE");
+        user.setProviderId("google-sub-old");
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code")).thenReturn(new GoogleUserInfo("google-sub-new", user.getEmail(), "Mismatch"));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleFailureRedirect("login_failed"));
+    }
+
+    @Test
+    void googleCallback_lockedUser_shouldRedirectWithLoginFailed() {
+        String state = "state-locked";
+        String stateKey = "identity:oauth:google:state:" + state;
+        User user = buildActiveUser();
+        user.setProvider("GOOGLE");
+        user.setProviderId("google-sub-1");
+        user.setStatus(UserEnum.UserStatus.LOCKED);
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code")).thenReturn(new GoogleUserInfo("google-sub-1", user.getEmail(), "Locked"));
+        when(userRepository.findByEmail(user.getEmail())).thenReturn(Optional.of(user));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleFailureRedirect("login_failed"));
+    }
+
+    @Test
+    void googleCallback_invalidGoogleToken_shouldRedirectWithTokenInvalid() {
+        String state = "state-token-invalid";
+        String stateKey = "identity:oauth:google:state:" + state;
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code"))
+                .thenThrow(new com.cinema.identity_service.services.google.GoogleOAuthFlowException("token_invalid"));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleFailureRedirect("token_invalid"));
+    }
+
+    @Test
+    void googleCallback_codeExchangeFail_shouldRedirectWithCodeExchangeFailed() {
+        String state = "state-exchange-fail";
+        String stateKey = "identity:oauth:google:state:" + state;
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code"))
+                .thenThrow(new com.cinema.identity_service.services.google.GoogleOAuthFlowException("code_exchange_failed"));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleFailureRedirect("code_exchange_failed"));
+    }
+
+    @Test
+    void googleCallback_whenCreateProfileFails_shouldRedirectWithProfileCreationFailed() {
+        String state = "state-create-fail";
+        String stateKey = "identity:oauth:google:state:" + state;
+        GoogleUserInfo googleUser = new GoogleUserInfo("google-sub-4", "failure.user@example.com", "Failure User");
+        User savedUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("failure.user@example.com")
+                .provider("GOOGLE")
+                .providerId("google-sub-4")
+                .password("encoded-random")
+                .role(UserEnum.UserRole.CUSTOMER)
+                .status(UserEnum.UserStatus.ACTIVE)
+                .build();
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code")).thenReturn(googleUser);
+        when(userRepository.findByEmail("failure.user@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        org.mockito.Mockito.doThrow(new RuntimeException("grpc failed"))
+                .when(userGrpcClient).createCustomerProfile(any(RegisterCustomerRequest.class));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleFailureRedirect("profile_creation_failed"));
+    }
+
     private User buildActiveUser() {
         return User.builder()
                 .id(UUID.randomUUID())
@@ -462,5 +727,13 @@ class UserServiceImplTokenFlowTest {
         GoogleLoginRequest request = new GoogleLoginRequest();
         ReflectionTestUtils.setField(request, "idToken", idToken);
         return request;
+    }
+
+    private String googleSuccessRedirect() {
+        return "https://cinema-star-ten.vercel.app/auth/callback?oauth=google&status=success";
+    }
+
+    private String googleFailureRedirect(String reason) {
+        return "https://cinema-star-ten.vercel.app/login?oauth=google&status=error&code=" + reason;
     }
 }

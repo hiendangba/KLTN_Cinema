@@ -31,6 +31,10 @@ public interface UserService {
 
     ActionMessageResponse googleLogin(GoogleLoginRequest googleLoginRequest, HttpServletResponse response);
 
+    void googleAuthorize(HttpServletResponse response);
+
+    void googleCallback(String code, String state, String error, HttpServletResponse response);
+
     ActionMessageResponse logout(HttpServletRequest request, HttpServletResponse response);
 
     ActionMessageResponse refreshToken(HttpServletRequest request, HttpServletResponse response);

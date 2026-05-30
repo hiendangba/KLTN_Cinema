@@ -75,6 +75,19 @@ public class UserController extends BaseController {
         return ok(actionMessageResponse);
     }
 
+    @GetMapping("/google/authorize")
+    public void googleAuthorize(HttpServletResponse response) {
+        userService.googleAuthorize(response);
+    }
+
+    @GetMapping("/google/callback")
+    public void googleCallback(@RequestParam(required = false) String code,
+                                @RequestParam(required = false) String state,
+                                @RequestParam(required = false) String error,
+                                HttpServletResponse response) {
+        userService.googleCallback(code, state, error, response);
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<APIResponse<ActionMessageResponse>> logout(HttpServletRequest request,
                                                                      HttpServletResponse httpServletResponse) {
