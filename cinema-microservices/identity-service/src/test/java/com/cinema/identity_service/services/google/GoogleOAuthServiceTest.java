@@ -12,12 +12,13 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
-import java.nio.charset.StandardCharsets;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.allOf;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -62,14 +63,13 @@ class GoogleOAuthServiceTest {
 
         mockServer.expect(requestTo(TOKEN_URL))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(request -> {
-                    String body = new String(request.getBody().readAllBytes(), StandardCharsets.UTF_8);
-                    assertThat(body).contains("code=auth-code");
-                    assertThat(body).contains("client_id=client-id.apps.googleusercontent.com");
-                    assertThat(body).contains("client_secret=client-secret");
-                    assertThat(body).contains("redirect_uri=https%3A%2F%2Fcinema-api.duckdns.org%2Fapi%2Fauth%2Fgoogle%2Fcallback");
-                    assertThat(body).contains("grant_type=authorization_code");
-                })
+                .andExpect(content().string(allOf(
+                        containsString("code=auth-code"),
+                        containsString("client_id=client-id.apps.googleusercontent.com"),
+                        containsString("client_secret=client-secret"),
+                        containsString("redirect_uri=https%3A%2F%2Fcinema-api.duckdns.org%2Fapi%2Fauth%2Fgoogle%2Fcallback"),
+                        containsString("grant_type=authorization_code")
+                )))
                 .andRespond(withStatus(HttpStatus.OK)
                         .contentType(MediaType.APPLICATION_JSON)
                         .body(tokenJson));
