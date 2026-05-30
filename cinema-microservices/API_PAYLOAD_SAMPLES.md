@@ -313,3 +313,21 @@ Quy ước chung:
   }
 }
 ```
+
+## Film Customer Search
+
+`POST /api/films/customer/search`
+
+```json
+{
+  "cursor": null,
+  "size": 20,
+  "keyword": "",
+  "sortBy": [],
+  "filterBy": [],
+  "dateRange": {
+    "from": "2026-01-01T00:00:00",
+    "to": "2026-05-31T23:59:59"
+  }
+}
+```

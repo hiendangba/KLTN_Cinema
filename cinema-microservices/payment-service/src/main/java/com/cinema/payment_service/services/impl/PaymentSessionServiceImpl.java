@@ -146,7 +146,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setCheckoutPayloadJson(checkoutResult.requestPayloadJson());
         PaymentTransaction savedTransaction = paymentTransactionRepository.save(transaction);
         savePromotionSnapshots(savedTransaction, appliedPromotions);
-        return toResponse(savedTransaction);
+        return toResponse(savedTransaction, checkoutResult.qrCodeUrl());
     }
 
     @Override
@@ -764,6 +764,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private PaymentSessionResponse toResponse(PaymentTransaction transaction) {
+        return toResponse(transaction, null);
+    }
+
+    private PaymentSessionResponse toResponse(PaymentTransaction transaction, String qrCodeUrl) {
         return PaymentSessionResponse.builder()
                 .id(transaction.getId())
                 .bookingId(transaction.getBookingId())
@@ -778,6 +782,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .orderInvoiceNumber(transaction.getOrderInvoiceNumber())
                 .providerRef(transaction.getProviderRef())
                 .payUrl(transaction.getPayUrl())
+                .qrCodeUrl(qrCodeUrl)
                 .checkoutFields(readCheckoutFields(transaction.getCheckoutPayloadJson()))
                 .status(transaction.getStatus())
                 .expiresAt(transaction.getExpiresAt())

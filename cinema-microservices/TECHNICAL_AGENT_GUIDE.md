@@ -327,6 +327,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
 | `POST` | `/api/films/search` | ❌ Public | Tìm kiếm danh mục phim kết hợp Cursor Pagination + Filters. |
+| `POST` | `/api/films/customer/search` | ✅ CUSTOMER | Tìm phim cho khách hàng, chỉ trả phim đang chiếu/sắp chiếu và có showtime active. |
 | `GET` | `/api/films/{id}` | ❌ Public | Lấy nguyên mẫu thông tin phim chi tiết (có đánh Cache Redis). |
 | `POST` | `/api/films` | ✅ ADMIN | Đăng tải thông tin Phim mới. |
 | `PUT` | `/api/films/{id}` | ✅ ADMIN | Chỉnh sửa cập nhật nội dung Phim. |
@@ -366,6 +367,8 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `POST` | `/api/payments/revenues/cinemas/export` | ✅ ADMIN/MGMT | Xuất Excel báo cáo doanh thu payment theo rạp, hỗ trợ `selectedIds` theo `cinemaId`. |
 | `POST` | `/api/payments/promotions/preview` | ✅ Authenticated | Ước tính giảm giá từ promo code trước checkout. |
 | `POST` | `/api/payments/webhooks/momo` | ❌ Public | Nhận webhook từ MoMo, verify chữ ký IPN, idempotent theo event key. |
+
+- `POST /api/payments/sessions` trả `payUrl` và `qrCodeUrl` trong `PaymentSessionResponse` để FE render QR thanh toán trực tiếp trên trang người dùng.
 
 ### 6. Hall Service (`/api/halls`)
 
@@ -1240,5 +1243,59 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
     - `Tests run: 27`, `Failures: 0`, `Errors: 0`
 - Ghi chú:
   - Full suite của `identity-service` có thể fail test integration `IdentityServiceApplicationTests` nếu thiếu `DB_URL`; không ảnh hưởng tới thay đổi contract auth/header ở trên.
+
+### 2026-05-30 Customer film search với showtime active
+- Yêu cầu:
+  - Thêm `POST /api/films/customer/search` cho `ROLE_CUSTOMER`.
+  - API chỉ trả phim `NOW_SHOWING`/`COMING_SOON` và phải có ít nhất một showtime active.
+  - Response vẫn giữ nguyên `CursorPageResponse<FilmResponse>`, không nhét showtime detail vào list phim.
+- Quyết định:
+  - `film-service` thêm customer-only scope riêng, không đụng vào `POST /api/films/search` hiện tại.
+  - `showtime-service` expose gRPC nội bộ `ListActiveFilmIds` để trả danh sách `filmId` đang có showtime active.
+  - `film-service` gọi gRPC đó rồi lọc tiếp bằng cursor search hiện có.
+  - Màn đặt vé vẫn dùng `GET /api/showtimes/films/{filmId}/active` để lấy showtime sau khi khách chọn phim.
+- File đã cập nhật:
+  - `common-lib/src/main/proto/showtime_internal.proto`
+  - `showtime-service/src/main/java/com/cinema/showtime_service/repository/ShowTimeRepository.java`
+  - `showtime-service/src/main/java/com/cinema/showtime_service/grpc/ShowtimeInternalGrpcService.java`
+  - `film-service/src/main/java/com/cinema/film_service/controller/FilmController.java`
+  - `film-service/src/main/java/com/cinema/film_service/services/FilmService.java`
+  - `film-service/src/main/java/com/cinema/film_service/services/impl/FilmServiceImpl.java`
+  - `film-service/src/main/java/com/cinema/film_service/grpc/ShowtimeGrpcClient.java`
+  - `film-service/src/main/resources/application.yaml`
+  - `compose.prod.yaml`
+  - `film-service/src/test/java/com/cinema/film_service/services/impl/FilmServiceImplTest.java`
+  - `showtime-service/src/test/java/com/cinema/showtime_service/grpc/ShowtimeInternalGrpcServiceTest.java`
+- Test plan:
+  - Non-customer bị từ chối.
+  - Film list chỉ còn `NOW_SHOWING`/`COMING_SOON` có active showtime.
+  - Cursor pagination vẫn giữ đúng `nextCursor`/`prevCursor`.
+  - `ListActiveFilmIds` trả danh sách film distinct, chỉ gồm film active.
+
+### 2026-05-30 Showtime search theo phim (ngày + rạp) và bỏ endpoint active cũ
+- Yêu cầu:
+  - Lấy showtime theo phim có phân trang, lọc theo ngày và rạp.
+  - Không dùng endpoint `GET /api/showtimes/films/{filmId}/active` nữa.
+- Quyết định:
+  - Thêm `POST /api/showtimes/films/{filmId}/search`.
+  - Request body:
+    - `page`, `size`
+    - `date` (bắt buộc, `yyyy-MM-dd`)
+    - `cinemaId` (optional)
+  - Backend xử lý:
+    - lọc `filmId`
+    - lọc theo ngày: convert `date` thành khoảng `startOfDay -> endOfDay`
+    - nếu có `cinemaId`: lấy danh sách `hallId` thuộc rạp rồi lọc `hallId IN (...)`
+    - chỉ trả showtime còn hoạt động: `SCHEDULED`, `ONGOING`
+  - Sort mặc định: `startDateTime ASC`, `id ASC`.
+  - Bỏ endpoint cũ: `GET /api/showtimes/films/{filmId}/active`.
+- Test đã thêm:
+  - Film + date + cinema filter đúng dữ liệu.
+  - Cinema không có hall -> page rỗng.
+  - Thiếu `date` -> validation fail.
+- Ghi chú build/test:
+  - Compile/test full trong môi trường local đang bị chặn bởi lỗi generated/gRPC có sẵn của repo, không phải do logic mới.
+- Ghi chú deploy:
+  - Rebuild/redeploy tối thiểu `showtime-service` khi phát hành thay đổi API này.
 
 

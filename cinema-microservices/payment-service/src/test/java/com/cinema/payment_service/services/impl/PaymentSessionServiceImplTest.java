@@ -123,6 +123,7 @@ class PaymentSessionServiceImplTest {
         assertEquals(bookingId, response.getBookingId());
         assertEquals(filmId, saved.getFilmId());
         assertEquals("https://momo.example.com/pay", response.getPayUrl());
+        assertEquals("https://momo.example.com/qr", response.getQrCodeUrl());
         assertEquals("https://momo.example.com/pay", saved.getPayUrl());
         verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
                 bookingId,
@@ -199,6 +200,7 @@ class PaymentSessionServiceImplTest {
         assertEquals(BigDecimal.valueOf(18000), saved.getPromotionDiscountAmount());
         assertEquals(BigDecimal.valueOf(162000), saved.getAmount());
         assertEquals(BigDecimal.valueOf(162000), response.getAmount());
+        assertEquals("https://momo.example.com/qr", response.getQrCodeUrl());
         verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
                 bookingId,
                 promotionId,

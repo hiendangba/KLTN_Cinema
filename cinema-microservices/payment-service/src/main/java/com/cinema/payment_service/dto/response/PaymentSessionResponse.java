@@ -1,6 +1,7 @@
 package com.cinema.payment_service.dto.response;
 
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;
 import lombok.Data;
 
@@ -25,6 +26,8 @@ public class PaymentSessionResponse {
     private String orderInvoiceNumber;
     private String providerRef;
     private String payUrl;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String qrCodeUrl;
     private Map<String, String> checkoutFields;
     private PaymentTransactionStatus status;
     private LocalDateTime expiresAt;
