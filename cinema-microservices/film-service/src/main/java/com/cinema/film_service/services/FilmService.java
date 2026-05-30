@@ -24,5 +24,7 @@ public interface FilmService {
 
     CursorPageResponse<FilmResponse> searchFilms(FilmCursorPageRequest request);
 
+    CursorPageResponse<FilmResponse> searchCustomerFilms(FilmCursorPageRequest request, HttpServletRequest httpRequest);
+
     ActionMessageResponse deleteFilm(UUID id, HttpServletRequest httpRequest);
 }

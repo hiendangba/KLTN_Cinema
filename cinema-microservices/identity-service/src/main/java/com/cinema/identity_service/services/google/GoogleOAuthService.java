@@ -5,6 +5,8 @@ import com.cinema.exception.ErrorCode;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeRequestUrl;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeTokenRequest;
 import com.google.api.client.googleapis.auth.oauth2.GoogleTokenResponse;
+import com.google.api.client.auth.oauth2.TokenErrorResponse;
+import com.google.api.client.auth.oauth2.TokenResponseException;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import lombok.AccessLevel;
@@ -38,40 +40,75 @@ public class GoogleOAuthService {
     String googleRedirectUri;
 
     public String buildAuthorizationUrl(String state) {
+        String clientId = resolveClientId();
+        String redirectUri = requireValue(googleRedirectUri, "Google redirect URI");
+        log.info("Google OAuth authorize init: statePresent={} stateLength={} clientId={} redirectUri={} scopes={}",
+                hasText(state),
+                safeLength(state),
+                maskClientId(clientId),
+                redirectUri,
+                SCOPES);
         GoogleAuthorizationCodeRequestUrl requestUrl = new GoogleAuthorizationCodeRequestUrl(
                 AUTHORIZATION_SERVER_URL,
-                resolveClientId(),
-                requireValue(googleRedirectUri, "Google redirect URI"),
+                clientId,
+                redirectUri,
                 SCOPES);
-        return requestUrl
+        String authorizationUrl = requestUrl
                 .setState(state)
                 .build();
+        log.info("Google OAuth authorize URL built: host={} stateLength={}",
+                AUTHORIZATION_SERVER_URL, safeLength(state));
+        return authorizationUrl;
     }
 
     public GoogleUserInfo exchangeCode(String code) {
+        String clientId = resolveClientId();
+        String clientSecret = requireValue(googleClientSecret, "Google client secret");
+        String redirectUri = requireValue(googleRedirectUri, "Google redirect URI");
+        log.info(
+                "Google OAuth exchange start: codePresent={} codeLength={} clientId={} redirectUri={} clientSecretConfigured={}",
+                hasText(code),
+                safeLength(code),
+                maskClientId(clientId),
+                redirectUri,
+                hasText(clientSecret));
         try {
             GoogleAuthorizationCodeTokenRequest tokenRequest = new GoogleAuthorizationCodeTokenRequest(
                     new NetHttpTransport(),
                     GsonFactory.getDefaultInstance(),
                     TOKEN_SERVER_URL,
-                    resolveClientId(),
-                    requireValue(googleClientSecret, "Google client secret"),
+                    clientId,
+                    clientSecret,
                     code);
-            tokenRequest.setRedirectUri(requireValue(googleRedirectUri, "Google redirect URI"));
+            tokenRequest.setRedirectUri(redirectUri);
 
             GoogleTokenResponse tokenResponse = tokenRequest.execute();
             String idToken = tokenResponse.getIdToken();
             if (idToken == null || idToken.isBlank()) {
                 throw new GoogleOAuthFlowException("token_invalid");
             }
+            log.info("Google OAuth exchange success: idTokenPresent={} idTokenLength={}",
+                    hasText(idToken), safeLength(idToken));
             return googleIdTokenVerifierService.verify(idToken);
         } catch (GoogleOAuthFlowException ex) {
             throw ex;
         } catch (BusinessException ex) {
-            log.warn("Google OAuth token verification failed");
+            log.warn("Google OAuth token verification failed: codePresent={} codeLength={} reason={}",
+                    hasText(code), safeLength(code), ex.getErrorCode(), ex);
             throw new GoogleOAuthFlowException("token_invalid", ex);
+        } catch (TokenResponseException ex) {
+            TokenErrorResponse details = ex.getDetails();
+            log.warn(
+                    "Google OAuth code exchange failed: statusCode={} error={} errorDescription={} responseBody={}",
+                    ex.getStatusCode(),
+                    details == null ? null : details.getError(),
+                    details == null ? null : details.getErrorDescription(),
+                    sanitizeForLog(ex.getContent()),
+                    ex);
+            throw new GoogleOAuthFlowException("code_exchange_failed", ex);
         } catch (IOException ex) {
-            log.warn("Google OAuth code exchange failed", ex);
+            log.warn("Google OAuth code exchange IO failure: codePresent={} codeLength={} reason={}",
+                    hasText(code), safeLength(code), ex.getMessage(), ex);
             throw new GoogleOAuthFlowException("code_exchange_failed", ex);
         }
     }
@@ -109,5 +146,34 @@ public class GoogleOAuthService {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private int safeLength(String value) {
+        return value == null ? 0 : value.length();
+    }
+
+    private String maskClientId(String clientId) {
+        if (clientId == null || clientId.isBlank()) {
+            return "<empty>";
+        }
+        if (clientId.length() <= 10) {
+            return "***";
+        }
+        return clientId.substring(0, 6) + "..." + clientId.substring(clientId.length() - 4);
+    }
+
+    private String sanitizeForLog(String value) {
+        if (value == null) {
+            return null;
+        }
+        String oneLine = value.replaceAll("[\\r\\n]+", " ").trim();
+        if (oneLine.length() <= 500) {
+            return oneLine;
+        }
+        return oneLine.substring(0, 500) + "...";
     }
 }

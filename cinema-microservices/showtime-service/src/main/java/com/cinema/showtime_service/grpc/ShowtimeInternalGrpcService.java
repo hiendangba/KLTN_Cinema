@@ -4,6 +4,8 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.showtime.GetShowtimeByIdReply;
 import com.cinema.grpc.showtime.GetShowtimeByIdRequest;
+import com.cinema.grpc.showtime.ListActiveFilmIdsReply;
+import com.cinema.grpc.showtime.ListActiveFilmIdsRequest;
 import com.cinema.grpc.showtime.ListActiveShowtimeIdsByHallReply;
 import com.cinema.grpc.showtime.ListActiveShowtimeIdsByHallRequest;
 import com.cinema.grpc.showtime.ShowtimeInternalServiceGrpc;
@@ -113,6 +115,32 @@ public class ShowtimeInternalGrpcService extends ShowtimeInternalServiceGrpc.Sho
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching active showtime ids by hall", ex);
             responseObserver.onNext(ListActiveShowtimeIdsByHallReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void listActiveFilmIds(ListActiveFilmIdsRequest request, StreamObserver<ListActiveFilmIdsReply> responseObserver) {
+        try {
+            ListActiveFilmIdsReply.Builder builder = ListActiveFilmIdsReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Active film ids fetched successfully");
+
+            showTimeRepository.findActiveFilmIds()
+                    .stream()
+                    .distinct()
+                    .map(UUID::toString)
+                    .forEach(builder::addFilmIds);
+
+            responseObserver.onNext(builder.build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching active film ids", ex);
+            responseObserver.onNext(ListActiveFilmIdsReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())

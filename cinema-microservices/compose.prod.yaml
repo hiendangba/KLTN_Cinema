@@ -104,6 +104,8 @@ services:
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: admin
       SPRING_RABBITMQ_PASSWORD: admin
+      SHOWTIME_GRPC_HOST: showtime-service
+      SHOWTIME_GRPC_PORT: 9194
       USER_SERVICE_URL: http://user-service:8091/api/users
       GRPC_SERVER_PORT: 9192
       SERVER_PORT: 8092

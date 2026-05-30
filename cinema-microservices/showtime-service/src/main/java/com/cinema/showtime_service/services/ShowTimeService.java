@@ -4,6 +4,7 @@ import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.dto.response.ResultResponse;
+import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
@@ -34,5 +35,5 @@ public interface ShowTimeService {
 
     SeatMapResponse getSeatMapByShowtimeId(UUID showtimeId);
 
-    PageResponse<ShowTimeResponse> getActiveShowtimesByFilmId(UUID filmId, Integer page, Integer size);
+    PageResponse<ShowTimeResponse> searchShowtimesByFilmId(UUID filmId, SearchShowtimesByFilmRequest request);
 }

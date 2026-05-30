@@ -4,7 +4,9 @@ import com.cinema.Enum.ShowTimeEnum;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
+import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
+import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
 import com.cinema.showtime_service.dto.response.HallResponse;
@@ -28,7 +30,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -38,9 +44,12 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -222,11 +231,20 @@ class ShowTimeServiceImplTest {
     }
 
     @Test
-    void getActiveShowtimesByFilmId_shouldReturnPagedActiveShowtimes() {
+    @SuppressWarnings("unchecked")
+    void searchShowtimesByFilmId_shouldFilterByDateAndCinemaAndSort() {
         UUID filmId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
         UUID hallId = UUID.randomUUID();
         UUID pricingPolicyId = UUID.randomUUID();
         UUID showtimeId = UUID.randomUUID();
+
+        SearchShowtimesByFilmRequest request = SearchShowtimesByFilmRequest.builder()
+                .page(2)
+                .size(10)
+                .date(LocalDate.of(2026, 5, 30))
+                .cinemaId(cinemaId)
+                .build();
 
         ShowTime showTime = new ShowTime();
         showTime.setId(showtimeId);
@@ -235,8 +253,8 @@ class ShowTimeServiceImplTest {
         showTime.setPricingPolicyId(pricingPolicyId);
         showTime.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
         showTime.setIsDeleted(false);
-        showTime.setStartDateTime(LocalDateTime.now().plusHours(1));
-        showTime.setEndDateTime(LocalDateTime.now().plusHours(3));
+        showTime.setStartDateTime(LocalDateTime.of(2026, 5, 30, 9, 0));
+        showTime.setEndDateTime(LocalDateTime.of(2026, 5, 30, 11, 0));
 
         ShowTimeResponse mappedResponse = ShowTimeResponse.builder()
                 .id(showtimeId)
@@ -249,12 +267,11 @@ class ShowTimeServiceImplTest {
         PricingPolicy policy = new PricingPolicy();
         policy.setId(pricingPolicyId);
         PricingPolicyResponse policyResponse = PricingPolicyResponse.builder().id(pricingPolicyId).build();
-
         FilmResponse filmResponse = FilmResponse.builder().id(filmId).build();
         HallResponse hallResponse = HallResponse.builder().id(hallId).build();
         SeatGrpcClient.LayoutBundle layoutBundle = SeatGrpcClient.LayoutBundle.builder()
-                .totalRows(2)
-                .totalCols(3)
+                .totalRows(1)
+                .totalCols(1)
                 .screenPosition("TOP")
                 .seats(List.of(
                         com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
@@ -262,56 +279,82 @@ class ShowTimeServiceImplTest {
                                 .setRow(1)
                                 .setCol(1)
                                 .setSeatType("STANDARD")
-                                .build(),
-                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
-                                .setSeatCode("A2")
-                                .setRow(1)
-                                .setCol(2)
-                                .setSeatType("STANDARD")
-                                .build(),
-                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
-                                .setSeatCode("B1")
-                                .setRow(2)
-                                .setCol(1)
-                                .setSeatType("VIP")
-                                .build(),
-                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
-                                .setSeatCode("B2")
-                                .setRow(2)
-                                .setCol(2)
-                                .setSeatType("VIP")
                                 .build()))
-                .cells(List.<com.cinema.grpc.seat.LayoutCellPayload>of())
+                .cells(List.of())
                 .build();
 
+        when(hallGrpcClient.listActiveHallIdsByCinema(cinemaId)).thenReturn(List.of(hallId));
         when(showTimeRepositoryImpl.countWithFilter(eq(null), any())).thenReturn(1L);
-        when(showTimeRepositoryImpl.searchWithPageAndSortAndFilter(eq(null), eq(1), eq(20), any(), any()))
+        when(showTimeRepositoryImpl.searchWithPageAndSortAndFilter(eq(null), eq(2), eq(10), any(), any()))
                 .thenReturn(List.of(showTime));
         when(showTimeMapper.toResponse(showTime)).thenReturn(mappedResponse);
         when(pricingPolicyRepository.findAllById(List.of(pricingPolicyId))).thenReturn(List.of(policy));
         when(pricingPolicyMapper.toResponse(policy)).thenReturn(policyResponse);
-        when(filmGrpcClient.getFilmsByIds(List.of(filmId))).thenReturn(java.util.Map.of(filmId, filmResponse));
+        when(filmGrpcClient.getFilmsByIds(List.of(filmId))).thenReturn(Map.of(filmId, filmResponse));
         when(hallGrpcClient.getHallById(hallId)).thenReturn(hallResponse);
         when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
-        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1", "A2", "B1", "B2"))))
-                .thenReturn(Map.of(
-                        "A1", "BOOKED",
-                        "A2", "LOCKED",
-                        "B1", "AVAILABLE",
-                        "B2", "AVAILABLE"));
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1"))))
+                .thenReturn(Map.of("A1", "AVAILABLE"));
 
-        var result = showTimeService.getActiveShowtimesByFilmId(filmId, null, null);
+        var result = showTimeService.searchShowtimesByFilmId(filmId, request);
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());
         assertEquals(1, result.getData().size());
         assertEquals(filmId, result.getData().get(0).getFilmId());
-        assertNotNull(result.getData().get(0).getFilm());
-        assertNotNull(result.getData().get(0).getHall());
-        assertNotNull(result.getData().get(0).getPricingPolicy());
-        assertEquals(4, result.getData().get(0).getTotalSeatCapacity());
-        assertEquals(2, result.getData().get(0).getOccupiedSeats());
-        assertEquals(2, result.getData().get(0).getAvailableSeats());
+
+        ArgumentCaptor<List> filterCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List> sortCaptor = ArgumentCaptor.forClass(List.class);
+        verify(showTimeRepositoryImpl).countWithFilter(eq(null), filterCaptor.capture());
+        verify(showTimeRepositoryImpl).searchWithPageAndSortAndFilter(eq(null), eq(2), eq(10), sortCaptor.capture(), any());
+
+        List<com.cinema.dto.request.FilterField<ShowTimeField>> filters =
+                (List<com.cinema.dto.request.FilterField<ShowTimeField>>) filterCaptor.getValue();
+        assertTrue(filters.stream().anyMatch(filter -> filter.getField() == ShowTimeField.FILM_ID));
+        assertTrue(filters.stream().anyMatch(filter -> filter.getField() == ShowTimeField.START_DATE_TIME));
+        assertTrue(filters.stream().anyMatch(filter -> filter.getField() == ShowTimeField.HALL_ID));
+
+        List<com.cinema.dto.request.SortField<ShowTimeField>> sorts =
+                (List<com.cinema.dto.request.SortField<ShowTimeField>>) sortCaptor.getValue();
+        assertEquals(2, sorts.size());
+        assertEquals(ShowTimeField.START_DATE_TIME, sorts.get(0).getField());
+        assertEquals("ASC", sorts.get(0).getDirection());
+        assertEquals(ShowTimeField.ID, sorts.get(1).getField());
+        assertEquals("ASC", sorts.get(1).getDirection());
+    }
+
+    @Test
+    void searchShowtimesByFilmId_shouldReturnEmptyPageWhenCinemaHasNoHall() {
+        UUID filmId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+
+        SearchShowtimesByFilmRequest request = SearchShowtimesByFilmRequest.builder()
+                .page(1)
+                .size(20)
+                .date(LocalDate.of(2026, 5, 30))
+                .cinemaId(cinemaId)
+                .build();
+
+        when(hallGrpcClient.listActiveHallIdsByCinema(cinemaId)).thenReturn(List.of());
+
+        var result = showTimeService.searchShowtimesByFilmId(filmId, request);
+
+        assertNotNull(result);
+        assertEquals(0L, result.getTotalElements());
+        assertEquals(0, result.getData().size());
+        verifyNoInteractions(showTimeRepositoryImpl);
+    }
+
+    @Test
+    void searchShowtimesByFilmRequest_shouldRejectMissingDate() {
+        Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+        SearchShowtimesByFilmRequest request = SearchShowtimesByFilmRequest.builder()
+                .page(1)
+                .size(20)
+                .build();
+
+        assertTrue(validator.validate(request).stream()
+                .anyMatch(violation -> "date".equals(violation.getPropertyPath().toString())));
     }
 
     private HttpServletRequest managerRequest(UUID userId) {

@@ -12,6 +12,7 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
+import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
@@ -79,24 +80,54 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                                                           HttpServletRequest httpRequest) {
         PageRequest<ShowTimeField> scopedRequest = scopeShowtimeSearchRequest(request, httpRequest);
         if (scopedRequest == null) {
-            return emptyShowtimePageResponse(request);
+            return emptyShowtimePageResponse(request.getPage(), request.getSize());
         }
         return enrichShowtimePage(searchShowtimesBase(scopedRequest));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<ShowTimeResponse> getActiveShowtimesByFilmId(UUID filmId, Integer page, Integer size) {
-        PageRequest<ShowTimeField> request = PageRequest.<ShowTimeField>builder()
-                .page(page)
-                .size(size)
-                .filterBy(List.of(FilterField.<ShowTimeField>builder()
-                        .field(ShowTimeField.FILM_ID)
-                        .operator("EQ")
-                        .value(filmId.toString())
-                        .build()))
+    public PageResponse<ShowTimeResponse> searchShowtimesByFilmId(UUID filmId, SearchShowtimesByFilmRequest request) {
+        if (request == null || request.getDate() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        List<FilterField<ShowTimeField>> filters = new ArrayList<>();
+        filters.add(FilterField.<ShowTimeField>builder()
+                .field(ShowTimeField.FILM_ID)
+                .operator("EQ")
+                .value(filmId)
+                .build());
+
+        LocalDateTime startOfDay = request.getDate().atStartOfDay();
+        LocalDateTime endOfDay = request.getDate().plusDays(1).atStartOfDay().minusNanos(1);
+        filters.add(FilterField.<ShowTimeField>builder()
+                .field(ShowTimeField.START_DATE_TIME)
+                .operator("BETWEEN")
+                .value(List.of(startOfDay, endOfDay))
+                .build());
+
+        if (request.getCinemaId() != null) {
+            List<UUID> hallIds = hallGrpcClient.listActiveHallIdsByCinema(request.getCinemaId());
+            if (hallIds == null || hallIds.isEmpty()) {
+                return emptyShowtimePageResponse(request.getPage(), request.getSize());
+            }
+            filters.add(FilterField.<ShowTimeField>builder()
+                    .field(ShowTimeField.HALL_ID)
+                    .operator("IN")
+                    .value(hallIds)
+                    .build());
+        }
+
+        PageRequest<ShowTimeField> scopedRequest = PageRequest.<ShowTimeField>builder()
+                .page(request.getPage())
+                .size(request.getSize())
+                .sortBy(List.of(
+                        new SortField<>(ShowTimeField.START_DATE_TIME, "ASC"),
+                        new SortField<>(ShowTimeField.ID, "ASC")))
+                .filterBy(filters)
                 .build();
-        return enrichShowtimePage(searchShowtimesBase(request));
+        return enrichShowtimePage(searchShowtimesBase(scopedRequest));
     }
 
     private PageResponse<ShowTimeResponse> searchShowtimesBase(PageRequest<ShowTimeField> request) {
@@ -180,17 +211,17 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 .build();
     }
 
-    private PageResponse<ShowTimeResponse> emptyShowtimePageResponse(PageRequest<ShowTimeField> request) {
-        int page = request.getPageOrDefault();
-        int size = request.getSizeOrDefault();
+    private PageResponse<ShowTimeResponse> emptyShowtimePageResponse(Integer page, Integer size) {
+        int currentPage = page == null || page < 1 ? 1 : page;
+        int pageSize = size == null || size < 1 ? 20 : size;
         return PageResponse.<ShowTimeResponse>builder()
                 .data(List.of())
-                .currentPage(page)
+                .currentPage(currentPage)
                 .totalPages(0)
                 .totalElements(0)
-                .size(size)
+                .size(pageSize)
                 .hasNext(false)
-                .hasPrevious(page > 1)
+                .hasPrevious(currentPage > 1)
                 .build();
     }
 

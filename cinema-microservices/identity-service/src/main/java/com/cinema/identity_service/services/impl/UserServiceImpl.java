@@ -655,9 +655,11 @@ public class UserServiceImpl implements UserService {
         try {
             redisTemplate.opsForValue().set(stateKey, state, googleStateTtlMinutes, TimeUnit.MINUTES);
             String authorizationUrl = googleOAuthService.buildAuthorizationUrl(state);
+            log.info("Google OAuth authorize prepared: stateKey={} stateLength={} ttlMinutes={} redirectUrl={}",
+                    stateKey, safeLength(state), googleStateTtlMinutes, authorizationUrl);
             redirect(response, authorizationUrl);
         } catch (Exception ex) {
-            log.error("Failed to start Google OAuth flow", ex);
+            log.error("Failed to start Google OAuth flow: stateKey={} stateLength={}", stateKey, safeLength(state), ex);
             redisTemplate.delete(stateKey);
             redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_LOGIN_FAILED));
         }
@@ -665,21 +667,30 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void googleCallback(String code, String state, String error, HttpServletResponse response) {
+        log.info(
+                "Google OAuth callback received: codePresent={} codeLength={} statePresent={} stateLength={} error={}",
+                hasText(code), safeLength(code), hasText(state), safeLength(state), error);
         String stateKey = validateGoogleState(state);
         if (stateKey == null) {
+            log.warn("Google OAuth callback state invalid: statePresent={} stateLength={}",
+                    hasText(state), safeLength(state));
             redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_STATE_INVALID));
             return;
         }
 
         try {
+            log.info("Google OAuth callback state validated: stateKey={}", stateKey);
             redisTemplate.delete(stateKey);
+            log.info("Google OAuth callback state deleted: stateKey={}", stateKey);
 
             if (error != null && !error.isBlank()) {
+                log.warn("Google OAuth callback denied by provider: error={}", error);
                 redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_OAUTH_DENIED));
                 return;
             }
 
             if (code == null || code.isBlank()) {
+                log.warn("Google OAuth callback missing authorization code");
                 redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_CODE_EXCHANGE_FAILED));
                 return;
             }
@@ -687,25 +698,36 @@ public class UserServiceImpl implements UserService {
             GoogleUserInfo googleUserInfo = googleOAuthService.exchangeCode(code);
             User user = resolveGoogleUser(googleUserInfo);
             issueAuthTokens(user, response);
+            log.info("Google OAuth callback success: userId={} role={} provider={} providerId={}",
+                    user.getId(), user.getRole(), user.getProvider(), maskProviderId(user.getProviderId()));
             redirect(response, buildGoogleSuccessRedirectUrl());
         } catch (GoogleOAuthFlowException ex) {
             markRollbackOnlyIfPossible();
+            log.warn("Google OAuth callback failed in exchange/verify phase: reason={} codeLength={} stateLength={}",
+                    ex.getReason(), safeLength(code), safeLength(state), ex);
             redirect(response, buildGoogleFailureRedirectUrl(ex.getReason()));
         } catch (BusinessException ex) {
             markRollbackOnlyIfPossible();
+            log.warn("Google OAuth callback business failure: errorCode={} mappedReason={}",
+                    ex.getErrorCode(), mapGoogleLoginFailureReason(ex), ex);
             redirect(response, buildGoogleFailureRedirectUrl(mapGoogleLoginFailureReason(ex)));
         } catch (Exception ex) {
             markRollbackOnlyIfPossible();
-            log.error("Google OAuth callback failed", ex);
+            log.error("Google OAuth callback failed unexpectedly: codeLength={} stateLength={} error={}",
+                    safeLength(code), safeLength(state), error, ex);
             redirect(response, buildGoogleFailureRedirectUrl(GOOGLE_ERROR_REASON_LOGIN_FAILED));
         }
     }
 
     private User resolveGoogleUser(GoogleUserInfo googleUserInfo) {
+        log.info("Resolving Google user: email={} providerId={}",
+                maskEmail(googleUserInfo.email()), maskProviderId(googleUserInfo.providerId()));
         Optional<User> existingUser = userRepository.findByEmail(googleUserInfo.email());
 
         if (existingUser.isPresent()) {
             User user = existingUser.get();
+            log.info("Found existing user for Google login: userId={} provider={} status={} providerId={}",
+                    user.getId(), user.getProvider(), user.getStatus(), maskProviderId(user.getProviderId()));
             if (user.getStatus().equals(UserEnum.UserStatus.LOCKED)) {
                 throw new BusinessException(LOGIN_FAILED);
             }
@@ -723,12 +745,15 @@ public class UserServiceImpl implements UserService {
 
     private String validateGoogleState(String state) {
         if (state == null || state.isBlank()) {
+            log.warn("Google OAuth state missing/blank");
             return null;
         }
 
         String stateKey = GOOGLE_STATE_PREFIX + state;
         Object storedState = redisTemplate.opsForValue().get(stateKey);
         if (storedState == null || !state.equals(storedState.toString())) {
+            log.warn("Google OAuth state mismatch: stateKey={} storedStatePresent={} incomingStateLength={}",
+                    stateKey, storedState != null, safeLength(state));
             return null;
         }
 
@@ -736,6 +761,8 @@ public class UserServiceImpl implements UserService {
     }
 
     private User registerGoogleCustomer(GoogleUserInfo googleUserInfo) {
+        log.info("Registering new Google customer: email={} providerId={}",
+                maskEmail(googleUserInfo.email()), maskProviderId(googleUserInfo.providerId()));
         User newUser = User.builder()
                 .email(googleUserInfo.email())
                 .password(passwordEncoder.encode(UUID.randomUUID().toString()))
@@ -745,6 +772,8 @@ public class UserServiceImpl implements UserService {
                 .status(UserEnum.UserStatus.ACTIVE)
                 .build();
         User savedUser = userRepository.save(newUser);
+        log.info("Google user persisted in identity-service: userId={} email={}",
+                savedUser.getId(), maskEmail(savedUser.getEmail()));
 
         try {
             RegisterCustomerRequest userServiceRequest = RegisterCustomerRequest.builder()
@@ -758,12 +787,15 @@ public class UserServiceImpl implements UserService {
                     .build();
 
             userGrpcClient.createCustomerProfile(userServiceRequest);
-            log.info("Google user created in user-service: userId={}, email={}", savedUser.getId(), savedUser.getEmail());
+            log.info("Google user profile created in user-service: userId={} email={}",
+                    savedUser.getId(), maskEmail(savedUser.getEmail()));
         } catch (BusinessException e) {
-            log.error("Failed to create Google user profile in user-service: email={}", savedUser.getEmail(), e);
+            log.error("Failed to create Google user profile in user-service: userId={} email={} errorCode={}",
+                    savedUser.getId(), maskEmail(savedUser.getEmail()), e.getErrorCode(), e);
             throw e;
         } catch (Exception e) {
-            log.error("Failed to create Google user profile in user-service: email={}", savedUser.getEmail(), e);
+            log.error("Failed to create Google user profile in user-service: userId={} email={}",
+                    savedUser.getId(), maskEmail(savedUser.getEmail()), e);
             throw new BusinessException(ErrorCode.NOT_CREATED);
         }
 
@@ -855,6 +887,35 @@ public class UserServiceImpl implements UserService {
         } catch (NoTransactionException ignored) {
             // No active transaction in unit tests or non-transactional callers.
         }
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
+    }
+
+    private int safeLength(String value) {
+        return value == null ? 0 : value.length();
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return "<empty>";
+        }
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 1) {
+            return "***";
+        }
+        return email.charAt(0) + "***" + email.substring(atIndex);
+    }
+
+    private String maskProviderId(String providerId) {
+        if (providerId == null || providerId.isBlank()) {
+            return "<empty>";
+        }
+        if (providerId.length() <= 8) {
+            return "***";
+        }
+        return providerId.substring(0, 4) + "..." + providerId.substring(providerId.length() - 3);
     }
 
     // Revoke all active tokens for current user session scope.

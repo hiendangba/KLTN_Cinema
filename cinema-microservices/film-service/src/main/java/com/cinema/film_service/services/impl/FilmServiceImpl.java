@@ -1,24 +1,27 @@
 package com.cinema.film_service.services.impl;
 
+import com.cinema.Enum.FilmEnum;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
+import com.cinema.dto.request.SortField;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.exception.BusinessException;
+import com.cinema.exception.ErrorCode;
 import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
 import com.cinema.film_service.dto.request.FilmCursorPageRequest;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
-import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.entity.Film;
+import com.cinema.film_service.grpc.ShowtimeGrpcClient;
 import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.FilmRepository;
 import com.cinema.film_service.repository.FilmRepositoryImpl;
 import com.cinema.film_service.services.FilmService;
-import com.cinema.exception.BusinessException;
-import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,10 +34,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
-import com.cinema.dto.request.SortField;
 
 @Service
 @Slf4j
@@ -45,21 +47,20 @@ public class FilmServiceImpl implements FilmService {
     private final FilmRepository filmRepository;
     private final FilmRepositoryImpl filmRepositoryImpl;
     private final FilmMapper filmMapper;
+    private final ShowtimeGrpcClient showtimeGrpcClient;
 
     @Override
     public ActionMessageResponse createFilm(CreateFilmRequest request, HttpServletRequest httpRequest) {
-        log.info("Tạo mới phim: {}", request.getTitle());
+        log.info("Creating film: {}", request.getTitle());
         validateAdminRole(httpRequest, "createFilm");
-        // Kiểm tra tên phim và năm phát hành đã tồn tại hay chưa
         if (filmRepository.findByTitleAndReleaseDateAndIsDeletedFalse(request.getTitle(), request.getReleaseDate()).isPresent()) {
-            log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
+            log.error("Film '{}' released in {} already exists", request.getTitle(), request.getReleaseDate().getYear());
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
-        log.info("Trạng trái phim {} trước khi map", request.getStatus());
+
         Film film = filmMapper.toEntity(request);
-        log.info("Trạng trái phim {} sau khi map", film.getStatus());
         Film savedFilm = filmRepository.save(film);
-        log.info("Phim được tạo thành công với ID: {}", savedFilm.getId());
+        log.info("Film created successfully with ID: {}", savedFilm.getId());
         return ActionMessageResponse.builder()
                 .message("Tạo phim thành công")
                 .build();
@@ -68,25 +69,24 @@ public class FilmServiceImpl implements FilmService {
     @Override
     @CacheEvict(value = "films", key = "#id")
     public ActionMessageResponse updateFilm(UUID id, UpdateFilmRequest request, HttpServletRequest httpRequest) {
-        log.info("Cập nhật phim với ID: {}", id);
+        log.info("Updating film with ID: {}", id);
         validateAdminRole(httpRequest, "updateFilm");
         Film film = filmRepository.findById(id)
                 .orElseThrow(() -> {
-                    log.error("Không tìm thấy phim với ID: {}", id);
+                    log.error("Film not found with ID: {}", id);
                     return new BusinessException(ErrorCode.FILM_NOT_FOUND);
                 });
 
         filmMapper.updateEntityFromRequest(film, request);
 
-        // Kiểm tra tên phim và năm phát hành đã tồn tại ở phim khác hay chưa
-        if (filmRepository.existsByTitleAndReleaseDateAndIdNotAndIsDeletedFalse(request.getTitle(), request.getReleaseDate(), id)) {
-            log.error("Phim '{}' phát hành năm {} đã tồn tại", request.getTitle(), request.getReleaseDate().getYear());
+        if (filmRepository.existsByTitleAndReleaseDateAndIdNotAndIsDeletedFalse(
+                request.getTitle(), request.getReleaseDate(), id)) {
+            log.error("Film '{}' released in {} already exists", request.getTitle(), request.getReleaseDate().getYear());
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
 
         filmRepository.save(film);
-
-        log.info("Phim được cập nhật thành công: {}", id);
+        log.info("Film updated successfully: {}", id);
         return ActionMessageResponse.builder()
                 .message("Cập nhật phim thành công")
                 .build();
@@ -96,11 +96,10 @@ public class FilmServiceImpl implements FilmService {
     @Transactional(readOnly = true)
     @Cacheable(value = "films", key = "#id")
     public FilmResponse getFilmById(UUID id) {
-        log.info("Lấy thông tin phim với ID: {}", id);
-
+        log.info("Getting film by ID: {}", id);
         Film film = filmRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> {
-                    log.error("Không tìm thấy phim với ID: {}", id);
+                    log.error("Film not found with ID: {}", id);
                     return new BusinessException(ErrorCode.FILM_NOT_FOUND);
                 });
 
@@ -110,7 +109,7 @@ public class FilmServiceImpl implements FilmService {
     @Override
     @Transactional(readOnly = true)
     public BatchFilmResponse getFilmsInBatch(BatchFilmRequest request) {
-        log.info("Lấy danh sách phim theo batch: {} ids", request.getIds().size());
+        log.info("Getting films by batch: {} ids", request.getIds().size());
         List<Film> films = filmRepository.findAllById(request.getIds());
         List<FilmResponse> filmResponses = films.stream()
                 .filter(film -> !film.getIsDeleted())
@@ -120,10 +119,55 @@ public class FilmServiceImpl implements FilmService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public CursorPageResponse<FilmResponse> searchFilms(FilmCursorPageRequest request) {
-        log.info("Lấy danh sách phim (cursor={}, size={}, keyword={}, sortBy={}, filterBy={}, dateRange={})",
-                request.getCursor(), request.getSize(), request.getKeyword(), request.getSortBy(),
-                request.getFilterBy(), request.getDateRange());
+        return searchFilmsInternal(request, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CursorPageResponse<FilmResponse> searchCustomerFilms(FilmCursorPageRequest request, HttpServletRequest httpRequest) {
+        validateCustomerRole(httpRequest);
+
+        Set<UUID> activeFilmIds = showtimeGrpcClient.getActiveFilmIds();
+        if (activeFilmIds.isEmpty()) {
+            return emptyCursorPageResponse();
+        }
+
+        return searchFilmsInternal(request, activeFilmIds);
+    }
+
+    @Override
+    @CacheEvict(value = "films", key = "#id")
+    public ActionMessageResponse deleteFilm(UUID id, HttpServletRequest httpRequest) {
+        log.info("Deleting film with ID: {}", id);
+        validateAdminRole(httpRequest, "deleteFilm");
+        Film film = filmRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> {
+                    log.error("Film not found with ID: {}", id);
+                    return new BusinessException(ErrorCode.FILM_NOT_FOUND);
+                });
+
+        film.setIsDeleted(true);
+        filmRepository.save(film);
+        log.info("Film deleted successfully: {}", id);
+        return ActionMessageResponse.builder()
+                .message("Xóa phim thành công")
+                .build();
+    }
+
+    private CursorPageResponse<FilmResponse> searchFilmsInternal(
+            FilmCursorPageRequest request,
+            Set<UUID> activeFilmIds) {
+        log.info(
+                "Getting films (cursor={}, size={}, keyword={}, sortBy={}, filterBy={}, dateRange={}, customerScope={})",
+                request.getCursor(),
+                request.getSize(),
+                request.getKeyword(),
+                request.getSortBy(),
+                request.getFilterBy(),
+                request.getDateRange(),
+                activeFilmIds != null);
 
         String[] cursorParts = request.getParsedCompositeCursor();
         String keyword = request.getNormalizedKeyword();
@@ -135,33 +179,33 @@ public class FilmServiceImpl implements FilmService {
                 : new ArrayList<>(request.getFilterBy());
         appendReleaseDateRangeFilter(filterFields, request.getDateRange());
 
+        if (activeFilmIds != null) {
+            filterFields = scopeCustomerFilters(filterFields, activeFilmIds);
+        }
+
         List<Film> films = filmRepositoryImpl.searchWithCursorAndSortAndFilter(
                 cursorParts, keyword, size, sortFields, filterFields);
+
         boolean hasNext = films.size() > size;
         String nextCursor = null;
         if (hasNext) {
             films = films.subList(0, size);
-            nextCursor = CursorPageRequest
-                    .encodeCompositeCursor(FilmField.getFieldValues(films.get(films.size() - 1), sortFields));
+            nextCursor = CursorPageRequest.encodeCompositeCursor(
+                    FilmField.getFieldValues(films.get(films.size() - 1), sortFields));
         }
 
         String prevCursor = null;
         if (cursorParts != null && cursorParts.length > 0) {
             List<Film> prevFilms = filmRepositoryImpl.previousCursor(
                     cursorParts, keyword, size, sortFields, filterFields);
-            if (!prevFilms.isEmpty()) {
-                if (prevFilms.size() == size) {
-                    prevCursor = CursorPageRequest
-                            .encodeCompositeCursor(
-                                    FilmField.getFieldValues(prevFilms.get(size - 1), sortFields));
-                }
+            if (!prevFilms.isEmpty() && prevFilms.size() == size) {
+                prevCursor = CursorPageRequest.encodeCompositeCursor(
+                        FilmField.getFieldValues(prevFilms.get(size - 1), sortFields));
             }
         }
 
         return CursorPageResponse.<FilmResponse>builder()
-                .data(films.stream()
-                        .map(filmMapper::toResponse)
-                        .collect(Collectors.toList()))
+                .data(films.stream().map(filmMapper::toResponse).collect(Collectors.toList()))
                 .nextCursor(nextCursor)
                 .prevCursor(prevCursor)
                 .hasNext(hasNext)
@@ -197,26 +241,44 @@ public class FilmServiceImpl implements FilmService {
                 .build());
     }
 
-    @Override
-    @CacheEvict(value = "films", key = "#id")
-    public ActionMessageResponse deleteFilm(UUID id, HttpServletRequest httpRequest) {
-        log.info("Deleting film with ID: {}", id);
-        validateAdminRole(httpRequest, "deleteFilm");
-        Film film = filmRepository.findByIdAndIsDeletedFalse(id)
-                .orElseThrow(() -> {
-                    log.error("Film not found with ID: {}", id);
-                    return new BusinessException(ErrorCode.FILM_NOT_FOUND);
-                });
+    private List<FilterField<FilmField>> scopeCustomerFilters(
+            List<FilterField<FilmField>> requestedFilters,
+            Set<UUID> activeFilmIds) {
+        List<FilterField<FilmField>> scopedFilters = requestedFilters.stream()
+                .filter(filter -> filter != null && filter.getField() != FilmField.STATUS)
+                .collect(Collectors.toCollection(ArrayList::new));
 
-        film.setIsDeleted(true);
-        filmRepository.save(film);
-        log.info("Xóa phim thành công: {}", id);
-        return ActionMessageResponse.builder()
-                .message("Xóa phim thành công")
+        scopedFilters.add(FilterField.<FilmField>builder()
+                .field(FilmField.STATUS)
+                .operator("IN")
+                .value(List.of(
+                        FilmEnum.FilmStatus.NOW_SHOWING.name(),
+                        FilmEnum.FilmStatus.COMING_SOON.name()))
+                .build());
+
+        scopedFilters.add(FilterField.<FilmField>builder()
+                .field(FilmField.ID)
+                .operator("IN")
+                .value(activeFilmIds.stream().map(UUID::toString).toList())
+                .build());
+        return scopedFilters;
+    }
+
+    private CursorPageResponse<FilmResponse> emptyCursorPageResponse() {
+        return CursorPageResponse.<FilmResponse>builder()
+                .data(List.of())
+                .nextCursor(null)
+                .prevCursor(null)
+                .hasNext(false)
+                .size(0)
                 .build();
     }
 
     private void validateAdminRole(HttpServletRequest httpRequest, String action) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN, log, action);
+    }
+
+    private void validateCustomerRole(HttpServletRequest httpRequest) {
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_CUSTOMER, log, "searchCustomerFilms");
     }
 }

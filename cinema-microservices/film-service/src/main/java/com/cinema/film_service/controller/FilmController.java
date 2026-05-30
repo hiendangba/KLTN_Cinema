@@ -35,6 +35,14 @@ public class FilmController extends BaseController {
         return ok(response);
     }
 
+    @PostMapping("/customer/search")
+    public ResponseEntity<APIResponse<CursorPageResponse<FilmResponse>>> searchCustomerFilms(
+            @Valid @RequestBody FilmCursorPageRequest request,
+            HttpServletRequest httpRequest) {
+        CursorPageResponse<FilmResponse> response = filmService.searchCustomerFilms(request, httpRequest);
+        return ok(response);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<FilmResponse>> getFilm(@PathVariable UUID id) {
         FilmResponse response = filmService.getFilmById(id);
