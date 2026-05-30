@@ -43,11 +43,13 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -268,7 +270,7 @@ class ShowTimeServiceImplTest {
         policy.setId(pricingPolicyId);
         PricingPolicyResponse policyResponse = PricingPolicyResponse.builder().id(pricingPolicyId).build();
         FilmResponse filmResponse = FilmResponse.builder().id(filmId).build();
-        HallResponse hallResponse = HallResponse.builder().id(hallId).build();
+        HallResponse hallResponse = HallResponse.builder().id(hallId).cinemaId(cinemaId).build();
         SeatGrpcClient.LayoutBundle layoutBundle = SeatGrpcClient.LayoutBundle.builder()
                 .totalRows(1)
                 .totalCols(1)
@@ -292,6 +294,7 @@ class ShowTimeServiceImplTest {
         when(pricingPolicyMapper.toResponse(policy)).thenReturn(policyResponse);
         when(filmGrpcClient.getFilmsByIds(List.of(filmId))).thenReturn(Map.of(filmId, filmResponse));
         when(hallGrpcClient.getHallById(hallId)).thenReturn(hallResponse);
+        when(cinemaGrpcClient.getCinemaNameById(cinemaId)).thenReturn("Cinema Alpha");
         when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
         when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1"))))
                 .thenReturn(Map.of("A1", "AVAILABLE"));
@@ -302,6 +305,8 @@ class ShowTimeServiceImplTest {
         assertEquals(1, result.getTotalElements());
         assertEquals(1, result.getData().size());
         assertEquals(filmId, result.getData().get(0).getFilmId());
+        assertNotNull(result.getData().get(0).getHall());
+        assertEquals("Cinema Alpha", result.getData().get(0).getHall().getCinemaName());
 
         ArgumentCaptor<List> filterCaptor = ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List> sortCaptor = ArgumentCaptor.forClass(List.class);
@@ -321,6 +326,114 @@ class ShowTimeServiceImplTest {
         assertEquals("ASC", sorts.get(0).getDirection());
         assertEquals(ShowTimeField.ID, sorts.get(1).getField());
         assertEquals("ASC", sorts.get(1).getDirection());
+    }
+
+    @Test
+    void getShowTimeById_shouldEnrichCinemaName() {
+        UUID filmId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+
+        ShowTime showTime = new ShowTime();
+        showTime.setId(showtimeId);
+        showTime.setFilmId(filmId);
+        showTime.setHallId(hallId);
+        showTime.setPricingPolicyId(pricingPolicyId);
+        showTime.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        showTime.setIsDeleted(false);
+        showTime.setStartDateTime(LocalDateTime.of(2026, 5, 30, 9, 0));
+        showTime.setEndDateTime(LocalDateTime.of(2026, 5, 30, 11, 0));
+
+        PricingPolicy policy = new PricingPolicy();
+        policy.setId(pricingPolicyId);
+        PricingPolicyResponse policyResponse = PricingPolicyResponse.builder().id(pricingPolicyId).build();
+        FilmResponse filmResponse = FilmResponse.builder().id(filmId).build();
+        HallResponse hallResponse = HallResponse.builder().id(hallId).cinemaId(cinemaId).build();
+        SeatGrpcClient.LayoutBundle layoutBundle = SeatGrpcClient.LayoutBundle.builder()
+                .totalRows(1)
+                .totalCols(1)
+                .screenPosition("TOP")
+                .seats(List.of(
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("A1")
+                                .setRow(1)
+                                .setCol(1)
+                                .setSeatType("STANDARD")
+                                .build()))
+                .cells(List.of())
+                .build();
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
+        when(pricingPolicyRepository.findById(pricingPolicyId)).thenReturn(Optional.of(policy));
+        when(pricingPolicyMapper.toResponse(policy)).thenReturn(policyResponse);
+        when(hallGrpcClient.getHallById(hallId)).thenReturn(hallResponse);
+        when(cinemaGrpcClient.getCinemaNameById(cinemaId)).thenReturn("Cinema Alpha");
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1"))))
+                .thenReturn(Map.of("A1", "AVAILABLE"));
+
+        var result = showTimeService.getShowTimeById(showtimeId);
+
+        assertNotNull(result);
+        assertNotNull(result.getHall());
+        assertEquals("Cinema Alpha", result.getHall().getCinemaName());
+    }
+
+    @Test
+    void getShowTimeById_shouldFallbackToNullWhenCinemaNameLookupFails() {
+        UUID filmId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+
+        ShowTime showTime = new ShowTime();
+        showTime.setId(showtimeId);
+        showTime.setFilmId(filmId);
+        showTime.setHallId(hallId);
+        showTime.setPricingPolicyId(pricingPolicyId);
+        showTime.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        showTime.setIsDeleted(false);
+        showTime.setStartDateTime(LocalDateTime.of(2026, 5, 30, 9, 0));
+        showTime.setEndDateTime(LocalDateTime.of(2026, 5, 30, 11, 0));
+
+        PricingPolicy policy = new PricingPolicy();
+        policy.setId(pricingPolicyId);
+        PricingPolicyResponse policyResponse = PricingPolicyResponse.builder().id(pricingPolicyId).build();
+        FilmResponse filmResponse = FilmResponse.builder().id(filmId).build();
+        HallResponse hallResponse = HallResponse.builder().id(hallId).cinemaId(cinemaId).build();
+        SeatGrpcClient.LayoutBundle layoutBundle = SeatGrpcClient.LayoutBundle.builder()
+                .totalRows(1)
+                .totalCols(1)
+                .screenPosition("TOP")
+                .seats(List.of(
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("A1")
+                                .setRow(1)
+                                .setCol(1)
+                                .setSeatType("STANDARD")
+                                .build()))
+                .cells(List.of())
+                .build();
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
+        when(pricingPolicyRepository.findById(pricingPolicyId)).thenReturn(Optional.of(policy));
+        when(pricingPolicyMapper.toResponse(policy)).thenReturn(policyResponse);
+        when(hallGrpcClient.getHallById(hallId)).thenReturn(hallResponse);
+        when(cinemaGrpcClient.getCinemaNameById(cinemaId)).thenThrow(new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1"))))
+                .thenReturn(Map.of("A1", "AVAILABLE"));
+
+        var result = showTimeService.getShowTimeById(showtimeId);
+
+        assertNotNull(result);
+        assertNotNull(result.getHall());
+        assertNull(result.getHall().getCinemaName());
     }
 
     @Test
@@ -355,6 +468,93 @@ class ShowTimeServiceImplTest {
 
         assertTrue(validator.validate(request).stream()
                 .anyMatch(violation -> "date".equals(violation.getPropertyPath().toString())));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchShowtimesByFilmId_shouldCacheCinemaNameByCinemaId() {
+        UUID filmId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId1 = UUID.randomUUID();
+        UUID hallId2 = UUID.randomUUID();
+        UUID pricingPolicyId1 = UUID.randomUUID();
+        UUID pricingPolicyId2 = UUID.randomUUID();
+        UUID showtimeId1 = UUID.randomUUID();
+        UUID showtimeId2 = UUID.randomUUID();
+
+        SearchShowtimesByFilmRequest request = SearchShowtimesByFilmRequest.builder()
+                .page(1)
+                .size(20)
+                .date(LocalDate.of(2026, 5, 30))
+                .cinemaId(cinemaId)
+                .build();
+
+        ShowTime showTime1 = new ShowTime();
+        showTime1.setId(showtimeId1);
+        showTime1.setFilmId(filmId);
+        showTime1.setHallId(hallId1);
+        showTime1.setPricingPolicyId(pricingPolicyId1);
+        showTime1.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        showTime1.setIsDeleted(false);
+        showTime1.setStartDateTime(LocalDateTime.of(2026, 5, 30, 9, 0));
+        showTime1.setEndDateTime(LocalDateTime.of(2026, 5, 30, 11, 0));
+
+        ShowTime showTime2 = new ShowTime();
+        showTime2.setId(showtimeId2);
+        showTime2.setFilmId(filmId);
+        showTime2.setHallId(hallId2);
+        showTime2.setPricingPolicyId(pricingPolicyId2);
+        showTime2.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        showTime2.setIsDeleted(false);
+        showTime2.setStartDateTime(LocalDateTime.of(2026, 5, 30, 12, 0));
+        showTime2.setEndDateTime(LocalDateTime.of(2026, 5, 30, 14, 0));
+
+        FilmResponse filmResponse = FilmResponse.builder().id(filmId).build();
+        HallResponse hallResponse1 = HallResponse.builder().id(hallId1).cinemaId(cinemaId).build();
+        HallResponse hallResponse2 = HallResponse.builder().id(hallId2).cinemaId(cinemaId).build();
+        PricingPolicy policy1 = new PricingPolicy();
+        policy1.setId(pricingPolicyId1);
+        PricingPolicy policy2 = new PricingPolicy();
+        policy2.setId(pricingPolicyId2);
+        PricingPolicyResponse policyResponse1 = PricingPolicyResponse.builder().id(pricingPolicyId1).build();
+        PricingPolicyResponse policyResponse2 = PricingPolicyResponse.builder().id(pricingPolicyId2).build();
+        SeatGrpcClient.LayoutBundle layoutBundle = SeatGrpcClient.LayoutBundle.builder()
+                .totalRows(1)
+                .totalCols(1)
+                .screenPosition("TOP")
+                .seats(List.of(
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("A1")
+                                .setRow(1)
+                                .setCol(1)
+                                .setSeatType("STANDARD")
+                                .build()))
+                .cells(List.of())
+                .build();
+
+        when(hallGrpcClient.listActiveHallIdsByCinema(cinemaId)).thenReturn(List.of(hallId1, hallId2));
+        when(showTimeRepositoryImpl.countWithFilter(eq(null), any())).thenReturn(2L);
+        when(showTimeRepositoryImpl.searchWithPageAndSortAndFilter(eq(null), eq(1), eq(20), any(), any()))
+                .thenReturn(List.of(showTime1, showTime2));
+        when(filmGrpcClient.getFilmsByIds(List.of(filmId))).thenReturn(Map.of(filmId, filmResponse));
+        when(hallGrpcClient.getHallById(hallId1)).thenReturn(hallResponse1);
+        when(hallGrpcClient.getHallById(hallId2)).thenReturn(hallResponse2);
+        when(cinemaGrpcClient.getCinemaNameById(cinemaId)).thenReturn("Cinema Alpha");
+        when(pricingPolicyRepository.findAllById(List.of(pricingPolicyId1, pricingPolicyId2)))
+                .thenReturn(List.of(policy1, policy2));
+        when(pricingPolicyMapper.toResponse(policy1)).thenReturn(policyResponse1);
+        when(pricingPolicyMapper.toResponse(policy2)).thenReturn(policyResponse2);
+        when(seatGrpcClient.getLayoutByHallId(hallId1)).thenReturn(layoutBundle);
+        when(seatGrpcClient.getLayoutByHallId(hallId2)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(any(), any())).thenReturn(Map.of("A1", "AVAILABLE"));
+
+        var result = showTimeService.searchShowtimesByFilmId(filmId, request);
+
+        assertNotNull(result);
+        assertEquals(2, result.getData().size());
+        assertEquals("Cinema Alpha", result.getData().get(0).getHall().getCinemaName());
+        assertEquals("Cinema Alpha", result.getData().get(1).getHall().getCinemaName());
+        verify(cinemaGrpcClient, times(1)).getCinemaNameById(cinemaId);
     }
 
     private HttpServletRequest managerRequest(UUID userId) {

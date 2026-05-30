@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -98,12 +99,16 @@ public class GoogleOAuthService {
             throw new GoogleOAuthFlowException("token_invalid", ex);
         } catch (TokenResponseException ex) {
             TokenErrorResponse details = ex.getDetails();
+            String wwwAuthenticate = extractHeaderValue(ex, "WWW-Authenticate");
+            String rawResponseBody = sanitizeForLog(ex.getContent());
             log.warn(
-                    "Google OAuth code exchange failed: statusCode={} error={} errorDescription={} responseBody={}",
+                    "Google OAuth code exchange failed: statusCode={} error={} errorDescription={} wwwAuthenticate={} rawResponseBody={} tokenEndpoint={}",
                     ex.getStatusCode(),
                     details == null ? null : details.getError(),
                     details == null ? null : details.getErrorDescription(),
-                    sanitizeForLog(ex.getContent()),
+                    wwwAuthenticate,
+                    rawResponseBody,
+                    TOKEN_SERVER_URL,
                     ex);
             throw new GoogleOAuthFlowException("code_exchange_failed", ex);
         } catch (IOException ex) {
@@ -175,5 +180,16 @@ public class GoogleOAuthService {
             return oneLine;
         }
         return oneLine.substring(0, 500) + "...";
+    }
+
+    private String extractHeaderValue(TokenResponseException exception, String headerName) {
+        if (exception == null || exception.getHeaders() == null || headerName == null || headerName.isBlank()) {
+            return null;
+        }
+        Object headerValue = exception.getHeaders().get(headerName);
+        if (headerValue == null) {
+            headerValue = exception.getHeaders().get(headerName.toLowerCase(Locale.ROOT));
+        }
+        return headerValue == null ? null : sanitizeForLog(String.valueOf(headerValue));
     }
 }

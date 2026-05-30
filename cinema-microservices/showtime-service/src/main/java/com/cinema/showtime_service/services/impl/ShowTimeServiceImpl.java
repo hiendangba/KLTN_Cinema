@@ -241,6 +241,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 : filmGrpcClient.getFilmsByIds(filmIds);
 
         Map<UUID, HallResponse> hallMap = getHallResponseMap(showtimes);
+        enrichHallCinemaNames(hallMap);
         Map<UUID, SeatGrpcClient.LayoutBundle> hallLayoutMap = getHallLayoutMap(showtimes);
 
         showtimes.forEach(showtime -> {
@@ -273,6 +274,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         FilmResponse film = filmGrpcClient.getFilmById(showTime.getFilmId());
         PricingPolicyResponse pricingPolicy = getPricingPolicyResponse(showTime.getPricingPolicyId());
         HallResponse hall = hallGrpcClient.getHallById(showTime.getHallId());
+        enrichHallCinemaName(hall);
         SeatAvailabilityStats stats = resolveSeatAvailability(
                 showTime.getId(),
                 seatGrpcClient.getLayoutByHallId(showTime.getHallId()));
@@ -550,6 +552,48 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             hallMap.put(hallId, hallGrpcClient.getHallById(hallId));
         }
         return hallMap;
+    }
+
+    private void enrichHallCinemaNames(Map<UUID, HallResponse> hallMap) {
+        if (hallMap == null || hallMap.isEmpty()) {
+            return;
+        }
+
+        Map<UUID, String> cinemaNameCache = new HashMap<>();
+        hallMap.values().forEach(hall -> enrichHallCinemaName(hall, cinemaNameCache));
+    }
+
+    private void enrichHallCinemaName(HallResponse hall) {
+        enrichHallCinemaName(hall, new HashMap<>());
+    }
+
+    private void enrichHallCinemaName(HallResponse hall, Map<UUID, String> cinemaNameCache) {
+        if (hall == null || hall.getCinemaId() == null) {
+            return;
+        }
+
+        hall.setCinemaName(resolveCinemaName(hall.getCinemaId(), cinemaNameCache));
+    }
+
+    private String resolveCinemaName(UUID cinemaId, Map<UUID, String> cinemaNameCache) {
+        if (cinemaId == null) {
+            return null;
+        }
+
+        if (cinemaNameCache.containsKey(cinemaId)) {
+            return cinemaNameCache.get(cinemaId);
+        }
+
+        try {
+            String cinemaName = cinemaGrpcClient.getCinemaNameById(cinemaId);
+            cinemaNameCache.put(cinemaId, cinemaName);
+            return cinemaName;
+        } catch (BusinessException ex) {
+            log.warn("Cannot enrich cinema name for hall response. cinemaId={}, errorCode={}",
+                    cinemaId, ex.getErrorCode());
+            cinemaNameCache.put(cinemaId, null);
+            return null;
+        }
     }
 
     private Map<UUID, SeatGrpcClient.LayoutBundle> getHallLayoutMap(List<ShowTimeResponse> showtimes) {

@@ -17,5 +17,6 @@ import java.util.UUID;
 public class HallResponse {
     UUID id;
     UUID cinemaId;
+    String cinemaName;
     String name;
 }

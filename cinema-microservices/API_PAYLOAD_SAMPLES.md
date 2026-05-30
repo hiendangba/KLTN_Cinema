@@ -287,6 +287,7 @@ Quy ước chung:
 
 ### Response note
 - `ShowTimeResponse` includes `totalSeatCapacity`, `occupiedSeats`, and `availableSeats`.
+- `hall` includes `cinemaName`.
 - FE can disable a showtime when `availableSeats = 0`.
 
 ## Ghi chú

@@ -19,6 +19,24 @@
 - `ErrorCode 4008 (VERIFY_TOKEN_MISSING)` đổi HTTP status từ `401 Unauthorized` sang `400 Bad Request`.
 - Mục tiêu: tránh frontend tự động gọi `refresh_token` khi lỗi xảy ra trong luồng OTP (`verify-otp`/`resend-otp`/`forgot-password`).
 - `ErrorCode 4009 (REFRESH_TOKEN_MISSING)` giữ nguyên `401 Unauthorized` để dành riêng cho ngữ cảnh phiên đăng nhập/refresh token.
+- Bổ sung log chẩn đoán Google OAuth tại `identity-service`: khi `code -> token` fail sẽ log thêm `WWW-Authenticate`, `rawResponseBody`, `tokenEndpoint` để tách nhanh lỗi `invalid_client` / `invalid_grant` / policy.
+
+## Runbook: Google OAuth `code_exchange_failed` (401)
+
+Khi log callback pass state nhưng fail ở `POST https://oauth2.googleapis.com/token`:
+
+1. Tạo mới OAuth Client loại `Web application` trong Google Auth Platform.
+2. Đặt chính xác `Authorized redirect URI`:
+   - `https://cinema-api.duckdns.org/api/auth/google/callback`
+3. Đặt `Audience` là `External`, `Publishing status = Production` để không giới hạn test users.
+4. Cập nhật env trên VPS cho `identity-service`:
+   - `GOOGLE_CLIENT_ID=<new-client-id>`
+   - `GOOGLE_CLIENT_SECRET=<new-client-secret>`
+   - `GOOGLE_CLIENT_IDS=<new-client-id>`
+   - `GOOGLE_REDIRECT_URI=https://cinema-api.duckdns.org/api/auth/google/callback`
+5. Restart container và xác minh env trong container:
+   - `docker exec -it <identity-container> sh -lc 'printenv | grep GOOGLE_'`
+6. Re-test login bằng Gmail cá nhân chưa từng là test user.
 
 ---
 
@@ -337,12 +355,12 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/showtimes/search` | ❌ Public | Lấy danh sách suất chiếu theo `PageRequest`, trả full thông tin `film`, `hall`, `pricingPolicy` và thêm `totalSeatCapacity`, `occupiedSeats`, `availableSeats` để FE render trạng thái chỗ trống. |
+| `POST` | `/api/showtimes/search` | ❌ Public | Lấy danh sách suất chiếu theo `PageRequest`, trả full thông tin `film`, `hall` (kèm `cinemaName`), `pricingPolicy` và thêm `totalSeatCapacity`, `occupiedSeats`, `availableSeats` để FE render trạng thái chỗ trống. |
 | `POST` | `/api/showtimes` | ✅ MGMT | Tạo lịch chiếu hàng loạt theo khung giờ và gắn `pricingPolicyId` cho toàn bộ batch. |
 | `PUT` | `/api/showtimes/{id}` | ✅ MGMT | Cập nhật chi tiết một showtime gồm thời gian, trạng thái và `pricingPolicyId`. |
 | `PATCH` | `/api/showtimes/{id}` | ✅ MGMT | Tinh chỉnh nhanh trạng thái showtime. |
 | `DELETE` | `/api/showtimes/{id}` | ✅ ADMIN | Bỏ lịch chiếu hệ thống (Cũng dùng Xóa Mềm). |
-| `GET` | `/api/showtimes/{id}` | ❌ Public | Lấy chi tiết suất chiếu và trả full thông tin `film`, `hall`, `pricingPolicy` và trạng thái chỗ còn trống. |
+| `GET` | `/api/showtimes/{id}` | ❌ Public | Lấy chi tiết suất chiếu và trả full thông tin `film`, `hall` (kèm `cinemaName`), `pricingPolicy` và trạng thái chỗ còn trống. |
 
 ### 4.1. Showtime Pricing Policy (`/api/showtimes/pricing-policies`)
 
@@ -1282,12 +1300,13 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
     - `page`, `size`
     - `date` (bắt buộc, `yyyy-MM-dd`)
     - `cinemaId` (optional)
-  - Backend xử lý:
+- Backend xử lý:
     - lọc `filmId`
     - lọc theo ngày: convert `date` thành khoảng `startOfDay -> endOfDay`
     - nếu có `cinemaId`: lấy danh sách `hallId` thuộc rạp rồi lọc `hallId IN (...)`
     - chỉ trả showtime còn hoạt động: `SCHEDULED`, `ONGOING`
   - Sort mặc định: `startDateTime ASC`, `id ASC`.
+  - Response `hall` kèm thêm `cinemaName` để FE hiển thị tên rạp trực tiếp.
   - Bỏ endpoint cũ: `GET /api/showtimes/films/{filmId}/active`.
 - Test đã thêm:
   - Film + date + cinema filter đúng dữ liệu.
