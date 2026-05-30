@@ -153,6 +153,44 @@ class BookingServiceImplTest {
     }
 
     @Test
+    void getAllCinemaRevenueReport_shouldAggregatePromotionDiscountAndPayableAmount() {
+        UUID cinema1 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+        UUID film2 = UUID.randomUUID();
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+
+        Booking booking1 = buildBooking(cinema1, film1, BookingStatus.CONFIRMED,
+                BigDecimal.valueOf(100000), BigDecimal.valueOf(50000));
+        booking1.setPromotionDiscountAmount(BigDecimal.valueOf(10000));
+        booking1.setPayableAmount(BigDecimal.valueOf(140000));
+
+        Booking booking2 = buildBooking(cinema1, film2, BookingStatus.RESERVED,
+                BigDecimal.valueOf(120000), BigDecimal.valueOf(30000));
+        booking2.setPromotionDiscountAmount(BigDecimal.valueOf(5000));
+        booking2.setPayableAmount(BigDecimal.valueOf(145000));
+
+        when(bookingRepository.findAllForBookingRevenueReport(anyCollection(), any(), any(), anyCollection()))
+                .thenReturn(List.of(booking1, booking2));
+
+        BookingRevenueReportRequest request = BookingRevenueReportRequest.builder()
+                .pageRequest(PageRequest.<BookingRevenueField>builder()
+                        .page(1)
+                        .size(10)
+                        .build())
+                .build();
+
+        BookingRevenueReportResponse response = bookingService.getAllCinemaRevenueReport(request);
+
+        assertEquals(BigDecimal.valueOf(300000), response.total().grossAmount());
+        assertEquals(BigDecimal.valueOf(15000), response.total().promotionDiscountAmount());
+        assertEquals(BigDecimal.valueOf(285000), response.total().payableAmount());
+        assertEquals(BigDecimal.valueOf(15000), response.items().get(0).promotionDiscountAmount());
+        assertEquals(BigDecimal.valueOf(285000), response.items().get(0).payableAmount());
+    }
+
+    @Test
     void getAllShowtimePerformanceReport_shouldGroupByShowtimeAndCalculateOccupancy() {
         UUID cinema1 = UUID.randomUUID();
         UUID cinema2 = UUID.randomUUID();

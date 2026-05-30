@@ -1085,9 +1085,150 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - Có thêm endpoint export Excel `POST /api/bookings/revenues/cinemas/export`; frontend gửi cùng body như report JSON, cộng `selectedIds` là danh sách `cinemaId` cần export. Nếu không gửi `selectedIds` thì backend export toàn bộ dòng đang khớp filter.
   - `dateRange` gửi riêng trong body request, không nhét vào `PageRequest`.
 
+### 2026-05-30 Google Login (idToken) cho identity-service
+- Yêu cầu: bổ sung đăng nhập Google theo rule:
+  - Nếu account Google đã có thì đăng nhập.
+  - Nếu chưa có thì tự register customer rồi đăng nhập.
+  - Nếu email đã tồn tại dưới account `LOCAL` thì không link, trả lỗi.
+- API contract (public):
+  - Endpoint: `POST /api/auth/google/login`
+  - Request body:
+    ```json
+    {
+      "idToken": "<google-id-token-from-frontend>"
+    }
+    ```
+  - Thành công:
+    - HTTP `200`
+    - Trả `ActionMessageResponse` với thông điệp đăng nhập thành công.
+    - Set `accessToken` + `refreshToken` qua `Set-Cookie` (HttpOnly, SameSite theo config hiện có của service).
+  - Lưu ý frontend:
+    - Không gửi `accessToken` Google.
+    - Chỉ gửi `idToken` do Google trả về sau sign-in.
+    - Gọi API bằng `credentials: include` để browser nhận cookie phiên đăng nhập.
+- Quyết định kỹ thuật:
+  - Backend verify `idToken` ở server bằng `GoogleIdTokenVerifierService`.
+  - Điều kiện pass verify:
+    - `aud` phải thuộc danh sách client IDs cấu hình.
+    - `iss` thuộc `accounts.google.com` hoặc `https://accounts.google.com`.
+    - `exp` còn hạn tại thời điểm verify.
+    - `sub`, `email` không rỗng.
+    - `email_verified=true`.
+- Luồng xử lý chi tiết trong `UserServiceImpl.googleLogin(...)`:
+  - Bước 1: Verify token và lấy payload chuẩn hóa `GoogleUserInfo(providerId, email, name)`.
+  - Bước 2: `findByEmail(email)` trong bảng identity.
+  - Bước 3A: Nếu user đã tồn tại:
+    - `status=LOCKED` -> từ chối (`LOGIN_FAILED`).
+    - `provider != GOOGLE` -> từ chối (`EMAIL_EXISTED`) theo rule không link LOCAL.
+    - `provider == GOOGLE` nhưng `providerId` khác `sub` -> từ chối (`LOGIN_FAILED`).
+    - `provider == GOOGLE` và `providerId` khớp -> cho login.
+  - Bước 3B: Nếu user chưa tồn tại:
+    - Tạo identity user mới:
+      - `provider=GOOGLE`
+      - `providerId=sub`
+      - `role=CUSTOMER`
+      - `status=ACTIVE`
+      - `password` random đã hash (để thỏa ràng buộc schema hiện tại).
+    - Gọi gRPC sang `user-service` để tạo customer profile.
+  - Bước 4: Phát token nội bộ (`accessToken`, `refreshToken`) và lưu Redis/session giống login thường.
+- Giá trị default cho profile customer Google mới:
+  - `dob=1970-01-01`
+  - `gender=OTHER`
+  - `phone=0999999999`
+  - `name`: ưu tiên claim `name` của Google, nếu thiếu thì lấy local-part của email.
+- Ma trận lỗi nghiệp vụ:
+  - `idToken` sai định dạng/hết hạn/verify thất bại -> `LOGIN_FAILED`.
+  - `GOOGLE_CLIENT_IDS` chưa cấu hình -> `LOGIN_FAILED`.
+  - Email đã có account `LOCAL` -> `EMAIL_EXISTED`.
+  - Account `GOOGLE` nhưng `providerId` mismatch -> `LOGIN_FAILED`.
+  - Account bị khóa -> `LOGIN_FAILED`.
+  - Lỗi khi create profile bên `user-service` -> `NOT_CREATED` (transaction identity rollback).
+- Cấu hình deploy/runtime:
+  - Thêm config:
+    - `app.auth.google.client-ids: ${GOOGLE_CLIENT_IDS:}`
+  - Biến môi trường bắt buộc:
+    - `GOOGLE_CLIENT_IDS=<web-client-id-1>,<web-client-id-2>`
+  - Khuyến nghị:
+    - Tách client ID theo môi trường dev/staging/prod.
+    - Không commit cứng client ID vào source.
+- File đã cập nhật:
+  - `identity-service/src/main/java/com/cinema/identity_service/controller/UserController.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/services/UserService.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/services/impl/UserServiceImpl.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/dto/request/GoogleLoginRequest.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/services/google/GoogleIdTokenVerifierService.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/services/google/GoogleUserInfo.java`
+  - `identity-service/src/main/resources/application.yaml`
+  - `identity-service/pom.xml`
+  - `identity-service/src/test/java/com/cinema/identity_service/services/impl/UserServiceImplTokenFlowTest.java`
+- Test evidence:
+  - Command:
+    - `./mvnw -f ..\\pom.xml -pl identity-service -am -Dtest=UserServiceImplTokenFlowTest "-Dsurefire.failIfNoSpecifiedTests=false" test`
+  - Kết quả:
+    - `BUILD SUCCESS`
+    - `Tests run: 13, Failures: 0, Errors: 0`
+  - Các case đã cover:
+    - Existing Google user login success.
+    - New Google user auto-register + login success.
+    - Existing LOCAL email bị chặn (`EMAIL_EXISTED`).
+    - ProviderId mismatch bị chặn (`LOGIN_FAILED`).
+    - Locked account bị chặn.
+    - Invalid token bị chặn.
+    - gRPC create profile fail trả lỗi và không phát token.
+
 ### Mẫu request gửi FE
 - Nếu không lọc theo ngày thì bỏ hẳn `dateRange` khỏi body.
 - Nếu có lọc theo ngày thì `dateRange` phải có đủ `from` và `to`.
 - Toàn bộ payload request mẫu cho frontend đã được gom vào [API_PAYLOAD_SAMPLES.md](API_PAYLOAD_SAMPLES.md).
+
+### 2026-05-30 Đồng bộ promo snapshot vào booking
+- Bối cảnh:
+  - `payment-service` vẫn là nơi validate promo, tính discount, và tạo `payment_transaction`.
+  - Tuy nhiên booking gốc trước đây chỉ giữ `finalAmount` nên dễ lệch dữ liệu giữa booking và payment sau khi áp promo.
+- Quyết định:
+  - `booking-service` lưu snapshot promo hiện tại ngay trên `Booking`:
+    - `promotionCode`
+    - `promotionName`
+    - `promotionDiscountAmount`
+    - `payableAmount`
+  - `finalAmount` vẫn giữ nghĩa là tiền gốc của booking.
+  - `payableAmount = finalAmount - promotionDiscountAmount`.
+  - Khi tạo booking mới:
+    - `promotionDiscountAmount = 0`
+    - `payableAmount = finalAmount`
+  - Khi `payment-service` tạo payment session xong:
+    - gọi gRPC `UpsertBookingPromotionSnapshot` sang `booking-service`
+    - đồng bộ snapshot promo vào booking trước khi trả session ra cho frontend.
+  - Khi confirm payment:
+    - `booking-service` đối chiếu `transactionAmount` với `payableAmount`
+    - không dùng `finalAmount` gốc để xác nhận thanh toán nữa.
+- Tác động báo cáo:
+  - Báo cáo booking dùng:
+    - `grossAmount` = tiền gốc
+    - `promotionDiscountAmount` = tổng tiền giảm
+    - `payableAmount` = tiền thực thu sau giảm
+  - `payment-service` vẫn giữ `payment_transaction.amount` là số tiền thực thu và `promotionDiscountAmount` là discount của transaction.
+- Contract gRPC liên quan:
+  - `common-lib/src/main/proto/booking_internal.proto`
+    - thêm `UpsertBookingPromotionSnapshot`
+    - thêm các field promo/payable vào `BookingPaymentContextPayload`
+- File chính đã chỉnh:
+  - `booking-service/src/main/java/com/cinema/booking_service/entity/Booking.java`
+  - `booking-service/src/main/java/com/cinema/booking_service/grpc/BookingInternalGrpcService.java`
+  - `booking-service/src/main/java/com/cinema/booking_service/services/impl/BookingServiceImpl.java`
+  - `booking-service/src/main/java/com/cinema/booking_service/dto/response/BookingResponse.java`
+  - `booking-service/src/main/java/com/cinema/booking_service/dto/response/BookingRevenueItemResponse.java`
+  - `booking-service/src/main/java/com/cinema/booking_service/dto/response/BookingRevenueSummaryResponse.java`
+  - `payment-service/src/main/java/com/cinema/payment_service/grpc/BookingGrpcClient.java`
+  - `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`
+- Test evidence:
+  - Command:
+    - `.\mvnw.cmd -f ..\pom.xml -pl common-lib,booking-service,payment-service -am test "-Dtest=BookingInternalGrpcServiceTest,BookingServiceImplTest,PaymentSessionServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" "-Dprotoc.skip=true"`
+  - Kết quả:
+    - `BUILD SUCCESS`
+    - `common-lib`, `booking-service`, `payment-service` đều pass
+    - `Tests run: 7 + 4 = 11`, `Failures: 0`, `Errors: 0`
+- Ghi chú triển khai:
+  - Trên Windows, `protobuf-maven-plugin` có thể giữ lock tạm trên `target/protoc-dependencies`; nếu gặp lỗi cleanup, dùng `-Dprotoc.skip=true` khi chạy test runtime trên module đã compile sẵn.
 
 
