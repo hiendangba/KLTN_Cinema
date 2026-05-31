@@ -163,7 +163,7 @@ class UserServiceImplAuditTest {
                 .gender(UserEnum.Gender.MALE)
                 .phone("0900000000")
                 .role(role)
-                .deleted(false)
+                .isDeleted(false)
                 .build();
     }
 }
