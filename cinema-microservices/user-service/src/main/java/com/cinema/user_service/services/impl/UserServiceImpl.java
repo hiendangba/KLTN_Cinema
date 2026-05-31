@@ -19,6 +19,7 @@ import com.cinema.user_service.repository.UserRepository;
 import com.cinema.user_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.user_service.services.UserService;
 import com.cinema.user_service.services.audit.UserAuditEmailService;
+import com.cinema.user_service.grpc.IdentityGrpcClient;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class UserServiceImpl implements UserService {
     UserRepository userRepository;
     UserMapper userMapper;
     CinemaGrpcClient cinemaGrpcClient;
+    IdentityGrpcClient identityGrpcClient;
     InternalEmailDispatchService internalEmailDispatchService;
     UserAuditEmailService userAuditEmailService;
 
@@ -207,6 +209,7 @@ public class UserServiceImpl implements UserService {
 
         softDelete(target);
         userRepository.save(target);
+        lockIdentityAccount(userId);
         queueAuditMailAfterCommit(buildDeleteAuditMail(
                 snapshot.email(),
                 snapshot.name(),
@@ -239,6 +242,7 @@ public class UserServiceImpl implements UserService {
 
         softDelete(target);
         userRepository.save(target);
+        lockIdentityAccount(userId);
         queueAuditMailAfterCommit(buildDeleteAuditMail(
                 snapshot.email(),
                 snapshot.name(),
@@ -275,6 +279,7 @@ public class UserServiceImpl implements UserService {
 
         softDelete(target);
         userRepository.save(target);
+        lockIdentityAccount(userId);
         queueAuditMailAfterCommit(buildDeleteAuditMail(
                 snapshot.email(),
                 snapshot.name(),
@@ -286,6 +291,109 @@ public class UserServiceImpl implements UserService {
         log.info("Staff profile soft deleted: staffId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
         return ActionMessageResponse.builder()
                 .message("Xóa mềm profile cho Staff thành công")
+                .build();
+    }
+
+    @Override
+    public ActionMessageResponse restoreCustomerProfile(UUID userId, HttpServletRequest httpRequest) {
+        UUID actorId = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        UserEnum.UserRole actorRole = parseUserRole(RequestAuthUtils.requireRoleHeader(httpRequest));
+        return restoreCustomerProfile(userId, actorId, actorRole);
+    }
+
+    @Override
+    public ActionMessageResponse restoreCustomerProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole) {
+        requireAdminOnly(actorRole, "restoreCustomerProfile");
+
+        User target = userRepository.findByIdAndRoleAndIsDeletedTrue(userId, UserEnum.UserRole.CUSTOMER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        UserSnapshot snapshot = snapshot(target);
+        AuditIdentity actor = resolveActor(actorId, actorRole);
+
+        restore(target);
+        userRepository.save(target);
+        unlockIdentityAccount(userId);
+        queueAuditMailAfterCommit(buildRestoreAuditMail(
+                snapshot.email(),
+                snapshot.name(),
+                snapshot.role(),
+                actor,
+                "restore",
+                List.of("isDeleted: true -> false", "accountStatus: locked -> active")));
+
+        log.info("Customer profile restored: customerId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
+        return ActionMessageResponse.builder()
+                .message("Khôi phục profile cho Customer thành công")
+                .build();
+    }
+
+    @Override
+    public ActionMessageResponse restoreManagerProfile(UUID userId, HttpServletRequest httpRequest) {
+        UUID actorId = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        UserEnum.UserRole actorRole = parseUserRole(RequestAuthUtils.requireRoleHeader(httpRequest));
+        return restoreManagerProfile(userId, actorId, actorRole);
+    }
+
+    @Override
+    public ActionMessageResponse restoreManagerProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole) {
+        requireAdminOnly(actorRole, "restoreManagerProfile");
+
+        User target = userRepository.findByIdAndRoleAndIsDeletedTrue(userId, UserEnum.UserRole.MANAGER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        UserSnapshot snapshot = snapshot(target);
+        AuditIdentity actor = resolveActor(actorId, actorRole);
+
+        restore(target);
+        userRepository.save(target);
+        unlockIdentityAccount(userId);
+        queueAuditMailAfterCommit(buildRestoreAuditMail(
+                snapshot.email(),
+                snapshot.name(),
+                snapshot.role(),
+                actor,
+                "restore",
+                List.of("isDeleted: true -> false", "accountStatus: locked -> active")));
+
+        log.info("Manager profile restored: managerId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
+        return ActionMessageResponse.builder()
+                .message("Khôi phục profile cho Manager thành công")
+                .build();
+    }
+
+    @Override
+    public ActionMessageResponse restoreStaffProfile(UUID userId, HttpServletRequest httpRequest) {
+        UUID actorId = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        UserEnum.UserRole actorRole = parseUserRole(RequestAuthUtils.requireRoleHeader(httpRequest));
+        return restoreStaffProfile(userId, actorId, actorRole);
+    }
+
+    @Override
+    public ActionMessageResponse restoreStaffProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole) {
+        requireAdminOrManager(actorRole, "restoreStaffProfile");
+
+        User target = userRepository.findByIdAndRoleAndIsDeletedTrue(userId, UserEnum.UserRole.STAFF)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (actorRole == UserEnum.UserRole.MANAGER && !hasSharedCinema(actorId, target.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        UserSnapshot snapshot = snapshot(target);
+        AuditIdentity actor = resolveActor(actorId, actorRole);
+
+        restore(target);
+        userRepository.save(target);
+        unlockIdentityAccount(userId);
+        queueAuditMailAfterCommit(buildRestoreAuditMail(
+                snapshot.email(),
+                snapshot.name(),
+                snapshot.role(),
+                actor,
+                "restore",
+                List.of("isDeleted: true -> false", "accountStatus: locked -> active")));
+
+        log.info("Staff profile restored: staffId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
+        return ActionMessageResponse.builder()
+                .message("Khôi phục profile cho Staff thành công")
                 .build();
     }
 
@@ -413,6 +521,18 @@ public class UserServiceImpl implements UserService {
         user.setIsDeleted(true);
     }
 
+    private void restore(User user) {
+        user.setIsDeleted(false);
+    }
+
+    private void lockIdentityAccount(UUID userId) {
+        identityGrpcClient.lockAccount(userId);
+    }
+
+    private void unlockIdentityAccount(UUID userId) {
+        identityGrpcClient.unlockAccount(userId);
+    }
+
     private UserSnapshot snapshot(User user) {
         return new UserSnapshot(
                 user.getId(),
@@ -466,6 +586,25 @@ public class UserServiceImpl implements UserService {
                 targetEmail,
                 "[CinemaStar] Thông báo vô hiệu hóa tài khoản",
                 "Xóa mềm hồ sơ người dùng",
+                actor.displayName(),
+                actor.role(),
+                targetName,
+                targetRole.name(),
+                action,
+                diffs);
+    }
+
+    private SendEmailRequest buildRestoreAuditMail(
+            String targetEmail,
+            String targetName,
+            UserEnum.UserRole targetRole,
+            AuditIdentity actor,
+            String action,
+            List<String> diffs) {
+        return userAuditEmailService.buildAuditEmail(
+                targetEmail,
+                "[CinemaStar] Thông báo khôi phục tài khoản",
+                "Khôi phục hồ sơ người dùng",
                 actor.displayName(),
                 actor.role(),
                 targetName,

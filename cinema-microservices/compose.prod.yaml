@@ -37,8 +37,10 @@ services:
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: admin
       SPRING_RABBITMQ_PASSWORD: admin
+      GRPC_SERVER_PORT: 9190
       SERVER_PORT: 8090
     expose:
+      - "9190"
       - "8090"
     depends_on:
       - postgres
@@ -68,6 +70,8 @@ services:
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: admin
       SPRING_RABBITMQ_PASSWORD: admin
+      IDENTITY_GRPC_HOST: identity-service
+      IDENTITY_GRPC_PORT: 9190
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
       GRPC_SERVER_PORT: 9191

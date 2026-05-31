@@ -51,6 +51,8 @@ spring:
       channels:
         cinema:
           address: ${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}
+        identity:
+          address: ${IDENTITY_GRPC_HOST:localhost}:${IDENTITY_GRPC_PORT:9190}
     server:
       port: ${GRPC_SERVER_PORT:9191}
 server:

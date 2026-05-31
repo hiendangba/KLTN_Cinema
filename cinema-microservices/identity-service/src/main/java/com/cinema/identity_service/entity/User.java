@@ -36,6 +36,8 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserEnum.UserStatus status;
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted;
     @Column(nullable = false, updatable = false)
     private LocalDateTime timeCreated;
 
@@ -46,6 +48,9 @@ public class User {
     public void generateId() {
         if (this.id == null) {
             this.id = UuidCreator.getTimeOrderedEpoch();
+        }
+        if (this.isDeleted == null) {
+            this.isDeleted = false;
         }
         timeCreated = LocalDateTime.now();
         timeUpdated = LocalDateTime.now();

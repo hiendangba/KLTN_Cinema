@@ -55,6 +55,8 @@ spring:
       channels:
         user:
           address: "${USER_GRPC_HOST:localhost}:${USER_GRPC_PORT:9191}"
+    server:
+      port: ${GRPC_SERVER_PORT:9190}
 server:
   port: ${SERVER_PORT:8090}
 app:

@@ -36,6 +36,18 @@ public interface UserService {
 
     ActionMessageResponse deleteStaffProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole);
 
+    ActionMessageResponse restoreCustomerProfile(UUID userId, HttpServletRequest httpRequest);
+
+    ActionMessageResponse restoreCustomerProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole);
+
+    ActionMessageResponse restoreManagerProfile(UUID userId, HttpServletRequest httpRequest);
+
+    ActionMessageResponse restoreManagerProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole);
+
+    ActionMessageResponse restoreStaffProfile(UUID userId, HttpServletRequest httpRequest);
+
+    ActionMessageResponse restoreStaffProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole);
+
     UserResponse getMyProfile(HttpServletRequest request);
 
     UserResponse getUserById(UUID userId, HttpServletRequest httpRequest);

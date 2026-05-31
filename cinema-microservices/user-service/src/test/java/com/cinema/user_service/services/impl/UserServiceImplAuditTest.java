@@ -8,6 +8,7 @@ import com.cinema.user_service.dto.request.UpdateCustomerRequest;
 import com.cinema.user_service.dto.request.UpdateStaffRequest;
 import com.cinema.user_service.entity.User;
 import com.cinema.user_service.grpc.CinemaGrpcClient;
+import com.cinema.user_service.grpc.IdentityGrpcClient;
 import com.cinema.user_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.user_service.mapper.UserMapper;
 import com.cinema.user_service.repository.UserRepository;
@@ -22,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -46,6 +48,9 @@ class UserServiceImplAuditTest {
     private CinemaGrpcClient cinemaGrpcClient;
 
     @Mock
+    private IdentityGrpcClient identityGrpcClient;
+
+    @Mock
     private InternalEmailDispatchService internalEmailDispatchService;
 
     private UserAuditEmailService userAuditEmailService;
@@ -59,6 +64,7 @@ class UserServiceImplAuditTest {
                 userRepository,
                 userMapper,
                 cinemaGrpcClient,
+                identityGrpcClient,
                 internalEmailDispatchService,
                 userAuditEmailService);
     }
@@ -129,6 +135,8 @@ class UserServiceImplAuditTest {
 
         service.deleteStaffProfile(targetId, actorId, UserEnum.UserRole.ADMIN);
 
+        verify(identityGrpcClient).lockAccount(targetId);
+
         ArgumentCaptor<SendEmailRequest> captor = ArgumentCaptor.forClass(SendEmailRequest.class);
         verify(internalEmailDispatchService).sendAsync(captor.capture());
 
@@ -140,6 +148,64 @@ class UserServiceImplAuditTest {
         assertThat(email.getContent()).contains("Target Staff");
         assertThat(email.getContent()).contains("isDeleted: false -&gt; true");
         assertThat(target.getIsDeleted()).isTrue();
+    }
+
+    @Test
+    void restoreCustomerProfile_shouldQueueRestoreAuditMail() {
+        UUID targetId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+
+        User target = buildUser(targetId, "customer@email.com", "Target Customer", UserEnum.UserRole.CUSTOMER);
+        target.setIsDeleted(true);
+        User actor = buildUser(actorId, "admin@email.com", "Admin Actor", UserEnum.UserRole.ADMIN);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedTrue(targetId, UserEnum.UserRole.CUSTOMER))
+                .thenReturn(Optional.of(target));
+        when(userRepository.findByIdAndIsDeletedFalse(actorId)).thenReturn(Optional.of(actor));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.restoreCustomerProfile(targetId, actorId, UserEnum.UserRole.ADMIN);
+
+        verify(identityGrpcClient).unlockAccount(targetId);
+
+        ArgumentCaptor<SendEmailRequest> captor = ArgumentCaptor.forClass(SendEmailRequest.class);
+        verify(internalEmailDispatchService).sendAsync(captor.capture());
+
+        SendEmailRequest email = captor.getValue();
+        assertThat(email.getTo()).isEqualTo("customer@email.com");
+        assertThat(email.getSubject()).contains("khôi phục");
+        assertThat(email.getContent()).contains("restore");
+        assertThat(email.getContent()).contains("Admin Actor");
+        assertThat(email.getContent()).contains("Target Customer");
+        assertThat(email.getContent()).contains("isDeleted: true -&gt; false");
+        assertThat(email.getContent()).contains("accountStatus: locked -&gt; active");
+        assertThat(target.getIsDeleted()).isFalse();
+    }
+
+    @Test
+    void restoreStaffProfile_managerWithSharedCinemaShouldSucceed() {
+        UUID targetId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+
+        User target = buildUser(targetId, "staff@email.com", "Target Staff", UserEnum.UserRole.STAFF);
+        target.setIsDeleted(true);
+        User actor = buildUser(actorId, "manager@email.com", "Manager Actor", UserEnum.UserRole.MANAGER);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedTrue(targetId, UserEnum.UserRole.STAFF))
+                .thenReturn(Optional.of(target));
+        when(userRepository.findByIdAndIsDeletedFalse(actorId)).thenReturn(Optional.of(actor));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(cinemaGrpcClient.getCinemaIdsByUserId(actorId, UserEnum.UserRole.MANAGER.name()))
+                .thenReturn(List.of(cinemaId));
+        when(cinemaGrpcClient.getCinemaIdsByUserId(targetId, UserEnum.UserRole.STAFF.name()))
+                .thenReturn(List.of(cinemaId));
+
+        service.restoreStaffProfile(targetId, actorId, UserEnum.UserRole.MANAGER);
+
+        verify(identityGrpcClient).unlockAccount(targetId);
+        verify(internalEmailDispatchService).sendAsync(any());
+        assertThat(target.getIsDeleted()).isFalse();
     }
 
     @Test

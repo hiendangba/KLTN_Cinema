@@ -584,7 +584,7 @@ public class UserServiceImpl implements UserService {
     public ActionMessageResponse login(LoginRequest loginRequest, HttpServletResponse response) {
         User user = userRepository.findByEmail(loginRequest.getEmail())
                 .orElseThrow(() -> new BusinessException(LOGIN_FAILED));
-        if (user.getStatus().equals(UserEnum.UserStatus.LOCKED)) {
+        if (isLockedOrDeleted(user)) {
             log.warn("Tài khoản đã bị khóa: {}", user.getId());
             throw new BusinessException(LOGIN_FAILED);
         }
@@ -628,7 +628,7 @@ public class UserServiceImpl implements UserService {
         User user;
         if (existingUser.isPresent()) {
             user = existingUser.get();
-            if (user.getStatus().equals(UserEnum.UserStatus.LOCKED)) {
+            if (isLockedOrDeleted(user)) {
                 throw new BusinessException(LOGIN_FAILED);
             }
             if (!GOOGLE_PROVIDER.equalsIgnoreCase(user.getProvider())) {
@@ -728,7 +728,7 @@ public class UserServiceImpl implements UserService {
             User user = existingUser.get();
             log.info("Found existing user for Google login: userId={} provider={} status={} providerId={}",
                     user.getId(), user.getProvider(), user.getStatus(), maskProviderId(user.getProviderId()));
-            if (user.getStatus().equals(UserEnum.UserStatus.LOCKED)) {
+            if (isLockedOrDeleted(user)) {
                 throw new BusinessException(LOGIN_FAILED);
             }
             if (!GOOGLE_PROVIDER.equalsIgnoreCase(user.getProvider())) {
@@ -1168,6 +1168,10 @@ public class UserServiceImpl implements UserService {
     private ForgotPasswordRequest toForgotPasswordRequest(Object value) {
         // Current flows rely on subject for forgot-password OTP, so this field is optional.
         return null;
+    }
+
+    private boolean isLockedOrDeleted(User user) {
+        return user.getStatus() == UserEnum.UserStatus.LOCKED || Boolean.TRUE.equals(user.getIsDeleted());
     }
 
     private OtpData.OtpPurpose parseOtpPurpose(Object value) {

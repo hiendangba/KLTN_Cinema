@@ -16,6 +16,7 @@ public interface UserMapper {
     @Mapping(target = "providerId", ignore = true)
     @Mapping(target = "provider", constant = "LOCAL")
     @Mapping(target = "status", constant = "ACTIVE")
+    @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "role", constant = "CUSTOMER")
     User toUser(RegisterCustomerRequest registerCustomerRequest);
 
@@ -25,6 +26,7 @@ public interface UserMapper {
     @Mapping(target = "providerId", ignore = true)
     @Mapping(target = "provider", constant = "LOCAL")
     @Mapping(target = "status", constant = "ACTIVE")
+    @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "role", constant = "MANAGER")
     User toUser(RegisterManagerRequest registerManagerRequest);
 
@@ -34,6 +36,7 @@ public interface UserMapper {
     @Mapping(target = "providerId", ignore = true)
     @Mapping(target = "provider", constant = "LOCAL")
     @Mapping(target = "status", constant = "ACTIVE")
+    @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "role", constant = "STAFF")
     User toUser(RegisterStaffRequest registerStaffRequest);
 }

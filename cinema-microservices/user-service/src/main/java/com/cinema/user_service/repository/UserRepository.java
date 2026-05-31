@@ -14,6 +14,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(String email);
     Page<User> findByRoleAndIsDeletedFalse(UserEnum.UserRole role, Pageable pageable);
     Optional<User> findByIdAndRoleAndIsDeletedFalse(UUID id, UserEnum.UserRole role);
+    Optional<User> findByIdAndRoleAndIsDeletedTrue(UUID id, UserEnum.UserRole role);
     Optional<User> findByIdAndIsDeletedFalse(UUID id);
     boolean existsByIdAndIsDeletedFalse(UUID id);
 }

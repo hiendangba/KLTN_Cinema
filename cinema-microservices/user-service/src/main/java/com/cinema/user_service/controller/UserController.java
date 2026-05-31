@@ -94,6 +94,30 @@ public class UserController extends BaseController {
         return ok(response);
     }
 
+    @PatchMapping("/customers/{id}/restore")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> restoreCustomerProfile(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.restoreCustomerProfile(id, request);
+        return ok(response);
+    }
+
+    @PatchMapping("/managers/{id}/restore")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> restoreManagerProfile(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.restoreManagerProfile(id, request);
+        return ok(response);
+    }
+
+    @PatchMapping("/staffs/{id}/restore")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> restoreStaffProfile(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.restoreStaffProfile(id, request);
+        return ok(response);
+    }
+
     @GetMapping("/me")
     public ResponseEntity<APIResponse<UserResponse>> getMyProfile(HttpServletRequest request) {
         UserResponse userResponse = userService.getMyProfile(request);
