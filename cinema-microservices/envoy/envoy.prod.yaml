@@ -243,6 +243,16 @@ static_resources:
                           route:
                             cluster: payment-service
                             timeout: 30s
+                        - match:
+                            path: /api/promotions
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/promotions
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
 
   clusters:
     - name: identity-service

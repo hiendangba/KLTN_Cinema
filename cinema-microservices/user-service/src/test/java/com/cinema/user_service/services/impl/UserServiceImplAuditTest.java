@@ -139,7 +139,7 @@ class UserServiceImplAuditTest {
         assertThat(email.getContent()).contains("Admin Actor");
         assertThat(email.getContent()).contains("Target Staff");
         assertThat(email.getContent()).contains("isDeleted: false -&gt; true");
-        assertThat(target.isDeleted()).isTrue();
+        assertThat(target.getIsDeleted()).isTrue();
     }
 
     @Test

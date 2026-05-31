@@ -410,7 +410,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private void softDelete(User user) {
-        user.setDeleted(true);
+        user.setIsDeleted(true);
     }
 
     private UserSnapshot snapshot(User user) {
@@ -425,7 +425,7 @@ public class UserServiceImpl implements UserService {
                 user.getAccountNumber(),
                 user.getAccountName(),
                 user.getRole(),
-                user.isDeleted());
+                Boolean.TRUE.equals(user.getIsDeleted()));
     }
 
     private AuditIdentity resolveActor(HttpServletRequest request) {
