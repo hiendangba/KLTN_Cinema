@@ -17,7 +17,6 @@ import com.cinema.identity_service.grpc.UserGrpcClient;
 import com.cinema.identity_service.mapper.UserMapper;
 import com.cinema.identity_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.identity_service.repository.UserRepository;
-import com.cinema.identity_service.services.internal.IdentityAccountInternalService;
 import com.cinema.identity_service.services.google.GoogleIdTokenVerifierService;
 import com.cinema.identity_service.services.google.GoogleOAuthService;
 import com.cinema.identity_service.services.google.GoogleUserInfo;
@@ -78,8 +77,6 @@ class UserServiceImplTokenFlowTest {
     @Mock
     private UserGrpcClient userGrpcClient;
     @Mock
-    private IdentityAccountInternalService identityAccountInternalService;
-    @Mock
     private GoogleIdTokenVerifierService googleIdTokenVerifierService;
     @Mock
     private GoogleOAuthService googleOAuthService;
@@ -98,7 +95,6 @@ class UserServiceImplTokenFlowTest {
                 userMapper,
                 redisTemplate,
                 userGrpcClient,
-                identityAccountInternalService,
                 googleIdTokenVerifierService,
                 googleOAuthService,
                 internalEmailDispatchService
