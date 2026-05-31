@@ -67,13 +67,6 @@ import java.util.stream.Collectors;
 public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(0, RoundingMode.HALF_UP);
-    private static final BigDecimal TEN_PERCENT = new BigDecimal("0.10");
-    private static final BigDecimal FIFTEEN_PERCENT = new BigDecimal("0.15");
-    private static final BigDecimal THIRTY_THOUSAND = new BigDecimal("30000");
-    private static final BigDecimal FORTY_THOUSAND = new BigDecimal("40000");
-    private static final BigDecimal TWENTY_THOUSAND = new BigDecimal("20000");
-    private static final BigDecimal MIN_FOR_CINEMASTAR10 = new BigDecimal("100000");
-    private static final BigDecimal MIN_FOR_COMBO20K = new BigDecimal("150000");
 
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final PaymentTransactionRepositoryImpl paymentTransactionRepositoryImpl;
