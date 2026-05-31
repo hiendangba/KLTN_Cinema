@@ -836,8 +836,9 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - Bổ sung API booking:
     - `POST /api/bookings`
     - `GET /api/bookings/{id}`
+    - `POST /api/bookings/me/active/search`
+    - `POST /api/bookings/me/history/search`
     - `POST /api/bookings/cinemas/me/search`
-    - `GET /api/bookings/me/active`
     - `POST /api/bookings/revenues/cinemas/search`
     - `POST /api/bookings/revenues/cinemas/me/search`
     - `POST /api/bookings/revenues/cinemas/export`

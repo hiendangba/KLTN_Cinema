@@ -453,6 +453,70 @@ class BookingServiceImplTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void searchMyBookingHistory_shouldForcePaidFiltersAndIgnoreClientStatusFilters() {
+        UUID userId = UUID.randomUUID();
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+        when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+
+        when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), isNull(), any()))
+                .thenReturn(0L);
+        when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                eq(userId), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                .thenReturn(List.of());
+
+        PageRequest<BookingField> request = PageRequest.<BookingField>builder()
+                .page(1)
+                .size(10)
+                .filterBy(List.of(
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.BOOKING_STATUS)
+                                .operator("EQ")
+                                .value(BookingStatus.EXPIRED)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.PAYMENT_STATUS)
+                                .operator("EQ")
+                                .value(PaymentStatus.UNPAID)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.FILM_TITLE)
+                                .operator("LIKE")
+                                .value("Avatar")
+                                .build()))
+                .build();
+
+        bookingService.searchMyBookingHistory(request, httpRequest);
+
+        ArgumentCaptor<List> countFilterCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List> searchFilterCaptor = ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
+                eq(userId),
+                isNull(),
+                isNull(),
+                countFilterCaptor.capture());
+        org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
+                eq(userId),
+                isNull(),
+                isNull(),
+                eq(1),
+                eq(10),
+                anyList(),
+                searchFilterCaptor.capture());
+
+        List<FilterField<BookingField>> countFilters = (List<FilterField<BookingField>>) countFilterCaptor.getValue();
+        List<FilterField<BookingField>> searchFilters = (List<FilterField<BookingField>>) searchFilterCaptor.getValue();
+
+        assertEquals(3, countFilters.size());
+        assertEquals(BookingField.FILM_TITLE, countFilters.get(0).getField());
+        assertEquals(BookingField.BOOKING_STATUS, countFilters.get(1).getField());
+        assertEquals(BookingStatus.CONFIRMED, countFilters.get(1).getValue());
+        assertEquals(BookingField.PAYMENT_STATUS, countFilters.get(2).getField());
+        assertEquals(PaymentStatus.PAID, countFilters.get(2).getValue());
+        assertEquals(countFilters, searchFilters);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void searchPurchasedBookingsByOperatorCinema_shouldForcePurchasedFiltersAndIgnoreClientStatusFilters() {
         when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);
 

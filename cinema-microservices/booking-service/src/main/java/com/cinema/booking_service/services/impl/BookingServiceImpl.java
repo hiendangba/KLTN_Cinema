@@ -197,20 +197,12 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public BookingResponse getMyActiveBooking(UUID showtimeId, UUID cinemaId, HttpServletRequest httpRequest) {
+    public PageResponse<BookingResponse> searchMyBookingHistory(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
         validateCustomerRole(httpRequest);
         UUID userId = resolveUserId(httpRequest);
-        List<Booking> bookings = bookingRepository.findActiveBookingsByUser(
-                userId,
-                EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED),
-                LocalDateTime.now(),
-                showtimeId,
-                cinemaId,
-                org.springframework.data.domain.PageRequest.of(0, 1));
-        if (bookings.isEmpty()) {
-            return null;
-        }
-        return bookingMapper.toResponse(bookings.get(0));
+        return searchBookingsByScope(userId, null, request, buildPurchasedBookingFilters());
     }
 
     @Override

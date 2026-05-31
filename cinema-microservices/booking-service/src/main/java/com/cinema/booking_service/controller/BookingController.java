@@ -26,7 +26,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -64,12 +63,11 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 
-    @GetMapping("/me/active")
-    public ResponseEntity<APIResponse<BookingResponse>> getMyActiveBooking(
-            @RequestParam(required = false) UUID showtimeId,
-            @RequestParam(required = false) UUID cinemaId,
+    @PostMapping("/me/history/search")
+    public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchMyBookingHistory(
+            @Valid @RequestBody PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
-        BookingResponse response = bookingService.getMyActiveBooking(showtimeId, cinemaId, httpRequest);
+        PageResponse<BookingResponse> response = bookingService.searchMyBookingHistory(request, httpRequest);
         return ok(response);
     }
 
