@@ -10,6 +10,7 @@ import com.cinema.user_service.dto.request.UpdateStaffRequest;
 import com.cinema.user_service.entity.User;
 import com.cinema.user_service.grpc.CinemaGrpcClient;
 import com.cinema.user_service.grpc.IdentityGrpcClient;
+import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.user_service.mapper.UserMapper;
 import com.cinema.user_service.repository.UserRepository;
@@ -119,6 +120,46 @@ class UserServiceImplAuditTest {
         assertThat(email.getContent()).contains("New Name");
         assertThat(email.getContent()).contains("name: Old Name -&gt; New Name");
         assertThat(email.getContent()).contains("email: old@email.com -&gt; new@email.com");
+        verify(identityGrpcClient).updateAccountEmail(userId, "new@email.com");
+    }
+
+    @Test
+    void updateCustomerProfile_shouldNotSyncIdentityEmailWhenUnchanged() {
+        UUID userId = UUID.randomUUID();
+        User user = buildUser(userId, "same@email.com", "Old Name", UserEnum.UserRole.CUSTOMER);
+        User actor = buildUser(userId, "same@email.com", "Old Name", UserEnum.UserRole.CUSTOMER);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedFalse(userId, UserEnum.UserRole.CUSTOMER))
+                .thenReturn(Optional.of(user));
+        when(userRepository.findByIdAndIsDeletedFalse(userId)).thenReturn(Optional.of(actor));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        doAnswer(invocation -> {
+            User target = invocation.getArgument(0);
+            UpdateCustomerRequest request = invocation.getArgument(1);
+            target.setName(request.getName());
+            target.setEmail(request.getEmail());
+            target.setDob(request.getDob());
+            target.setGender(request.getGender());
+            target.setPhone(request.getPhone());
+            return null;
+        }).when(userMapper).updateUserCustomer(any(User.class), any(UpdateCustomerRequest.class));
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", userId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.ADMIN.name());
+
+        UpdateCustomerRequest request = UpdateCustomerRequest.builder()
+                .name("New Name")
+                .email("same@email.com")
+                .dob(LocalDate.of(1995, 1, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0901234567")
+                .build();
+
+        service.updateCustomerProfile(request, httpRequest);
+
+        verify(identityGrpcClient, never()).updateAccountEmail(any(), any());
     }
 
     @Test
@@ -454,6 +495,45 @@ class UserServiceImplAuditTest {
         verify(identityGrpcClient).unlockAccount(targetId);
         verify(internalEmailDispatchService).sendAsync(any());
         assertThat(target.getIsDeleted()).isFalse();
+    }
+
+    @Test
+    void getUserById_shouldEnrichIdentityAccount() {
+        UUID requesterId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        User target = buildUser(targetId, "target@email.com", "Target User", UserEnum.UserRole.CUSTOMER);
+        UserResponse.IdentityAccountResponse identityAccount = UserResponse.IdentityAccountResponse.builder()
+                .id(targetId)
+                .email("target@email.com")
+                .provider("google")
+                .providerId("provider-1")
+                .role(UserEnum.UserRole.CUSTOMER.name())
+                .status(UserEnum.UserStatus.ACTIVE.name())
+                .isDeleted(false)
+                .timeCreated(LocalDate.now().atStartOfDay())
+                .timeUpdated(LocalDate.now().atStartOfDay())
+                .build();
+        UserResponse profileResponse = UserResponse.builder()
+                .id(targetId)
+                .email(target.getEmail())
+                .name(target.getName())
+                .role(target.getRole())
+                .build();
+
+        when(userRepository.findByIdAndIsDeletedFalse(targetId)).thenReturn(Optional.of(target));
+        when(userMapper.toUserResponse(target)).thenReturn(profileResponse);
+        when(identityGrpcClient.getAccountByUserId(targetId)).thenReturn(identityAccount);
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", requesterId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.ADMIN.name());
+
+        UserResponse response = service.getUserById(targetId, httpRequest);
+
+        assertThat(response.getIdentityAccount()).isNotNull();
+        assertThat(response.getIdentityAccount().getEmail()).isEqualTo("target@email.com");
+        verify(identityGrpcClient).getAccountByUserId(targetId);
     }
 
     @Test

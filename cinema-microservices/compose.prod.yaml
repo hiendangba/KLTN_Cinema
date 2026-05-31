@@ -46,7 +46,7 @@ services:
       - postgres
       - redis
       - rabbitmq
-    mem_limit: 320m
+    mem_limit: 352m
 
   user-service:
     image: ${IMAGE_REPO}/user-service:${IMAGE_TAG:-dev}
@@ -120,7 +120,7 @@ services:
       - postgres
       - redis
       - rabbitmq
-    mem_limit: 224m
+    mem_limit: 352m
 
   showtime-service:
     image: ${IMAGE_REPO}/showtime-service:${IMAGE_TAG:-dev}
@@ -169,7 +169,7 @@ services:
       - hall-services
       - cinema-service
       - seat-service
-    mem_limit: 224m
+    mem_limit: 352m
 
   booking-service:
     image: ${IMAGE_REPO}/booking-service:${IMAGE_TAG:-dev}
@@ -207,7 +207,7 @@ services:
       - redis
       - cinema-service
       - film-service
-    mem_limit: 224m
+    mem_limit: 352m
 
   payment-service:
     image: ${IMAGE_REPO}/payment-service:${IMAGE_TAG:-dev}
@@ -244,7 +244,7 @@ services:
       - postgres
       - booking-service
       - cinema-service
-    mem_limit: 224m
+    mem_limit: 352m
 
   hall-services:
     image: ${IMAGE_REPO}/hall-services:${IMAGE_TAG:-dev}
@@ -279,7 +279,7 @@ services:
       - postgres
       - redis
       - cinema-service
-    mem_limit: 416m
+    mem_limit: 352m
 
   seat-service:
     image: ${IMAGE_REPO}/seat-service:${IMAGE_TAG:-dev}
@@ -378,7 +378,7 @@ services:
       - ./postgres-init:/docker-entrypoint-initdb.d
     ports:
       - "5433:5432"
-    mem_limit: 320m
+    mem_limit: 240m
 
   redis:
     image: redis:7
@@ -435,7 +435,7 @@ services:
       - ./envoy/envoy.prod.yaml:/etc/envoy/envoy.yaml:ro
       - ./envoy/certs:/etc/envoy/certs:ro
     command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
-    mem_limit: 96m
+    mem_limit: 50m
 
 volumes:
   pgdata:

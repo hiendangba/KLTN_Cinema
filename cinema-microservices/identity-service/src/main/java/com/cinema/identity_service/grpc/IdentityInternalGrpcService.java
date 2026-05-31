@@ -3,8 +3,11 @@ package com.cinema.identity_service.grpc;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.common.OperationReply;
+import com.cinema.grpc.identity.GetUserAccountByUserIdReply;
+import com.cinema.grpc.identity.GetUserAccountByUserIdRequest;
 import com.cinema.grpc.identity.IdentityInternalServiceGrpc;
 import com.cinema.grpc.identity.LockUserAccountRequest;
+import com.cinema.grpc.identity.UpdateUserAccountByUserIdRequest;
 import com.cinema.grpc.identity.UnlockUserAccountRequest;
 import com.cinema.identity_service.services.internal.IdentityAccountInternalService;
 import io.grpc.BindableService;
@@ -62,6 +65,65 @@ public class IdentityInternalGrpcService extends IdentityInternalServiceGrpc.Ide
             responseObserver.onCompleted();
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while unlocking identity account", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void getUserAccountByUserId(
+            GetUserAccountByUserIdRequest request,
+            StreamObserver<GetUserAccountByUserIdReply> responseObserver) {
+        try {
+            UUID userId = UUID.fromString(request.getUserId());
+            responseObserver.onNext(GetUserAccountByUserIdReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Identity account fetched successfully")
+                    .setAccount(identityAccountInternalService.getAccountByUserId(userId))
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(GetUserAccountByUserIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(GetUserAccountByUserIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching identity account", ex);
+            responseObserver.onNext(GetUserAccountByUserIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void updateUserAccountByUserId(
+            UpdateUserAccountByUserIdRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            UUID userId = UUID.fromString(request.getUserId());
+            identityAccountInternalService.updateAccountEmail(userId, request.getEmail());
+            responseObserver.onNext(success("Identity account email updated successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex.getErrorCode()));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while updating identity account", ex);
             responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
             responseObserver.onCompleted();
         }

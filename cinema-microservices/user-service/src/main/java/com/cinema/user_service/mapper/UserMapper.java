@@ -55,6 +55,7 @@ public interface UserMapper {
     @Mapping(target = "isDeleted", ignore = true)
     void updateUserStaff(@MappingTarget User user, UpdateStaffRequest request);
 
+    @Mapping(target = "identityAccount", ignore = true)
     UserResponse toUserResponse(User user);
     List<UserResponse> toUserResponseList(List<User> users);
 }

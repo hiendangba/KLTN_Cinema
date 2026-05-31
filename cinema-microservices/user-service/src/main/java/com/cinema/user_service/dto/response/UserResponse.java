@@ -23,8 +23,27 @@ public class UserResponse {
     String phone;
     UserEnum.UserRole role;
     LocalDateTime timeCreated;
-    LocalDateTime timeUpdated ;
+    LocalDateTime timeUpdated;
     String bankCode;
     String accountNumber;
     String accountName;
+    IdentityAccountResponse identityAccount;
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @FieldDefaults(level = AccessLevel.PRIVATE)
+    public static class IdentityAccountResponse {
+        UUID id;
+        String email;
+        String provider;
+        String providerId;
+        String role;
+        String status;
+        Boolean isDeleted;
+        LocalDateTime timeCreated;
+        LocalDateTime timeUpdated;
+    }
 }

@@ -124,6 +124,7 @@ public class UserServiceImpl implements UserService {
 
         userMapper.updateUserCustomer(user, request);
         userRepository.save(user);
+        syncIdentityEmailIfChanged(user.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 user,
                 actor,
@@ -152,6 +153,7 @@ public class UserServiceImpl implements UserService {
 
         userMapper.updateUserManager(manager, request);
         userRepository.save(manager);
+        syncIdentityEmailIfChanged(manager.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 manager,
                 actor,
@@ -180,6 +182,7 @@ public class UserServiceImpl implements UserService {
 
         userMapper.updateUserStaff(staff, request);
         userRepository.save(staff);
+        syncIdentityEmailIfChanged(staff.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 staff,
                 actor,
@@ -208,6 +211,7 @@ public class UserServiceImpl implements UserService {
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
         userMapper.updateUserCustomer(target, request);
         userRepository.save(target);
+        syncIdentityEmailIfChanged(target.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 target,
                 actor,
@@ -238,6 +242,7 @@ public class UserServiceImpl implements UserService {
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
         userMapper.updateUserManager(target, request);
         userRepository.save(target);
+        syncIdentityEmailIfChanged(target.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 target,
                 actor,
@@ -272,6 +277,7 @@ public class UserServiceImpl implements UserService {
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
         userMapper.updateUserStaff(target, request);
         userRepository.save(target);
+        syncIdentityEmailIfChanged(target.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 target,
                 actor,
@@ -521,7 +527,9 @@ public class UserServiceImpl implements UserService {
 
         log.info("User profile loaded by id: requesterId={}, requesterRole={}, targetUserId={}, targetRole={}",
                 requesterUserId, requesterRole, userId, targetUser.getRole());
-        return userMapper.toUserResponse(targetUser);
+        UserResponse response = userMapper.toUserResponse(targetUser);
+        response.setIdentityAccount(identityGrpcClient.getAccountByUserId(userId));
+        return response;
     }
 
     @Override
@@ -631,6 +639,14 @@ public class UserServiceImpl implements UserService {
 
     private void unlockIdentityAccount(UUID userId) {
         identityGrpcClient.unlockAccount(userId);
+    }
+
+    private void syncIdentityEmailIfChanged(UUID userId, String currentEmail, String nextEmail) {
+        if (Objects.equals(currentEmail, nextEmail)) {
+            return;
+        }
+        identityGrpcClient.updateAccountEmail(userId, nextEmail);
+        log.info("Identity account email synced: userId={}, email={}", userId, nextEmail);
     }
 
     private UserSnapshot snapshot(User user) {
