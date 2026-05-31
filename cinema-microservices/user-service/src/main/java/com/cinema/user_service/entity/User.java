@@ -59,6 +59,9 @@ public class User {
     @Column(nullable = false, length = 20)
     private UserEnum.UserRole role;
 
+    @Column(name = "is_deleted", nullable = false)
+    private boolean deleted;
+
     @Column(nullable = false, updatable = false)
     LocalDateTime timeCreated;
 
@@ -70,6 +73,7 @@ public class User {
         if (this.id == null) {
             this.id = UuidCreator.getTimeOrderedEpoch();
         }
+        this.deleted = false;
         timeCreated = LocalDateTime.now();
         timeUpdated = LocalDateTime.now();
     }

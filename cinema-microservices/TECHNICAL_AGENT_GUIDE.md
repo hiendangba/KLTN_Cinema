@@ -76,10 +76,26 @@ Khi log callback pass state nhưng fail ở `POST https://oauth2.googleapis.com/
   1. So thời gian giữa log `Google OAuth exchange start` và log success/fail để đo độ trễ thực tế.
   2. Nếu cần test tay, luôn lấy `code` mới ngay trước lúc gọi `/token`.
   3. Nếu `curl` trong cùng container trả `200` nhưng app fail, ưu tiên kiểm tra request body/encoding thay vì nghi ngờ HTTPS hoặc Envoy.
-  4. Nếu có nhiều lần fail liên tiếp, đối chiếu response body:
+ 4. Nếu có nhiều lần fail liên tiếp, đối chiếu response body:
      - `invalid_grant`: lỗi vòng đời `code` (hết hạn/đã dùng/sai format).
      - `invalid_client`: lệch `client_id`/`client_secret`.
-  5. Khi debug xong, rotate `GOOGLE_CLIENT_SECRET` nếu secret đã lộ qua terminal/log.
+ 5. Khi debug xong, rotate `GOOGLE_CLIENT_SECRET` nếu secret đã lộ qua terminal/log.
+
+### 2026-05-30 Audit mail cho update/delete user
+
+- `user-service` là nơi phát notification audit chính cho mọi update/delete profile.
+- Mail audit dùng lại queue RabbitMQ hiện có qua `SendEmailRequest`, không thêm API mail mới.
+- Nội dung mail phải có:
+  - `actorName`
+  - `actorRole`
+  - `targetName`
+  - `action`
+  - danh sách field theo mẫu `old -> new`
+- Mail chỉ queue **sau khi DB commit thành công**; rollback thì không gửi.
+- Soft delete chỉ set `isDeleted = true`, không xóa vật lý.
+- Các query đọc danh sách/chi tiết trong `user-service` phải lọc `isDeleted = false`, nếu không user đã xóa vẫn bị lộ ra ở search/get.
+- Nếu delete đi qua orchestration từ `identity-service`, chỉ gọi gRPC sang `user-service` để tránh gửi mail trùng.
+- `actorName` ưu tiên lấy từ profile theo `X-User-ID`, fallback email/id nếu profile không có tên.
 
 ---
 

@@ -23,6 +23,7 @@ import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -40,6 +41,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/payments")
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentController extends BaseController {
 
     private final VietQrService vietQrService;
@@ -128,6 +130,12 @@ public class PaymentController extends BaseController {
     public ResponseEntity<?> handleMomoWebhook(
             @RequestBody(required = false) MomoIpnRequest request) {
         PaymentSessionService.WebhookProcessingResult result = paymentSessionService.handleMomoWebhook(request);
+        log.info(
+                "MOMO_IPN_HTTP_RESPONSE orderId={} requestId={} resultCode={} status={}",
+                request == null || request.orderId() == null ? "" : request.orderId(),
+                request == null || request.requestId() == null ? "" : request.requestId(),
+                request == null || request.resultCode() == null ? "" : request.resultCode(),
+                result.status().value());
         if (result.status().is2xxSuccessful() && result.status().value() == 204) {
             return ResponseEntity.noContent().build();
         }

@@ -70,6 +70,30 @@ public class UserController extends BaseController {
         return ok(updateStaffResponse);
     }
 
+    @DeleteMapping("/customers/{id}")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> deleteCustomerProfile(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.deleteCustomerProfile(id, request);
+        return ok(response);
+    }
+
+    @DeleteMapping("/managers/{id}")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> deleteManagerProfile(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.deleteManagerProfile(id, request);
+        return ok(response);
+    }
+
+    @DeleteMapping("/staffs/{id}")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> deleteStaffProfile(
+            @PathVariable UUID id,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.deleteStaffProfile(id, request);
+        return ok(response);
+    }
+
     @GetMapping("/me")
     public ResponseEntity<APIResponse<UserResponse>> getMyProfile(HttpServletRequest request) {
         UserResponse userResponse = userService.getMyProfile(request);

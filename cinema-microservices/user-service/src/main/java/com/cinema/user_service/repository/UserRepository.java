@@ -12,6 +12,8 @@ import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
     boolean existsByEmail(String email);
-    Page<User> findByRole(UserEnum.UserRole role, Pageable pageable);
-    Optional<User> findByIdAndRole(UUID id, UserEnum.UserRole role);
+    Page<User> findByRoleAndIsDeletedFalse(UserEnum.UserRole role, Pageable pageable);
+    Optional<User> findByIdAndRoleAndIsDeletedFalse(UUID id, UserEnum.UserRole role);
+    Optional<User> findByIdAndIsDeletedFalse(UUID id);
+    boolean existsByIdAndIsDeletedFalse(UUID id);
 }

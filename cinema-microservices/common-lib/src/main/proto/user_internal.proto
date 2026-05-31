@@ -12,6 +12,9 @@ service UserInternalService {
   rpc CreateCustomerProfile(CreateCustomerProfileRequest) returns (cinema.common.v1.OperationReply);
   rpc CreateManagerProfile(CreateManagerProfileRequest) returns (cinema.common.v1.OperationReply);
   rpc CreateStaffProfile(CreateStaffProfileRequest) returns (cinema.common.v1.OperationReply);
+  rpc DeleteCustomerProfile(DeleteProfileRequest) returns (cinema.common.v1.OperationReply);
+  rpc DeleteManagerProfile(DeleteProfileRequest) returns (cinema.common.v1.OperationReply);
+  rpc DeleteStaffProfile(DeleteProfileRequest) returns (cinema.common.v1.OperationReply);
   rpc CheckUserExists(CheckUserExistsRequest) returns (CheckUserExistsReply);
   rpc GetUserBasicById(GetUserBasicByIdRequest) returns (GetUserBasicByIdReply);
 }
@@ -54,6 +57,12 @@ message CreateStaffProfileRequest {
 
 message CheckUserExistsRequest {
   string user_id = 1;
+}
+
+message DeleteProfileRequest {
+  string user_id = 1;
+  string actor_id = 2;
+  string actor_role = 3;
 }
 
 message CheckUserExistsReply {

@@ -40,6 +40,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -62,6 +63,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(0, RoundingMode.HALF_UP);
@@ -398,13 +400,30 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     @Override
     @Transactional
     public WebhookProcessingResult handleMomoWebhook(MomoIpnRequest request) {
+        log.info(
+                "MOMO_IPN_RECEIVED orderId={} requestId={} resultCode={} transId={} responseTime={}",
+                request == null ? "" : safeWebhookPart(request.orderId()),
+                request == null ? "" : safeWebhookPart(request.requestId()),
+                request == null || request.resultCode() == null ? "" : request.resultCode(),
+                request == null || request.transId() == null ? "" : request.transId(),
+                request == null || request.responseTime() == null ? "" : request.responseTime());
+
         if (request == null || !StringUtils.hasText(request.orderId()) || !StringUtils.hasText(request.signature())) {
+            log.warn(
+                    "MOMO_IPN_INVALID_PAYLOAD orderId={} requestId={} reason=missing_orderId_or_signature",
+                    request == null ? "" : safeWebhookPart(request.orderId()),
+                    request == null ? "" : safeWebhookPart(request.requestId()));
             return new WebhookProcessingResult(HttpStatus.BAD_REQUEST, Map.of(
                     "success", false,
                     "message", "Invalid webhook payload"));
         }
 
         if (!verifyMomoSignature(request)) {
+            log.warn(
+                    "MOMO_IPN_REJECTED_SIGNATURE orderId={} requestId={} resultCode={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    request.resultCode());
             return new WebhookProcessingResult(HttpStatus.UNAUTHORIZED, Map.of(
                     "success", false,
                     "message", "Unauthorized"));
@@ -413,6 +432,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         PaymentTransaction transaction = paymentTransactionRepository.findByOrderInvoiceNumber(request.orderId())
                 .orElse(null);
         if (transaction == null) {
+            log.info(
+                    "MOMO_IPN_TX_NOT_FOUND orderId={} requestId={} resultCode={} transId={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    request.resultCode(),
+                    request.transId());
             return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
                     "success", true,
                     "ignored", true,
@@ -421,6 +446,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         String webhookEventKey = buildWebhookEventKey(request);
         if (isDuplicateWebhook(transaction, webhookEventKey)) {
+            log.info(
+                    "MOMO_IPN_DUPLICATE orderId={} requestId={} transactionId={} webhookEventKey={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    transaction.getId(),
+                    webhookEventKey);
             return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
                     "success", true,
                     "ignored", true,
@@ -428,6 +459,11 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         if (transaction.getStatus() == PaymentTransactionStatus.EXPIRED) {
+            log.info(
+                    "MOMO_IPN_TX_ALREADY_EXPIRED orderId={} requestId={} transactionId={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    transaction.getId());
             markWebhookMeta(transaction, webhookEventKey);
             paymentTransactionRepository.save(transaction);
             return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
@@ -437,10 +473,22 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         if (isSuccessfulMomoResult(request)) {
+            log.info(
+                    "MOMO_IPN_SUCCESS_RESULT orderId={} requestId={} transactionId={} resultCode={} amount={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    transaction.getId(),
+                    request.resultCode(),
+                    request.amount());
             return handlePaymentSucceeded(transaction, request, webhookEventKey);
         }
 
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
+            log.info(
+                    "MOMO_IPN_ALREADY_PAID orderId={} requestId={} transactionId={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    transaction.getId());
             markWebhookMeta(transaction, webhookEventKey);
             paymentTransactionRepository.save(transaction);
             return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
@@ -451,6 +499,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         transaction.setStatus(PaymentTransactionStatus.FAILED);
         transaction.setFailureReason(buildMomoFailureReason(request));
+        log.warn(
+                "MOMO_IPN_MARK_FAILED orderId={} requestId={} transactionId={} resultCode={} failureReason={}",
+                safeWebhookPart(request.orderId()),
+                safeWebhookPart(request.requestId()),
+                transaction.getId(),
+                request.resultCode(),
+                transaction.getFailureReason());
         markWebhookMeta(transaction, webhookEventKey);
         paymentTransactionRepository.save(transaction);
         return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
@@ -489,6 +544,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 : BigDecimal.valueOf(request.amount()).setScale(0, RoundingMode.HALF_UP);
         if (webhookAmount == null || transaction.getAmount() == null
                 || transaction.getAmount().compareTo(webhookAmount) != 0) {
+            log.warn(
+                    "MOMO_IPN_AMOUNT_MISMATCH orderId={} requestId={} transactionId={} expectedAmount={} receivedAmount={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    transaction.getId(),
+                    transaction.getAmount(),
+                    webhookAmount);
             transaction.setStatus(PaymentTransactionStatus.FAILED);
             transaction.setFailureReason("AMOUNT_MISMATCH");
             markWebhookMeta(transaction, webhookEventKey);
@@ -500,6 +562,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         if (transaction.getExpiresAt() != null && !transaction.getExpiresAt().isAfter(LocalDateTime.now())) {
+            log.info(
+                    "MOMO_IPN_EXPIRED_BEFORE_CONFIRM orderId={} requestId={} transactionId={} expiresAt={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    transaction.getId(),
+                    transaction.getExpiresAt());
             transaction.setStatus(PaymentTransactionStatus.EXPIRED);
             transaction.setExpiredAt(LocalDateTime.now());
             markWebhookMeta(transaction, webhookEventKey);
@@ -516,6 +584,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setFailureReason(null);
         markWebhookMeta(transaction, webhookEventKey);
         paymentTransactionRepository.save(transaction);
+        log.info(
+                "MOMO_IPN_MARK_PAID orderId={} requestId={} transactionId={} bookingId={} amount={}",
+                safeWebhookPart(request.orderId()),
+                safeWebhookPart(request.requestId()),
+                transaction.getId(),
+                transaction.getBookingId(),
+                transaction.getAmount());
 
         try {
             bookingGrpcClient.confirmBookingPayment(
@@ -525,6 +600,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     transaction.getProviderRef(),
                     transaction.getOrderInvoiceNumber());
         } catch (BusinessException ex) {
+            log.warn(
+                    "MOMO_IPN_CONFIRM_BOOKING_FAILED orderId={} requestId={} transactionId={} bookingId={} errorCode={}",
+                    safeWebhookPart(request.orderId()),
+                    safeWebhookPart(request.requestId()),
+                    transaction.getId(),
+                    transaction.getBookingId(),
+                    ex.getErrorCode().name());
             transaction.setFailureReason("BOOKING_CONFIRM_FAILED:" + ex.getErrorCode().name());
             paymentTransactionRepository.save(transaction);
             return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
@@ -533,6 +615,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "booking_error", ex.getErrorCode().name()));
         }
 
+        log.info(
+                "MOMO_IPN_CONFIRMED orderId={} requestId={} transactionId={} bookingId={} status={}",
+                safeWebhookPart(request.orderId()),
+                safeWebhookPart(request.requestId()),
+                transaction.getId(),
+                transaction.getBookingId(),
+                transaction.getStatus());
         return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
                 "success", true,
                 "message", "Payment confirmed"));

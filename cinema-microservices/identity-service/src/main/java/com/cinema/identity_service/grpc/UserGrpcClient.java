@@ -7,6 +7,7 @@ import com.cinema.grpc.common.OperationReply;
 import com.cinema.grpc.user.CreateCustomerProfileRequest;
 import com.cinema.grpc.user.CreateManagerProfileRequest;
 import com.cinema.grpc.user.CreateStaffProfileRequest;
+import com.cinema.grpc.user.DeleteProfileRequest;
 import com.cinema.grpc.user.UserInternalServiceGrpc;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
@@ -14,6 +15,8 @@ import com.cinema.identity_service.dto.request.RegisterStaffRequest;
 import io.grpc.StatusRuntimeException;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.stereotype.Component;
+
+import java.util.UUID;
 
 @Component
 public class UserGrpcClient {
@@ -81,13 +84,52 @@ public class UserGrpcClient {
         }
     }
 
+    public void deleteCustomerProfile(UUID userId, UUID actorId, String actorRole) {
+        deleteProfile(userId, actorId, actorRole, DeleteAction.CUSTOMER);
+    }
+
+    public void deleteManagerProfile(UUID userId, UUID actorId, String actorRole) {
+        deleteProfile(userId, actorId, actorRole, DeleteAction.MANAGER);
+    }
+
+    public void deleteStaffProfile(UUID userId, UUID actorId, String actorRole) {
+        deleteProfile(userId, actorId, actorRole, DeleteAction.STAFF);
+    }
+
     private void ensureSuccess(OperationReply reply, ErrorCode fallback) {
         if (!reply.getSuccess()) {
             throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), fallback));
         }
     }
 
+    private void deleteProfile(UUID userId, UUID actorId, String actorRole, DeleteAction action) {
+        try {
+            OperationReply reply = switch (action) {
+                case CUSTOMER -> userBlockingStub.deleteCustomerProfile(buildDeleteRequest(userId, actorId, actorRole));
+                case MANAGER -> userBlockingStub.deleteManagerProfile(buildDeleteRequest(userId, actorId, actorRole));
+                case STAFF -> userBlockingStub.deleteStaffProfile(buildDeleteRequest(userId, actorId, actorRole));
+            };
+            ensureSuccess(reply, ErrorCode.NOT_CREATED);
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
+        }
+    }
+
+    private DeleteProfileRequest buildDeleteRequest(UUID userId, UUID actorId, String actorRole) {
+        return DeleteProfileRequest.newBuilder()
+                .setUserId(userId.toString())
+                .setActorId(actorId.toString())
+                .setActorRole(actorRole == null ? "" : actorRole)
+                .build();
+    }
+
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private enum DeleteAction {
+        CUSTOMER,
+        MANAGER,
+        STAFF
     }
 }

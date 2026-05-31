@@ -6,6 +6,7 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.common.OperationReply;
 import com.cinema.grpc.user.CheckUserExistsReply;
 import com.cinema.grpc.user.CheckUserExistsRequest;
+import com.cinema.grpc.user.DeleteProfileRequest;
 import com.cinema.grpc.user.CreateCustomerProfileRequest;
 import com.cinema.grpc.user.CreateManagerProfileRequest;
 import com.cinema.grpc.user.CreateStaffProfileRequest;
@@ -130,6 +131,21 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
     }
 
     @Override
+    public void deleteCustomerProfile(DeleteProfileRequest request, StreamObserver<OperationReply> responseObserver) {
+        handleDelete(request, responseObserver, UserEnum.UserRole.CUSTOMER);
+    }
+
+    @Override
+    public void deleteManagerProfile(DeleteProfileRequest request, StreamObserver<OperationReply> responseObserver) {
+        handleDelete(request, responseObserver, UserEnum.UserRole.MANAGER);
+    }
+
+    @Override
+    public void deleteStaffProfile(DeleteProfileRequest request, StreamObserver<OperationReply> responseObserver) {
+        handleDelete(request, responseObserver, UserEnum.UserRole.STAFF);
+    }
+
+    @Override
     public void checkUserExists(
             CheckUserExistsRequest request,
             StreamObserver<CheckUserExistsReply> responseObserver) {
@@ -201,6 +217,37 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
                     .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    private void handleDelete(
+            DeleteProfileRequest request,
+            StreamObserver<OperationReply> responseObserver,
+            UserEnum.UserRole targetRole) {
+        try {
+            UUID targetUserId = UUID.fromString(request.getUserId());
+            UUID actorId = UUID.fromString(request.getActorId());
+            UserEnum.UserRole actorRole = UserEnum.UserRole.valueOf(request.getActorRole());
+
+            switch (targetRole) {
+                case CUSTOMER -> userService.deleteCustomerProfile(targetUserId, actorId, actorRole);
+                case MANAGER -> userService.deleteManagerProfile(targetUserId, actorId, actorRole);
+                case STAFF -> userService.deleteStaffProfile(targetUserId, actorId, actorRole);
+                default -> throw new BusinessException(ErrorCode.INVALID_FORMAT);
+            }
+
+            responseObserver.onNext(success("Profile deleted successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while deleting user profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
             responseObserver.onCompleted();
         }
     }

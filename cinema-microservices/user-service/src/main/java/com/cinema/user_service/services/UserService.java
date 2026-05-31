@@ -3,6 +3,7 @@ package com.cinema.user_service.services;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
+import com.cinema.Enum.UserEnum;
 import com.cinema.user_service.dto.request.*;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
@@ -22,6 +23,18 @@ public interface UserService {
     ActionMessageResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest);
 
     ActionMessageResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest);
+
+    ActionMessageResponse deleteCustomerProfile(UUID userId, HttpServletRequest httpRequest);
+
+    ActionMessageResponse deleteCustomerProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole);
+
+    ActionMessageResponse deleteManagerProfile(UUID userId, HttpServletRequest httpRequest);
+
+    ActionMessageResponse deleteManagerProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole);
+
+    ActionMessageResponse deleteStaffProfile(UUID userId, HttpServletRequest httpRequest);
+
+    ActionMessageResponse deleteStaffProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole);
 
     UserResponse getMyProfile(HttpServletRequest request);
 
