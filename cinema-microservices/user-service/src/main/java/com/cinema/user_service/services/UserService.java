@@ -20,9 +20,15 @@ public interface UserService {
 
     ActionMessageResponse updateCustomerProfile(UpdateCustomerRequest request, HttpServletRequest httpRequest);
 
+    ActionMessageResponse updateCustomerProfile(UUID userId, UpdateCustomerRequest request, HttpServletRequest httpRequest);
+
     ActionMessageResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest);
 
+    ActionMessageResponse updateManagerProfile(UUID userId, UpdateManagerRequest request, HttpServletRequest httpRequest);
+
     ActionMessageResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest);
+
+    ActionMessageResponse updateStaffProfile(UUID userId, UpdateStaffRequest request, HttpServletRequest httpRequest);
 
     ActionMessageResponse deleteCustomerProfile(UUID userId, HttpServletRequest httpRequest);
 

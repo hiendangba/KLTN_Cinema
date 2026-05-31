@@ -5,6 +5,7 @@ import com.cinema.dto.request.SendEmailRequest;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.user_service.dto.request.UpdateCustomerRequest;
+import com.cinema.user_service.dto.request.UpdateManagerRequest;
 import com.cinema.user_service.dto.request.UpdateStaffRequest;
 import com.cinema.user_service.entity.User;
 import com.cinema.user_service.grpc.CinemaGrpcClient;
@@ -118,6 +119,253 @@ class UserServiceImplAuditTest {
         assertThat(email.getContent()).contains("New Name");
         assertThat(email.getContent()).contains("name: Old Name -&gt; New Name");
         assertThat(email.getContent()).contains("email: old@email.com -&gt; new@email.com");
+    }
+
+    @Test
+    void updateCustomerProfileById_adminShouldQueueAuditMailWithDiffs() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        User target = buildUser(targetId, "customer.old@email.com", "Customer Old", UserEnum.UserRole.CUSTOMER);
+        User actor = buildUser(actorId, "admin@email.com", "Admin Actor", UserEnum.UserRole.ADMIN);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedFalse(targetId, UserEnum.UserRole.CUSTOMER))
+                .thenReturn(Optional.of(target));
+        when(userRepository.findByIdAndIsDeletedFalse(actorId)).thenReturn(Optional.of(actor));
+        when(userRepository.existsByEmail("customer.new@email.com")).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        doAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            UpdateCustomerRequest request = invocation.getArgument(1);
+            user.setName(request.getName());
+            user.setEmail(request.getEmail());
+            user.setDob(request.getDob());
+            user.setGender(request.getGender());
+            user.setPhone(request.getPhone());
+            return null;
+        }).when(userMapper).updateUserCustomer(any(User.class), any(UpdateCustomerRequest.class));
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", actorId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.ADMIN.name());
+
+        UpdateCustomerRequest request = UpdateCustomerRequest.builder()
+                .name("Customer New")
+                .email("customer.new@email.com")
+                .dob(LocalDate.of(1997, 5, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0901111111")
+                .build();
+
+        service.updateCustomerProfile(targetId, request, httpRequest);
+
+        ArgumentCaptor<SendEmailRequest> captor = ArgumentCaptor.forClass(SendEmailRequest.class);
+        verify(internalEmailDispatchService).sendAsync(captor.capture());
+
+        SendEmailRequest email = captor.getValue();
+        assertThat(email.getTo()).isEqualTo("customer.new@email.com");
+        assertThat(email.getContent()).contains("Admin Actor");
+        assertThat(email.getContent()).contains("Customer New");
+        assertThat(target.getEmail()).isEqualTo("customer.new@email.com");
+    }
+
+    @Test
+    void updateCustomerProfileById_nonAdminShouldBeForbidden() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", actorId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.MANAGER.name());
+
+        UpdateCustomerRequest request = UpdateCustomerRequest.builder()
+                .name("Customer New")
+                .email("customer.new@email.com")
+                .dob(LocalDate.of(1997, 5, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0901111111")
+                .build();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateCustomerProfile(targetId, request, httpRequest));
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
+        verify(internalEmailDispatchService, never()).sendAsync(any());
+    }
+
+    @Test
+    void updateManagerProfileById_adminShouldQueueAuditMail() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        User target = buildUser(targetId, "manager.old@email.com", "Manager Old", UserEnum.UserRole.MANAGER);
+        User actor = buildUser(actorId, "admin@email.com", "Admin Actor", UserEnum.UserRole.ADMIN);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedFalse(targetId, UserEnum.UserRole.MANAGER))
+                .thenReturn(Optional.of(target));
+        when(userRepository.findByIdAndIsDeletedFalse(actorId)).thenReturn(Optional.of(actor));
+        when(userRepository.existsByEmail("manager.new@email.com")).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        doAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            UpdateManagerRequest request = invocation.getArgument(1);
+            user.setName(request.getName());
+            user.setEmail(request.getEmail());
+            user.setDob(request.getDob());
+            user.setGender(request.getGender());
+            user.setPhone(request.getPhone());
+            user.setBankCode(request.getBankCode());
+            user.setAccountNumber(request.getAccountNumber());
+            user.setAccountName(request.getAccountName());
+            return null;
+        }).when(userMapper).updateUserManager(any(User.class), any(UpdateManagerRequest.class));
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", actorId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.ADMIN.name());
+
+        UpdateManagerRequest request = UpdateManagerRequest.builder()
+                .name("Manager New")
+                .email("manager.new@email.com")
+                .dob(LocalDate.of(1992, 5, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0902222222")
+                .bankCode("VCB")
+                .accountNumber("123")
+                .accountName("Manager New")
+                .build();
+
+        service.updateManagerProfile(targetId, request, httpRequest);
+
+        verify(internalEmailDispatchService).sendAsync(any());
+        assertThat(target.getEmail()).isEqualTo("manager.new@email.com");
+    }
+
+    @Test
+    void updateManagerProfileById_duplicateEmailShouldThrow() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        User target = buildUser(targetId, "manager.old@email.com", "Manager Old", UserEnum.UserRole.MANAGER);
+        User actor = buildUser(actorId, "admin@email.com", "Admin Actor", UserEnum.UserRole.ADMIN);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedFalse(targetId, UserEnum.UserRole.MANAGER))
+                .thenReturn(Optional.of(target));
+        when(userRepository.findByIdAndIsDeletedFalse(actorId)).thenReturn(Optional.of(actor));
+        when(userRepository.existsByEmail("duplicated@email.com")).thenReturn(true);
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", actorId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.ADMIN.name());
+
+        UpdateManagerRequest request = UpdateManagerRequest.builder()
+                .name("Manager New")
+                .email("duplicated@email.com")
+                .dob(LocalDate.of(1992, 5, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0902222222")
+                .bankCode("VCB")
+                .accountNumber("123")
+                .accountName("Manager New")
+                .build();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateManagerProfile(targetId, request, httpRequest));
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.EMAIL_EXISTED);
+        verify(internalEmailDispatchService, never()).sendAsync(any());
+    }
+
+    @Test
+    void updateStaffProfileById_managerWithSharedCinemaShouldSucceed() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+
+        User target = buildUser(targetId, "staff.old@email.com", "Staff Old", UserEnum.UserRole.STAFF);
+        User actor = buildUser(actorId, "manager@email.com", "Manager Actor", UserEnum.UserRole.MANAGER);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedFalse(targetId, UserEnum.UserRole.STAFF))
+                .thenReturn(Optional.of(target));
+        when(userRepository.findByIdAndIsDeletedFalse(actorId)).thenReturn(Optional.of(actor));
+        when(userRepository.existsByEmail("staff.new@email.com")).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(cinemaGrpcClient.getCinemaIdsByUserId(actorId, UserEnum.UserRole.MANAGER.name()))
+                .thenReturn(List.of(cinemaId));
+        when(cinemaGrpcClient.getCinemaIdsByUserId(targetId, UserEnum.UserRole.STAFF.name()))
+                .thenReturn(List.of(cinemaId));
+
+        doAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            UpdateStaffRequest request = invocation.getArgument(1);
+            user.setName(request.getName());
+            user.setEmail(request.getEmail());
+            user.setDob(request.getDob());
+            user.setGender(request.getGender());
+            user.setPhone(request.getPhone());
+            user.setBankCode(request.getBankCode());
+            user.setAccountNumber(request.getAccountNumber());
+            user.setAccountName(request.getAccountName());
+            return null;
+        }).when(userMapper).updateUserStaff(any(User.class), any(UpdateStaffRequest.class));
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", actorId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.MANAGER.name());
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .name("Staff New")
+                .email("staff.new@email.com")
+                .dob(LocalDate.of(1996, 3, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0903333333")
+                .bankCode("VCB")
+                .accountNumber("456")
+                .accountName("Staff New")
+                .build();
+
+        service.updateStaffProfile(targetId, request, httpRequest);
+
+        verify(internalEmailDispatchService).sendAsync(any());
+        assertThat(target.getEmail()).isEqualTo("staff.new@email.com");
+    }
+
+    @Test
+    void updateStaffProfileById_managerWithoutSharedCinemaShouldBeForbidden() {
+        UUID actorId = UUID.randomUUID();
+        UUID targetId = UUID.randomUUID();
+
+        User target = buildUser(targetId, "staff.old@email.com", "Staff Old", UserEnum.UserRole.STAFF);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedFalse(targetId, UserEnum.UserRole.STAFF))
+                .thenReturn(Optional.of(target));
+        when(cinemaGrpcClient.getCinemaIdsByUserId(actorId, UserEnum.UserRole.MANAGER.name()))
+                .thenReturn(List.of(UUID.randomUUID()));
+        when(cinemaGrpcClient.getCinemaIdsByUserId(targetId, UserEnum.UserRole.STAFF.name()))
+                .thenReturn(List.of(UUID.randomUUID()));
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", actorId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.MANAGER.name());
+
+        UpdateStaffRequest request = UpdateStaffRequest.builder()
+                .name("Staff New")
+                .email("staff.new@email.com")
+                .dob(LocalDate.of(1996, 3, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0903333333")
+                .bankCode("VCB")
+                .accountNumber("456")
+                .accountName("Staff New")
+                .build();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.updateStaffProfile(targetId, request, httpRequest));
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
+        verify(internalEmailDispatchService, never()).sendAsync(any());
     }
 
     @Test

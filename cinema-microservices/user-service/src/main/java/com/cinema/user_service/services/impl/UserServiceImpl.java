@@ -192,6 +192,100 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public ActionMessageResponse updateCustomerProfile(
+            UUID userId,
+            UpdateCustomerRequest request,
+            HttpServletRequest httpRequest) {
+        UUID actorId = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        UserEnum.UserRole actorRole = parseUserRole(RequestAuthUtils.requireRoleHeader(httpRequest));
+        requireAdminOnly(actorRole, "updateCustomerProfileById");
+
+        User target = userRepository.findByIdAndRoleAndIsDeletedFalse(userId, UserEnum.UserRole.CUSTOMER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        UserSnapshot original = snapshot(target);
+        AuditIdentity actor = resolveActor(actorId, actorRole);
+
+        ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
+        userMapper.updateUserCustomer(target, request);
+        userRepository.save(target);
+        queueAuditMailAfterCommit(buildUpdateAuditMail(
+                target,
+                actor,
+                "update",
+                buildCustomerUpdateDiffs(original, request)));
+
+        log.info("Customer profile updated by id: targetCustomerId={}, actorId={}, actorRole={}, email={}",
+                userId, actorId, actorRole, request.getEmail());
+        return ActionMessageResponse.builder()
+                .message("Cáº­p nháº­t profile cho Customer thÃ nh cÃ´ng")
+                .build();
+    }
+
+    @Override
+    public ActionMessageResponse updateManagerProfile(
+            UUID userId,
+            UpdateManagerRequest request,
+            HttpServletRequest httpRequest) {
+        UUID actorId = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        UserEnum.UserRole actorRole = parseUserRole(RequestAuthUtils.requireRoleHeader(httpRequest));
+        requireAdminOnly(actorRole, "updateManagerProfileById");
+
+        User target = userRepository.findByIdAndRoleAndIsDeletedFalse(userId, UserEnum.UserRole.MANAGER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        UserSnapshot original = snapshot(target);
+        AuditIdentity actor = resolveActor(actorId, actorRole);
+
+        ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
+        userMapper.updateUserManager(target, request);
+        userRepository.save(target);
+        queueAuditMailAfterCommit(buildUpdateAuditMail(
+                target,
+                actor,
+                "update",
+                buildManagerUpdateDiffs(original, request)));
+
+        log.info("Manager profile updated by id: targetManagerId={}, actorId={}, actorRole={}, email={}",
+                userId, actorId, actorRole, request.getEmail());
+        return ActionMessageResponse.builder()
+                .message("Cáº­p nháº­t profile cho Manager thÃ nh cÃ´ng")
+                .build();
+    }
+
+    @Override
+    public ActionMessageResponse updateStaffProfile(
+            UUID userId,
+            UpdateStaffRequest request,
+            HttpServletRequest httpRequest) {
+        UUID actorId = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        UserEnum.UserRole actorRole = parseUserRole(RequestAuthUtils.requireRoleHeader(httpRequest));
+        requireAdminOrManager(actorRole, "updateStaffProfileById");
+
+        User target = userRepository.findByIdAndRoleAndIsDeletedFalse(userId, UserEnum.UserRole.STAFF)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (actorRole == UserEnum.UserRole.MANAGER && !hasSharedCinema(actorId, target.getId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        UserSnapshot original = snapshot(target);
+        AuditIdentity actor = resolveActor(actorId, actorRole);
+
+        ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
+        userMapper.updateUserStaff(target, request);
+        userRepository.save(target);
+        queueAuditMailAfterCommit(buildUpdateAuditMail(
+                target,
+                actor,
+                "update",
+                buildStaffUpdateDiffs(original, request)));
+
+        log.info("Staff profile updated by id: targetStaffId={}, actorId={}, actorRole={}, email={}",
+                userId, actorId, actorRole, request.getEmail());
+        return ActionMessageResponse.builder()
+                .message("Cáº­p nháº­t profile cho Staff thÃ nh cÃ´ng")
+                .build();
+    }
+
+    @Override
     public ActionMessageResponse deleteCustomerProfile(UUID userId, HttpServletRequest httpRequest) {
         UUID actorId = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
         UserEnum.UserRole actorRole = parseUserRole(RequestAuthUtils.requireRoleHeader(httpRequest));
@@ -514,6 +608,12 @@ public class UserServiceImpl implements UserService {
             log.warn("Forbidden action={} requiredRoles={}/{} actualRole={}", action, HeaderNames.ROLE_ADMIN,
                     HeaderNames.ROLE_MANAGER, actorRole);
             throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private void ensureEmailAvailableForUpdate(String currentEmail, String nextEmail) {
+        if (!Objects.equals(currentEmail, nextEmail) && userRepository.existsByEmail(nextEmail)) {
+            throw new BusinessException(ErrorCode.EMAIL_EXISTED);
         }
     }
 

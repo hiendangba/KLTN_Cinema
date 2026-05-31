@@ -53,6 +53,15 @@ public class UserController extends BaseController {
         return ok(updateCustomerResponse);
     }
 
+    @PutMapping("/customers/{id}")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateCustomerProfileById(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateCustomerRequest updateCustomerRequest,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.updateCustomerProfile(id, updateCustomerRequest, request);
+        return ok(response);
+    }
+
     @PutMapping("/managers")
     public ResponseEntity<APIResponse<ActionMessageResponse>> updateManagerProfile(
             @Valid @RequestBody UpdateManagerRequest updateManagerRequest,
@@ -62,12 +71,30 @@ public class UserController extends BaseController {
         return ok(updateManagerResponse);
     }
 
+    @PutMapping("/managers/{id}")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateManagerProfileById(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateManagerRequest updateManagerRequest,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.updateManagerProfile(id, updateManagerRequest, request);
+        return ok(response);
+    }
+
     @PutMapping("/staffs")
     public ResponseEntity<APIResponse<ActionMessageResponse>> updateStaffProfile(
             @Valid @RequestBody UpdateStaffRequest updateStaffRequest,
             HttpServletRequest request) {
         ActionMessageResponse updateStaffResponse = userService.updateStaffProfile(updateStaffRequest, request);
         return ok(updateStaffResponse);
+    }
+
+    @PutMapping("/staffs/{id}")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updateStaffProfileById(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateStaffRequest updateStaffRequest,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.updateStaffProfile(id, updateStaffRequest, request);
+        return ok(response);
     }
 
     @DeleteMapping("/customers/{id}")
