@@ -23,27 +23,6 @@ import java.util.UUID;
 public class UserController extends BaseController {
     private final UserService userService;
 
-    @PostMapping("/customers")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> createCustomerProfile(
-            @Valid @RequestBody RegisterCustomerRequest registerCustomerRequest) {
-        ActionMessageResponse registerCustomerResponse = userService.createCustomerProfile(registerCustomerRequest);
-        return created(registerCustomerResponse);
-    }
-
-    @PostMapping("/managers")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> createManagerProfile(
-            @Valid @RequestBody RegisterManagerRequest registerManagerRequest) {
-        ActionMessageResponse registerManagerResponse = userService.createManagerProfile(registerManagerRequest);
-        return created(registerManagerResponse);
-    }
-
-    @PostMapping("/staffs")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> createStaffProfile(
-            @Valid @RequestBody RegisterStaffRequest registerStaffRequest) {
-        ActionMessageResponse registerStaffResponse = userService.createStaffProfile(registerStaffRequest);
-        return created(registerStaffResponse);
-    }
-
     @PutMapping("/customers")
     public ResponseEntity<APIResponse<ActionMessageResponse>> updateCustomerProfile(
             @Valid @RequestBody UpdateCustomerRequest updateCustomerRequest,

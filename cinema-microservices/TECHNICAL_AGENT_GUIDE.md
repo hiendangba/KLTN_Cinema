@@ -393,11 +393,11 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
-| `POST` | `/api/users/customers` | Internal | Khởi tạo Profile KH sau khi Verify Identity. |
+| Internal gRPC | `UserInternalService` | Internal | Khởi tạo Profile KH sau khi Verify Identity từ `identity-service`. |
 | `GET` | `/api/users/me` | ✅ Authenticated | Lấy thông tin profile của user hiện tại theo `X-User-ID`. |
 | `PUT` | `/api/users/customers` | ✅ CUST | Cập nhật hồ sơ cá nhân. |
 | `GET` | `/api/users/exists/{userId}` | Internal | Kiểm tra nhanh chéo Service xem User tồn tại không. |
-| `GET/PUT/POST` | `/api/users/staffs|managers`| ✅ ADMIN | Các nghiệp vụ CRUD quản lý nhân sự chuyên quản. |
+| `GET/PUT/DELETE/PATCH` | `/api/users/staffs|managers`| ✅ ADMIN | Quản lý hồ sơ nhân sự chuyên quản; tạo mới đi qua `identity-service` + gRPC nội bộ. |
 
 ### 3. Film Service (`/api/films`)
 
