@@ -10,6 +10,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -26,6 +27,7 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class MomoPaymentGatewayClient {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
@@ -47,15 +49,40 @@ public class MomoPaymentGatewayClient {
         }
 
         Map<String, Object> requestFields = buildRequestFields(transaction, bookingContext);
+        String orderId = asString(requestFields.get("orderId"));
+        String requestId = asString(requestFields.get("requestId"));
+        log.info(
+                "MOMO_CREATE_GATEWAY_REQUEST orderId={} requestId={} amount={} requestType={} redirectUrl={} ipnUrl={} endpoint={}",
+                orderId,
+                requestId,
+                asString(requestFields.get("amount")),
+                asString(requestFields.get("requestType")),
+                asString(requestFields.get("redirectUrl")),
+                asString(requestFields.get("ipnUrl")),
+                resolveCreateEndpoint());
         String signature = sign(requestFields);
         requestFields.put("signature", signature);
 
         String requestJson = writeJson(requestFields);
-        String responseJson = invokeCreateApi(requestJson);
+        String responseJson = invokeCreateApi(requestJson, orderId, requestId);
         MomoCreatePaymentResponse response = readJson(responseJson);
+        log.info(
+                "MOMO_CREATE_GATEWAY_RESPONSE orderId={} requestId={} resultCode={} message={} payUrl={} qrCodeUrl={}",
+                orderId,
+                requestId,
+                response == null || response.resultCode() == null ? "" : response.resultCode(),
+                response == null ? "" : safeLogText(response.message()),
+                response == null ? "" : safeLogText(response.payUrl()),
+                response == null ? "" : safeLogText(response.qrCodeUrl()));
 
         if (response == null || response.resultCode() == null || response.resultCode() != 0
                 || !StringUtils.hasText(response.payUrl())) {
+            log.warn(
+                    "MOMO_CREATE_GATEWAY_RESPONSE_INVALID orderId={} requestId={} resultCode={} payUrlPresent={}",
+                    orderId,
+                    requestId,
+                    response == null || response.resultCode() == null ? "" : response.resultCode(),
+                    response != null && StringUtils.hasText(response.payUrl()));
             throw new BusinessException(ErrorCode.INTERNAL_ERROR);
         }
 
@@ -130,8 +157,8 @@ public class MomoPaymentGatewayClient {
         }
     }
 
-    private String invokeCreateApi(String requestJson) {
-        String endpoint = properties.getBaseUrl().replaceAll("/+$", "") + "/v2/gateway/api/create";
+    private String invokeCreateApi(String requestJson, String orderId, String requestId) {
+        String endpoint = resolveCreateEndpoint();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
                 .timeout(REQUEST_TIMEOUT)
@@ -141,16 +168,46 @@ public class MomoPaymentGatewayClient {
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            log.info(
+                    "MOMO_CREATE_GATEWAY_HTTP_RESPONSE orderId={} requestId={} statusCode={} responseBodyLength={}",
+                    safeLogText(orderId),
+                    safeLogText(requestId),
+                    response.statusCode(),
+                    response.body() == null ? 0 : response.body().length());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                log.warn(
+                        "MOMO_CREATE_GATEWAY_HTTP_NON_2XX orderId={} requestId={} statusCode={}",
+                        safeLogText(orderId),
+                        safeLogText(requestId),
+                        response.statusCode());
                 throw new BusinessException(ErrorCode.INTERNAL_ERROR);
             }
             return response.body();
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
+            log.error("MOMO_CREATE_GATEWAY_HTTP_INTERRUPTED orderId={} requestId={}", safeLogText(orderId),
+                    safeLogText(requestId));
             throw new BusinessException(ErrorCode.INTERNAL_ERROR);
         } catch (IOException ex) {
+            log.error("MOMO_CREATE_GATEWAY_HTTP_IO_ERROR orderId={} requestId={} error={}",
+                    safeLogText(orderId), safeLogText(requestId), ex.getMessage());
             throw new BusinessException(ErrorCode.INTERNAL_ERROR);
         }
+    }
+
+    private String resolveCreateEndpoint() {
+        return properties.getBaseUrl().replaceAll("/+$", "") + "/v2/gateway/api/create";
+    }
+
+    private String safeLogText(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return "";
+        }
+        String value = raw.trim();
+        if (value.length() <= 512) {
+            return value;
+        }
+        return value.substring(0, 512);
     }
 
     private MomoCreatePaymentResponse readJson(String json) {

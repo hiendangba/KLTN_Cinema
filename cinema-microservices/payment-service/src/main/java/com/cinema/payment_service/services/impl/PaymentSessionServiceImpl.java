@@ -36,6 +36,7 @@ import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -136,6 +137,24 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         transaction.setPayUrl(momoGatewayProperties.getRedirectUrl());
         PaymentTransaction persistedTransaction = paymentTransactionRepository.saveAndFlush(transaction);
+        log.info(
+                "MOMO_CREATE_PERSISTED transactionId={} bookingId={} orderId={} requestId={} status={} expiresAt={} amount={}",
+                persistedTransaction.getId(),
+                persistedTransaction.getBookingId(),
+                persistedTransaction.getOrderInvoiceNumber(),
+                persistedTransaction.getOrderInvoiceNumber(),
+                persistedTransaction.getStatus(),
+                persistedTransaction.getExpiresAt(),
+                persistedTransaction.getAmount());
+        log.info(
+                "MOMO_CREATE_REQUEST transactionId={} bookingId={} orderId={} requestId={} redirectUrl={} ipnUrl={} amount={}",
+                persistedTransaction.getId(),
+                persistedTransaction.getBookingId(),
+                persistedTransaction.getOrderInvoiceNumber(),
+                persistedTransaction.getOrderInvoiceNumber(),
+                momoGatewayProperties.getRedirectUrl(),
+                momoGatewayProperties.getIpnUrl(),
+                persistedTransaction.getAmount());
 
         MomoPaymentGatewayClient.MomoCheckoutResult checkoutResult = momoPaymentGatewayClient.createCheckout(
                 persistedTransaction,
@@ -143,7 +162,27 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         persistedTransaction.setPayUrl(checkoutResult.payUrl());
         persistedTransaction.setCheckoutPayloadJson(checkoutResult.requestPayloadJson());
         persistedTransaction.setResponsePayloadJson(checkoutResult.responsePayloadJson());
+        String responseResultCode = extractCheckoutResponseField(checkoutResult.responsePayloadJson(), "resultCode");
+        String responseMessage = extractCheckoutResponseField(checkoutResult.responsePayloadJson(), "message");
+        log.info(
+                "MOMO_CREATE_RESPONSE transactionId={} bookingId={} orderId={} requestId={} resultCode={} message={} payUrl={} qrCodeUrl={}",
+                persistedTransaction.getId(),
+                persistedTransaction.getBookingId(),
+                persistedTransaction.getOrderInvoiceNumber(),
+                persistedTransaction.getOrderInvoiceNumber(),
+                responseResultCode,
+                responseMessage,
+                checkoutResult.payUrl(),
+                checkoutResult.qrCodeUrl());
         PaymentTransaction savedTransaction = paymentTransactionRepository.save(persistedTransaction);
+        log.info(
+                "MOMO_CREATE_SAVED transactionId={} bookingId={} orderId={} requestId={} status={} expiresAt={}",
+                savedTransaction.getId(),
+                savedTransaction.getBookingId(),
+                savedTransaction.getOrderInvoiceNumber(),
+                savedTransaction.getOrderInvoiceNumber(),
+                savedTransaction.getStatus(),
+                savedTransaction.getExpiresAt());
         savePromotionSnapshots(savedTransaction, appliedPromotions);
         return toResponse(savedTransaction, checkoutResult.qrCodeUrl());
     }
@@ -893,6 +932,22 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             });
         } catch (Exception ex) {
             return Map.of();
+        }
+    }
+
+    private String extractCheckoutResponseField(String responseJson, String fieldName) {
+        if (!StringUtils.hasText(responseJson) || !StringUtils.hasText(fieldName)) {
+            return "";
+        }
+        try {
+            JsonNode root = objectMapper.readTree(responseJson);
+            JsonNode value = root.path(fieldName);
+            if (value.isMissingNode() || value.isNull()) {
+                return "";
+            }
+            return value.isTextual() ? value.asText() : value.toString();
+        } catch (Exception ex) {
+            return "";
         }
     }
 
