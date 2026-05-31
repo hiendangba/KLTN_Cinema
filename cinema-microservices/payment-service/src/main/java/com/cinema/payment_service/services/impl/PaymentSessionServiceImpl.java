@@ -134,12 +134,16 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 requesterUserId);
         syncBookingPromotionSnapshot(bookingContext, transaction, appliedPromotions);
 
+        transaction.setPayUrl(momoGatewayProperties.getRedirectUrl());
+        PaymentTransaction persistedTransaction = paymentTransactionRepository.saveAndFlush(transaction);
+
         MomoPaymentGatewayClient.MomoCheckoutResult checkoutResult = momoPaymentGatewayClient.createCheckout(
-                transaction,
+                persistedTransaction,
                 bookingContext);
-        transaction.setPayUrl(checkoutResult.payUrl());
-        transaction.setCheckoutPayloadJson(checkoutResult.requestPayloadJson());
-        PaymentTransaction savedTransaction = paymentTransactionRepository.save(transaction);
+        persistedTransaction.setPayUrl(checkoutResult.payUrl());
+        persistedTransaction.setCheckoutPayloadJson(checkoutResult.requestPayloadJson());
+        persistedTransaction.setResponsePayloadJson(checkoutResult.responsePayloadJson());
+        PaymentTransaction savedTransaction = paymentTransactionRepository.save(persistedTransaction);
         savePromotionSnapshots(savedTransaction, appliedPromotions);
         return toResponse(savedTransaction, checkoutResult.qrCodeUrl());
     }

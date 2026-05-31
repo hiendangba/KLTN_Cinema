@@ -20,6 +20,7 @@ import com.cinema.dto.request.PageRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -36,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -101,6 +103,9 @@ class PaymentSessionServiceImplTest {
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
                 .thenReturn(Optional.empty());
+        when(momoGatewayProperties.getRedirectUrl()).thenReturn("https://cinema-api.duckdns.org/payment/result");
+        when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(momoPaymentGatewayClient.createCheckout(any(PaymentTransaction.class), any()))
@@ -117,6 +122,11 @@ class PaymentSessionServiceImplTest {
 
         ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
         verify(paymentTransactionRepository).save(transactionCaptor.capture());
+        verify(paymentTransactionRepository).saveAndFlush(any(PaymentTransaction.class));
+        InOrder inOrder = inOrder(paymentTransactionRepository, momoPaymentGatewayClient);
+        inOrder.verify(paymentTransactionRepository).saveAndFlush(any(PaymentTransaction.class));
+        inOrder.verify(momoPaymentGatewayClient).createCheckout(any(PaymentTransaction.class), any());
+        inOrder.verify(paymentTransactionRepository).save(any(PaymentTransaction.class));
 
         PaymentTransaction saved = transactionCaptor.getValue();
         assertNotNull(response);
@@ -125,6 +135,8 @@ class PaymentSessionServiceImplTest {
         assertEquals("https://momo.example.com/pay", response.getPayUrl());
         assertEquals("https://momo.example.com/qr", response.getQrCodeUrl());
         assertEquals("https://momo.example.com/pay", saved.getPayUrl());
+        assertEquals("{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}",
+                saved.getResponsePayloadJson());
         verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
                 bookingId,
                 null,
@@ -163,6 +175,9 @@ class PaymentSessionServiceImplTest {
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
                 .thenReturn(Optional.empty());
+        when(momoGatewayProperties.getRedirectUrl()).thenReturn("https://cinema-api.duckdns.org/payment/result");
+        when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         when(momoPaymentGatewayClient.createCheckout(any(PaymentTransaction.class), any()))
@@ -192,6 +207,11 @@ class PaymentSessionServiceImplTest {
 
         ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
         verify(paymentTransactionRepository).save(transactionCaptor.capture());
+        verify(paymentTransactionRepository).saveAndFlush(any(PaymentTransaction.class));
+        InOrder inOrder = inOrder(paymentTransactionRepository, momoPaymentGatewayClient);
+        inOrder.verify(paymentTransactionRepository).saveAndFlush(any(PaymentTransaction.class));
+        inOrder.verify(momoPaymentGatewayClient).createCheckout(any(PaymentTransaction.class), any());
+        inOrder.verify(paymentTransactionRepository).save(any(PaymentTransaction.class));
 
         PaymentTransaction saved = transactionCaptor.getValue();
         assertNotNull(response);
@@ -201,6 +221,8 @@ class PaymentSessionServiceImplTest {
         assertEquals(BigDecimal.valueOf(162000), saved.getAmount());
         assertEquals(BigDecimal.valueOf(162000), response.getAmount());
         assertEquals("https://momo.example.com/qr", response.getQrCodeUrl());
+        assertEquals("{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}",
+                saved.getResponsePayloadJson());
         verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
                 bookingId,
                 promotionId,

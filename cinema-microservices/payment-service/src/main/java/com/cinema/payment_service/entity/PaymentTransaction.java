@@ -69,6 +69,9 @@ public class PaymentTransaction {
     @Column(name = "checkout_payload_json", columnDefinition = "text")
     private String checkoutPayloadJson;
 
+    @Column(name = "response_payload_json", columnDefinition = "text")
+    private String responsePayloadJson;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private PaymentTransactionStatus status;
