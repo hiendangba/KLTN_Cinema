@@ -9,6 +9,7 @@ import com.cinema.grpc.identity.GetUserAccountByUserIdReply;
 import com.cinema.grpc.identity.GetUserAccountByUserIdRequest;
 import com.cinema.grpc.identity.IdentityInternalServiceGrpc;
 import com.cinema.grpc.identity.LockUserAccountRequest;
+import com.cinema.grpc.identity.ResetPasswordByUserIdRequest;
 import com.cinema.grpc.identity.UpdateUserAccountByUserIdRequest;
 import com.cinema.grpc.identity.UnlockUserAccountRequest;
 import com.cinema.user_service.dto.response.UserResponse;
@@ -95,6 +96,21 @@ public class IdentityGrpcClient {
                     ChangePasswordByUserIdRequest.newBuilder()
                             .setUserId(userId.toString())
                             .setOldPassword(oldPassword)
+                            .setNewPassword(newPassword)
+                            .build());
+            if (!reply.getSuccess()) {
+                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.EXTERNAL_SERVICE_ERROR));
+            }
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
+        }
+    }
+
+    public void resetPassword(UUID userId, String newPassword) {
+        try {
+            OperationReply reply = identityBlockingStub.resetPasswordByUserId(
+                    ResetPasswordByUserIdRequest.newBuilder()
+                            .setUserId(userId.toString())
                             .setNewPassword(newPassword)
                             .build());
             if (!reply.getSuccess()) {

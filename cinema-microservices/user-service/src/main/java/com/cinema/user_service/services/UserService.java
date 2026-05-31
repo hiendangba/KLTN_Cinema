@@ -18,8 +18,6 @@ public interface UserService {
 
     ActionMessageResponse createStaffProfile(RegisterStaffRequest request);
 
-    ActionMessageResponse changePassword(ChangePasswordRequest request, HttpServletRequest httpRequest);
-
     ActionMessageResponse updateCustomerProfile(UpdateCustomerRequest request, HttpServletRequest httpRequest);
 
     ActionMessageResponse updateCustomerProfile(UUID userId, UpdateCustomerRequest request, HttpServletRequest httpRequest);

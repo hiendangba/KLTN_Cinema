@@ -1,4 +1,4 @@
-static_resources:
+﻿static_resources:
   listeners:
     - name: listener_http
       address:
@@ -118,7 +118,7 @@ static_resources:
                             cluster: identity-service
                             timeout: 15s
                         - match:
-                            path: /api/auth/change-password
+
                           route:
                             cluster: identity-service
                             timeout: 15s
@@ -392,3 +392,4 @@ admin:
     socket_address:
       address: 0.0.0.0
       port_value: 9901
+

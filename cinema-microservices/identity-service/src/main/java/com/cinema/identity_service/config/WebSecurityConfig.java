@@ -24,7 +24,7 @@ public class WebSecurityConfig {
         http.csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/internal/auth/**").authenticated()
-                        .requestMatchers("/api/auth/manager", "/api/auth/staff", "/api/auth/change-password").authenticated()
+                        .requestMatchers("/api/auth/manager", "/api/auth/staff").authenticated()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**",
@@ -45,3 +45,4 @@ public class WebSecurityConfig {
         return http.build();
     }
 }
+

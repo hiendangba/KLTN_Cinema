@@ -49,4 +49,14 @@ public class UpdateStaffRequest {
 
     @Size(max = 255, message = "Tên chủ tài khoản tối đa 255 ký tự")
     private String accountName;
+
+    @Size(max = 32, message = "Mật khẩu cũ tối đa 32 ký tự")
+    private String oldPassword;
+
+    @Size(min = 8, max = 32, message = "Mật khẩu mới phải từ 8 đến 32 ký tự")
+    @Pattern(
+            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$",
+            message = "Mật khẩu mới phải có ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt"
+    )
+    private String newPassword;
 }

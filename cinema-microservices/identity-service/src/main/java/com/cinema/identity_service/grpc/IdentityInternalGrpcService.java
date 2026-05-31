@@ -9,6 +9,7 @@ import com.cinema.grpc.identity.GetUserAccountByUserIdRequest;
 import com.cinema.grpc.identity.IdentityInternalServiceGrpc;
 import com.cinema.grpc.identity.LockUserAccountRequest;
 import com.cinema.grpc.identity.UpdateUserAccountByUserIdRequest;
+import com.cinema.grpc.identity.ResetPasswordByUserIdRequest;
 import com.cinema.grpc.identity.UnlockUserAccountRequest;
 import com.cinema.identity_service.services.internal.IdentityAccountInternalService;
 import io.grpc.BindableService;
@@ -150,6 +151,28 @@ public class IdentityInternalGrpcService extends IdentityInternalServiceGrpc.Ide
             responseObserver.onCompleted();
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while changing identity password", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void resetPasswordByUserId(
+            ResetPasswordByUserIdRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            UUID userId = UUID.fromString(request.getUserId());
+            identityAccountInternalService.resetPassword(userId, request.getNewPassword());
+            responseObserver.onNext(success("Identity account password reset successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex.getErrorCode()));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while resetting identity password", ex);
             responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
             responseObserver.onCompleted();
         }

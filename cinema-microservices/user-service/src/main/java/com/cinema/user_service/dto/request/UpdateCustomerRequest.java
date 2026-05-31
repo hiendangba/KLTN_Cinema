@@ -45,4 +45,14 @@ public class UpdateCustomerRequest {
     @Pattern(regexp = "^(0[0-9]{9}|\\+84[0-9]{9})$", message = "Số điện thoại không hợp lệ")
     @Column(length = 15)
     private String phone;
+
+    @Size(max = 32, message = "Mật khẩu cũ tối đa 32 ký tự")
+    private String oldPassword;
+
+    @Size(min = 8, max = 32, message = "Mật khẩu mới phải từ 8 đến 32 ký tự")
+    @Pattern(
+            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]+$",
+            message = "Mật khẩu mới phải có ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt"
+    )
+    private String newPassword;
 }

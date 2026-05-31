@@ -7,7 +7,7 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
-import com.cinema.identity_service.dto.request.ChangePasswordRequest;
+
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
 import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
@@ -22,7 +22,6 @@ import com.cinema.identity_service.mapper.UserMapper;
 import com.cinema.identity_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.identity_service.repository.UserRepository;
 import com.cinema.identity_service.services.UserService;
-import com.cinema.identity_service.services.internal.IdentityAccountInternalService;
 import com.cinema.identity_service.services.google.GoogleIdTokenVerifierService;
 import com.cinema.identity_service.services.google.GoogleOAuthFlowException;
 import com.cinema.identity_service.services.google.GoogleOAuthService;
@@ -76,7 +75,6 @@ public class UserServiceImpl implements UserService {
     final UserMapper userMapper;
     final RedisTemplate<String, Object> redisTemplate;
     final UserGrpcClient userGrpcClient;
-    final IdentityAccountInternalService identityAccountInternalService;
     final GoogleIdTokenVerifierService googleIdTokenVerifierService;
     final GoogleOAuthService googleOAuthService;
     final InternalEmailDispatchService internalEmailDispatchService;
@@ -113,7 +111,6 @@ public class UserServiceImpl implements UserService {
     private static final String GOOGLE_STATUS_ERROR = "error";
     private static final String GOOGLE_ERROR_REASON_STATE_INVALID = "state_invalid";
     private static final String GOOGLE_ERROR_REASON_CODE_EXCHANGE_FAILED = "code_exchange_failed";
-    private static final String GOOGLE_ERROR_REASON_TOKEN_INVALID = "token_invalid";
     private static final String GOOGLE_ERROR_REASON_EMAIL_CONFLICT = "email_conflict";
     private static final String GOOGLE_ERROR_REASON_LOGIN_FAILED = "login_failed";
     private static final String GOOGLE_ERROR_REASON_PROFILE_CREATION_FAILED = "profile_creation_failed";
@@ -128,7 +125,7 @@ public class UserServiceImpl implements UserService {
     // queue OTP email.
     @Override
     public ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest,
-                                                  HttpServletResponse response) {
+            HttpServletResponse response) {
         if (userRepository.existsByEmail(registerCustomerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
         }
@@ -179,7 +176,7 @@ public class UserServiceImpl implements UserService {
     // user-service.
     @Override
     public ActionMessageResponse createManager(RegisterManagerRequest registerManagerRequest,
-                                               HttpServletRequest request) {
+            HttpServletRequest request) {
         // Kiem tra email da ton tai
         if (userRepository.existsByEmail(registerManagerRequest.getEmail())) {
             throw new BusinessException(EMAIL_EXISTED);
@@ -241,7 +238,7 @@ public class UserServiceImpl implements UserService {
     // user-service.
     @Override
     public ActionMessageResponse createStaff(RegisterStaffRequest registerStaffRequest,
-                                             HttpServletRequest request) {
+            HttpServletRequest request) {
         RequestAuthUtils.requireAnyRole(request, log, "createStaff",
                 HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
 
@@ -378,7 +375,7 @@ public class UserServiceImpl implements UserService {
     // Redis.
     @Override
     public ActionMessageResponse forgotPassword(ForgotPasswordRequest forgotPasswordRequest,
-                                                HttpServletResponse response) {
+            HttpServletResponse response) {
         if (!userRepository.existsByEmail(forgotPasswordRequest.getEmail())) {
             throw new BusinessException(USER_NOT_FOUND);
         }
@@ -417,26 +414,10 @@ public class UserServiceImpl implements UserService {
                 .build();
     }
 
-    // Change password for authenticated user after validating old/new password
-    // constraints.
-    @Override
-    public ActionMessageResponse changePassword(ChangePasswordRequest changePasswordRequest,
-                                                HttpServletRequest request) {
-        UUID userUUID = RequestAuthUtils.requireUserId(request, ErrorCode.UNAUTHORIZED);
-        identityAccountInternalService.changePassword(
-                userUUID,
-                changePasswordRequest.getOldPassword(),
-                changePasswordRequest.getNewPassword());
-        log.info("Password changed for user: {}", userUUID);
-        return ActionMessageResponse.builder()
-                .message("Đổi mật khẩu thành công")
-                .build();
-    }
-
     // Verify OTP and execute follow-up action (register account or reset password).
     @Override
     public ActionMessageResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request,
-                                           HttpServletResponse response) {
+            HttpServletResponse response) {
         String cookieVerifyToken = null;
         if (request.getCookies() != null) {
             for (Cookie cookie : request.getCookies()) {
@@ -588,11 +569,13 @@ public class UserServiceImpl implements UserService {
         String accessTokenKey = ACCESS_TOKEN_PREFIX + tokenId;
         String refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenId;
 
-
-        //Trừ thêm 1 biến buffer để không xảy ra trường hợp dưới local hết hạn mà trên redis vẫn còn hạn buffer = 60s
-        redisTemplate.opsForValue().set(accessTokenKey, user.getId().toString(), jwtServiceImpl.getAccessTokenExpiration() - TOKEN_EXPIRY_BUFFER,
+        // Trừ thêm 1 biến buffer để không xảy ra trường hợp dưới local hết hạn mà trên
+        // redis vẫn còn hạn buffer = 60s
+        redisTemplate.opsForValue().set(accessTokenKey, user.getId().toString(),
+                jwtServiceImpl.getAccessTokenExpiration() - TOKEN_EXPIRY_BUFFER,
                 TimeUnit.MILLISECONDS);
-        redisTemplate.opsForValue().set(refreshTokenKey, user.getId().toString(), jwtServiceImpl.getRefreshTokenExpiration(),
+        redisTemplate.opsForValue().set(refreshTokenKey, user.getId().toString(),
+                jwtServiceImpl.getRefreshTokenExpiration(),
                 TimeUnit.MILLISECONDS);
 
         String userTokensKey = USER_TOKENS_PREFIX + user.getId();
@@ -630,7 +613,7 @@ public class UserServiceImpl implements UserService {
 
         issueAuthTokens(user, response);
         return ActionMessageResponse.builder()
-                .message("ÄÄƒng nháº­p thÃ nh cÃ´ng")
+                .message("Đăng nhập bằng Google thành công")
                 .build();
     }
 
@@ -979,7 +962,7 @@ public class UserServiceImpl implements UserService {
             String userTokensKey = USER_TOKENS_PREFIX + userId;
 
             redisTemplate.delete(refreshTokenKey);
-            //Nếu vẫn còn AccessToken trên redis
+            // Nếu vẫn còn AccessToken trên redis
             if (Boolean.TRUE.equals(hasAccessToken)) {
                 redisTemplate.delete(accessTokenKey);
                 redisTemplate.opsForSet().remove(userTokensKey, tokenId);
@@ -994,7 +977,8 @@ public class UserServiceImpl implements UserService {
             refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenId;
 
             // Tao rotate token va luu vao redis
-            redisTemplate.opsForValue().set(accessTokenKey, userId.toString(), jwtServiceImpl.getAccessTokenExpiration(),
+            redisTemplate.opsForValue().set(accessTokenKey, userId.toString(),
+                    jwtServiceImpl.getAccessTokenExpiration(),
                     TimeUnit.MILLISECONDS);
             redisTemplate.opsForValue().set(refreshTokenKey, userId.toString(), ttlMillis, TimeUnit.MILLISECONDS);
             redisTemplate.opsForSet().add(userTokensKey, tokenId);
@@ -1108,7 +1092,8 @@ public class UserServiceImpl implements UserService {
     private OtpData mapToOtpData(Map<?, ?> source) {
         try {
             OtpData.OtpPurpose purpose = parseOtpPurpose(source.get("purpose"));
-            RegisterCustomerRequest registerCustomerRequest = toRegisterCustomerRequest(source.get("registerCustomerRequest"));
+            RegisterCustomerRequest registerCustomerRequest = toRegisterCustomerRequest(
+                    source.get("registerCustomerRequest"));
             ForgotPasswordRequest forgotPasswordRequest = toForgotPasswordRequest(source.get("forgotPasswordRequest"));
 
             return OtpData.builder()
@@ -1153,7 +1138,8 @@ public class UserServiceImpl implements UserService {
     }
 
     private ForgotPasswordRequest toForgotPasswordRequest(Object value) {
-        // Current flows rely on subject for forgot-password OTP, so this field is optional.
+        // Current flows rely on subject for forgot-password OTP, so this field is
+        // optional.
         return null;
     }
 
@@ -1231,8 +1217,7 @@ public class UserServiceImpl implements UserService {
                     asInt(list.get(3), 0),
                     asInt(list.get(4), 0),
                     asInt(list.get(5), 0),
-                    nano
-            );
+                    nano);
         }
         return LocalDateTime.parse(value.toString());
     }

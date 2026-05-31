@@ -384,7 +384,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `POST` | `/api/auth/refresh_token` | ❌ | Trao đổi Refresh Token lấy Access Token mới. |
 | `POST` | `/api/auth/forgot-password` | ❌ | Báo quên mật khẩu, đẩy một email mang OTP reset. |
 | `POST` | `/api/auth/resend-otp` | ❌ | Yêu cầu gửi lại OTP cho các hành động trên. |
-| `POST` | `/api/auth/change-password` | ✅ | Người dùng đổi mật khẩu mới (Cần Auth hợp lệ). |
+
 | `POST` | `/api/auth/manager` | ✅ ADMIN | Cấp tài khoản cấp độ Manager. |
 | `POST` | `/api/auth/staff` | ✅ ADMIN/MANAGER | Cấp tài khoản nhân sự Staff. |
 | `GET` | `/internal/auth/check` | ✅ | Internal API. Trạm kiểm soát của Envoy. |
@@ -1300,7 +1300,7 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
     - thêm route protected đi qua ext_authz:
       - `POST /api/auth/manager`
       - `POST /api/auth/staff`
-      - `POST /api/auth/change-password`
+
     - giữ route `prefix: /api/auth` với `ext_authz` disabled cho luồng public.
   - `common-lib/src/main/java/com/cinema/http/RequestAuthUtils.java`:
     - `requireUserId(...)` đọc thuần `X-User-ID`.
@@ -1375,5 +1375,6 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - Compile/test full trong môi trường local đang bị chặn bởi lỗi generated/gRPC có sẵn của repo, không phải do logic mới.
 - Ghi chú deploy:
   - Rebuild/redeploy tối thiểu `showtime-service` khi phát hành thay đổi API này.
+
 
 

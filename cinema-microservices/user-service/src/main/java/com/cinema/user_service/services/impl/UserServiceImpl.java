@@ -107,21 +107,10 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public ActionMessageResponse changePassword(ChangePasswordRequest request, HttpServletRequest httpRequest) {
-        UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
-        identityGrpcClient.changePassword(userUUID, request.getOldPassword(), request.getNewPassword());
-        log.info("Password changed through user-service: userId={}", userUUID);
-        return ActionMessageResponse.builder()
-                .message("Doi mat khau thanh cong")
-                .build();
-    }
-
-
-    @Override
     public ActionMessageResponse updateCustomerProfile(UpdateCustomerRequest request,
             HttpServletRequest httpRequest) {
         UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
-        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN, log, "updateCustomerProfile");
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_CUSTOMER, log, "updateCustomerProfile");
 
         User user = userRepository.findByIdAndRoleAndIsDeletedFalse(userUUID, UserEnum.UserRole.CUSTOMER)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
@@ -135,6 +124,7 @@ public class UserServiceImpl implements UserService {
 
         userMapper.updateUserCustomer(user, request);
         userRepository.save(user);
+        applyPasswordChangeIfRequested(user.getId(), request.getOldPassword(), request.getNewPassword(), true);
         syncIdentityEmailIfChanged(user.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 user,
@@ -151,6 +141,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public ActionMessageResponse updateManagerProfile(UpdateManagerRequest request, HttpServletRequest httpRequest) {
         UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "updateManagerProfile");
         AuditIdentity actor = resolveActor(httpRequest);
 
         User manager = userRepository.findByIdAndRoleAndIsDeletedFalse(userUUID, UserEnum.UserRole.MANAGER)
@@ -164,6 +155,7 @@ public class UserServiceImpl implements UserService {
 
         userMapper.updateUserManager(manager, request);
         userRepository.save(manager);
+        applyPasswordChangeIfRequested(manager.getId(), request.getOldPassword(), request.getNewPassword(), true);
         syncIdentityEmailIfChanged(manager.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 manager,
@@ -179,7 +171,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public ActionMessageResponse updateStaffProfile(UpdateStaffRequest request, HttpServletRequest httpRequest) {
         UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
-        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "updateStaffProfile");
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_STAFF, log, "updateStaffProfile");
         AuditIdentity actor = resolveActor(httpRequest);
 
         User staff = userRepository.findByIdAndRoleAndIsDeletedFalse(userUUID, UserEnum.UserRole.STAFF)
@@ -193,6 +185,7 @@ public class UserServiceImpl implements UserService {
 
         userMapper.updateUserStaff(staff, request);
         userRepository.save(staff);
+        applyPasswordChangeIfRequested(staff.getId(), request.getOldPassword(), request.getNewPassword(), true);
         syncIdentityEmailIfChanged(staff.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 staff,
@@ -222,6 +215,7 @@ public class UserServiceImpl implements UserService {
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
         userMapper.updateUserCustomer(target, request);
         userRepository.save(target);
+        applyPasswordChangeIfRequested(target.getId(), request.getOldPassword(), request.getNewPassword(), false);
         syncIdentityEmailIfChanged(target.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 target,
@@ -232,7 +226,7 @@ public class UserServiceImpl implements UserService {
         log.info("Customer profile updated by id: targetCustomerId={}, actorId={}, actorRole={}, email={}",
                 userId, actorId, actorRole, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cáº­p nháº­t profile cho Customer thÃ nh cÃ´ng")
+                .message("Cập nhật profile cho Customer thành công")
                 .build();
     }
 
@@ -253,6 +247,7 @@ public class UserServiceImpl implements UserService {
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
         userMapper.updateUserManager(target, request);
         userRepository.save(target);
+        applyPasswordChangeIfRequested(target.getId(), request.getOldPassword(), request.getNewPassword(), false);
         syncIdentityEmailIfChanged(target.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 target,
@@ -263,7 +258,7 @@ public class UserServiceImpl implements UserService {
         log.info("Manager profile updated by id: targetManagerId={}, actorId={}, actorRole={}, email={}",
                 userId, actorId, actorRole, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cáº­p nháº­t profile cho Manager thÃ nh cÃ´ng")
+                .message("Cập nhật profile cho Manager thành công")
                 .build();
     }
 
@@ -288,6 +283,7 @@ public class UserServiceImpl implements UserService {
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
         userMapper.updateUserStaff(target, request);
         userRepository.save(target);
+        applyPasswordChangeIfRequested(target.getId(), request.getOldPassword(), request.getNewPassword(), false);
         syncIdentityEmailIfChanged(target.getId(), original.email(), request.getEmail());
         queueAuditMailAfterCommit(buildUpdateAuditMail(
                 target,
@@ -298,7 +294,7 @@ public class UserServiceImpl implements UserService {
         log.info("Staff profile updated by id: targetStaffId={}, actorId={}, actorRole={}, email={}",
                 userId, actorId, actorRole, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cáº­p nháº­t profile cho Staff thÃ nh cÃ´ng")
+                .message("Cập nhật profile cho Staff thành công")
                 .build();
     }
 
@@ -516,7 +512,9 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         log.info("User profile loaded: userId={}", userUUID);
-        return userMapper.toUserResponse(user);
+        UserResponse response = userMapper.toUserResponse(user);
+        response.setIdentityAccount(identityGrpcClient.getAccountByUserId(userUUID));
+        return response;
     }
 
     @Override
@@ -660,6 +658,27 @@ public class UserServiceImpl implements UserService {
         log.info("Identity account email synced: userId={}, email={}", userId, nextEmail);
     }
 
+    private void applyPasswordChangeIfRequested(
+            UUID userId,
+            String oldPassword,
+            String newPassword,
+            boolean requireOldPassword) {
+        if (!hasText(newPassword)) {
+            return;
+        }
+
+        if (requireOldPassword && !hasText(oldPassword)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        if (requireOldPassword) {
+            identityGrpcClient.changePassword(userId, oldPassword, newPassword);
+        } else {
+            identityGrpcClient.resetPassword(userId, newPassword);
+        }
+        log.info("Identity account password updated: userId={}, resetMode={}", userId, !requireOldPassword);
+    }
+
     private UserSnapshot snapshot(User user) {
         return new UserSnapshot(
                 user.getId(),
@@ -761,6 +780,7 @@ public class UserServiceImpl implements UserService {
         addIfChanged(diffs, "dob", before.dob(), request.getDob());
         addIfChanged(diffs, "gender", before.gender(), request.getGender());
         addIfChanged(diffs, "phone", before.phone(), request.getPhone());
+        addPasswordChangeDiff(diffs, request.getNewPassword());
         return normalizeDiffs(diffs);
     }
 
@@ -774,6 +794,7 @@ public class UserServiceImpl implements UserService {
         addIfChanged(diffs, "bankCode", before.bankCode(), request.getBankCode());
         addIfChanged(diffs, "accountNumber", before.accountNumber(), request.getAccountNumber());
         addIfChanged(diffs, "accountName", before.accountName(), request.getAccountName());
+        addPasswordChangeDiff(diffs, request.getNewPassword());
         return normalizeDiffs(diffs);
     }
 
@@ -787,7 +808,14 @@ public class UserServiceImpl implements UserService {
         addIfChanged(diffs, "bankCode", before.bankCode(), request.getBankCode());
         addIfChanged(diffs, "accountNumber", before.accountNumber(), request.getAccountNumber());
         addIfChanged(diffs, "accountName", before.accountName(), request.getAccountName());
+        addPasswordChangeDiff(diffs, request.getNewPassword());
         return normalizeDiffs(diffs);
+    }
+
+    private void addPasswordChangeDiff(List<String> diffs, String newPassword) {
+        if (hasText(newPassword)) {
+            diffs.add("password: changed");
+        }
     }
 
     private List<String> normalizeDiffs(List<String> diffs) {
@@ -866,7 +894,7 @@ public class UserServiceImpl implements UserService {
             case ADMIN -> true;
             case MANAGER -> targetRole == UserEnum.UserRole.CUSTOMER
                     || (targetRole == UserEnum.UserRole.STAFF
-                    && hasSharedCinema(requesterUserId, targetUser.getId()));
+                            && hasSharedCinema(requesterUserId, targetUser.getId()));
             case STAFF -> targetRole == UserEnum.UserRole.CUSTOMER;
             case CUSTOMER -> false;
         };

@@ -76,6 +76,23 @@ class IdentityAccountInternalServiceTest {
         verify(userRepository).save(user);
     }
 
+    @Test
+    void resetPassword_shouldEncodeAndSaveNewPassword() {
+        UUID userId = UUID.randomUUID();
+        User user = buildUser(userId, UserEnum.UserStatus.ACTIVE, false);
+        user.setPassword("old-hash");
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("NewPass@123", "old-hash")).thenReturn(false);
+        when(passwordEncoder.encode("NewPass@123")).thenReturn("reset-hash");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.resetPassword(userId, "NewPass@123");
+
+        assertThat(user.getPassword()).isEqualTo("reset-hash");
+        verify(userRepository).save(user);
+    }
+
     private User buildUser(UUID id, UserEnum.UserStatus status, boolean isDeleted) {
         return User.builder()
                 .id(id)

@@ -3,7 +3,6 @@ package com.cinema.identity_service.controller;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
-import com.cinema.identity_service.dto.request.ChangePasswordRequest;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
 import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
@@ -46,13 +45,6 @@ public class UserController extends BaseController {
             @Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest, HttpServletResponse response) {
         ActionMessageResponse forgotPasswordResponse = userService.forgotPassword(forgotPasswordRequest, response);
         return ok(forgotPasswordResponse);
-    }
-
-    @PostMapping("/change-password")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> changePassword(
-            @Valid @RequestBody ChangePasswordRequest changePasswordRequest, HttpServletRequest request) {
-        ActionMessageResponse changePasswordResponse = userService.changePassword(changePasswordRequest, request);
-        return ok(changePasswordResponse);
     }
 
     @PostMapping("/resend-otp")

@@ -5,7 +5,6 @@ import com.cinema.dto.request.SendEmailRequest;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.user_service.dto.request.UpdateCustomerRequest;
-import com.cinema.user_service.dto.request.ChangePasswordRequest;
 import com.cinema.user_service.dto.request.UpdateManagerRequest;
 import com.cinema.user_service.dto.request.UpdateStaffRequest;
 import com.cinema.user_service.entity.User;
@@ -96,7 +95,7 @@ class UserServiceImplAuditTest {
 
         MockHttpServletRequest httpRequest = new MockHttpServletRequest();
         httpRequest.addHeader("X-User-ID", userId.toString());
-        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.ADMIN.name());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.CUSTOMER.name());
 
         UpdateCustomerRequest request = UpdateCustomerRequest.builder()
                 .name("New Name")
@@ -104,6 +103,8 @@ class UserServiceImplAuditTest {
                 .dob(LocalDate.of(1995, 1, 1))
                 .gender(UserEnum.Gender.FEMALE)
                 .phone("0901234567")
+                .oldPassword("OldPass@123")
+                .newPassword("NewPass@123")
                 .build();
 
         service.updateCustomerProfile(request, httpRequest);
@@ -121,6 +122,7 @@ class UserServiceImplAuditTest {
         assertThat(email.getContent()).contains("name: Old Name -&gt; New Name");
         assertThat(email.getContent()).contains("email: old@email.com -&gt; new@email.com");
         verify(identityGrpcClient).updateAccountEmail(userId, "new@email.com");
+        verify(identityGrpcClient).changePassword(userId, "OldPass@123", "NewPass@123");
     }
 
     @Test
@@ -147,7 +149,7 @@ class UserServiceImplAuditTest {
 
         MockHttpServletRequest httpRequest = new MockHttpServletRequest();
         httpRequest.addHeader("X-User-ID", userId.toString());
-        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.ADMIN.name());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.CUSTOMER.name());
 
         UpdateCustomerRequest request = UpdateCustomerRequest.builder()
                 .name("New Name")
@@ -163,20 +165,45 @@ class UserServiceImplAuditTest {
     }
 
     @Test
-    void changePassword_shouldCallIdentityGrpc() {
+    void updateCustomerProfileById_adminShouldResetPasswordWhenProvided() {
         UUID userId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
 
         MockHttpServletRequest httpRequest = new MockHttpServletRequest();
-        httpRequest.addHeader("X-User-ID", userId.toString());
+        httpRequest.addHeader("X-User-ID", actorId.toString());
+        httpRequest.addHeader("X-User-Role", UserEnum.UserRole.ADMIN.name());
 
-        ChangePasswordRequest request = ChangePasswordRequest.builder()
-                .oldPassword("OldPass@123")
+        User target = buildUser(userId, "customer.old@email.com", "Customer Old", UserEnum.UserRole.CUSTOMER);
+        User actor = buildUser(actorId, "admin@email.com", "Admin Actor", UserEnum.UserRole.ADMIN);
+
+        when(userRepository.findByIdAndRoleAndIsDeletedFalse(userId, UserEnum.UserRole.CUSTOMER))
+                .thenReturn(Optional.of(target));
+        when(userRepository.findByIdAndIsDeletedFalse(actorId)).thenReturn(Optional.of(actor));
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        doAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            UpdateCustomerRequest request = invocation.getArgument(1);
+            user.setName(request.getName());
+            user.setEmail(request.getEmail());
+            user.setDob(request.getDob());
+            user.setGender(request.getGender());
+            user.setPhone(request.getPhone());
+            return null;
+        }).when(userMapper).updateUserCustomer(any(User.class), any(UpdateCustomerRequest.class));
+
+        UpdateCustomerRequest request = UpdateCustomerRequest.builder()
+                .name("Customer New")
+                .email("customer.old@email.com")
+                .dob(LocalDate.of(1997, 5, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0901111111")
                 .newPassword("NewPass@123")
                 .build();
 
-        service.changePassword(request, httpRequest);
+        service.updateCustomerProfile(userId, request, httpRequest);
 
-        verify(identityGrpcClient).changePassword(userId, "OldPass@123", "NewPass@123");
+        verify(identityGrpcClient).resetPassword(userId, "NewPass@123");
     }
 
     @Test

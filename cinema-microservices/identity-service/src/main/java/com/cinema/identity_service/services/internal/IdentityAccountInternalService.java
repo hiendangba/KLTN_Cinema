@@ -110,6 +110,19 @@ public class IdentityAccountInternalService {
         log.info("Identity account password changed: userId={}", userId);
     }
 
+    public void resetPassword(UUID userId, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            throw new BusinessException(ErrorCode.PASSWORD_DUPLICATED);
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        log.info("Identity account password reset: userId={}", userId);
+    }
+
     private IdentityAccountPayload toPayload(User user) {
         return IdentityAccountPayload.newBuilder()
                 .setId(user.getId().toString())
