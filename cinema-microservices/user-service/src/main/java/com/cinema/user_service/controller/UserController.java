@@ -44,6 +44,14 @@ public class UserController extends BaseController {
         return created(registerStaffResponse);
     }
 
+    @PostMapping("/change-password")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> changePassword(
+            @Valid @RequestBody ChangePasswordRequest changePasswordRequest,
+            HttpServletRequest request) {
+        ActionMessageResponse response = userService.changePassword(changePasswordRequest, request);
+        return ok(response);
+    }
+
     @PutMapping("/customers")
     public ResponseEntity<APIResponse<ActionMessageResponse>> updateCustomerProfile(
             @Valid @RequestBody UpdateCustomerRequest updateCustomerRequest,

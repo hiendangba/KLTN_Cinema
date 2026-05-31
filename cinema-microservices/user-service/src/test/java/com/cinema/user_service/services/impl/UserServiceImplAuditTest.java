@@ -5,6 +5,7 @@ import com.cinema.dto.request.SendEmailRequest;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.user_service.dto.request.UpdateCustomerRequest;
+import com.cinema.user_service.dto.request.ChangePasswordRequest;
 import com.cinema.user_service.dto.request.UpdateManagerRequest;
 import com.cinema.user_service.dto.request.UpdateStaffRequest;
 import com.cinema.user_service.entity.User;
@@ -15,7 +16,6 @@ import com.cinema.user_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.user_service.mapper.UserMapper;
 import com.cinema.user_service.repository.UserRepository;
 import com.cinema.user_service.services.audit.UserAuditEmailService;
-import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -160,6 +160,23 @@ class UserServiceImplAuditTest {
         service.updateCustomerProfile(request, httpRequest);
 
         verify(identityGrpcClient, never()).updateAccountEmail(any(), any());
+    }
+
+    @Test
+    void changePassword_shouldCallIdentityGrpc() {
+        UUID userId = UUID.randomUUID();
+
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("X-User-ID", userId.toString());
+
+        ChangePasswordRequest request = ChangePasswordRequest.builder()
+                .oldPassword("OldPass@123")
+                .newPassword("NewPass@123")
+                .build();
+
+        service.changePassword(request, httpRequest);
+
+        verify(identityGrpcClient).changePassword(userId, "OldPass@123", "NewPass@123");
     }
 
     @Test

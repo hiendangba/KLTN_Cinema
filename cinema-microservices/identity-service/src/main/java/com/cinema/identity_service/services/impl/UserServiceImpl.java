@@ -22,6 +22,7 @@ import com.cinema.identity_service.mapper.UserMapper;
 import com.cinema.identity_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.identity_service.repository.UserRepository;
 import com.cinema.identity_service.services.UserService;
+import com.cinema.identity_service.services.internal.IdentityAccountInternalService;
 import com.cinema.identity_service.services.google.GoogleIdTokenVerifierService;
 import com.cinema.identity_service.services.google.GoogleOAuthFlowException;
 import com.cinema.identity_service.services.google.GoogleOAuthService;
@@ -75,6 +76,7 @@ public class UserServiceImpl implements UserService {
     final UserMapper userMapper;
     final RedisTemplate<String, Object> redisTemplate;
     final UserGrpcClient userGrpcClient;
+    final IdentityAccountInternalService identityAccountInternalService;
     final GoogleIdTokenVerifierService googleIdTokenVerifierService;
     final GoogleOAuthService googleOAuthService;
     final InternalEmailDispatchService internalEmailDispatchService;
@@ -420,26 +422,11 @@ public class UserServiceImpl implements UserService {
     @Override
     public ActionMessageResponse changePassword(ChangePasswordRequest changePasswordRequest,
                                                 HttpServletRequest request) {
-
-        // Kiem tra mat khau cu va mat khau moi co giong nhau hay khong
-        if (changePasswordRequest.getOldPassword().equals(changePasswordRequest.getNewPassword())) {
-            throw new BusinessException(ErrorCode.PASSWORD_DUPLICATED);
-        }
-
         UUID userUUID = RequestAuthUtils.requireUserId(request, ErrorCode.UNAUTHORIZED);
-
-        User user = userRepository.findById(userUUID)
-                .orElseThrow(() -> new BusinessException(USER_NOT_FOUND));
-
-        // Kiem tra mat khau cu co dung hay khong
-        if (!passwordEncoder.matches(changePasswordRequest.getOldPassword(), user.getPassword())) {
-            throw new BusinessException(ErrorCode.PASSWORD_INCORRECT);
-        }
-
-        // Update password (validation da duoc kiem tra o ChangePasswordRequest)
-        user.setPassword(passwordEncoder.encode(changePasswordRequest.getNewPassword()));
-        userRepository.save(user);
-
+        identityAccountInternalService.changePassword(
+                userUUID,
+                changePasswordRequest.getOldPassword(),
+                changePasswordRequest.getNewPassword());
         log.info("Password changed for user: {}", userUUID);
         return ActionMessageResponse.builder()
                 .message("Đổi mật khẩu thành công")

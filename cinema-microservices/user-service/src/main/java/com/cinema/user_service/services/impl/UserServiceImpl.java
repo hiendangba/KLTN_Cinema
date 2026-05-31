@@ -107,6 +107,17 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public ActionMessageResponse changePassword(ChangePasswordRequest request, HttpServletRequest httpRequest) {
+        UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);
+        identityGrpcClient.changePassword(userUUID, request.getOldPassword(), request.getNewPassword());
+        log.info("Password changed through user-service: userId={}", userUUID);
+        return ActionMessageResponse.builder()
+                .message("Doi mat khau thanh cong")
+                .build();
+    }
+
+
+    @Override
     public ActionMessageResponse updateCustomerProfile(UpdateCustomerRequest request,
             HttpServletRequest httpRequest) {
         UUID userUUID = RequestAuthUtils.requireUserId(httpRequest, ErrorCode.UNAUTHORIZED);

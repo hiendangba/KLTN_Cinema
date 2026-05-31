@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.UUID;
 import java.util.Objects;
@@ -21,6 +22,7 @@ import java.util.Objects;
 public class IdentityAccountInternalService {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public void lockAccount(UUID userId) {
         User user = userRepository.findById(userId)
@@ -89,6 +91,23 @@ public class IdentityAccountInternalService {
         } else {
             log.info("Identity account email unchanged: userId={}", userId);
         }
+    }
+
+    public void changePassword(UUID userId, String oldPassword, String newPassword) {
+        if (Objects.equals(oldPassword, newPassword)) {
+            throw new BusinessException(ErrorCode.PASSWORD_DUPLICATED);
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
+            throw new BusinessException(ErrorCode.PASSWORD_INCORRECT);
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        log.info("Identity account password changed: userId={}", userId);
     }
 
     private IdentityAccountPayload toPayload(User user) {

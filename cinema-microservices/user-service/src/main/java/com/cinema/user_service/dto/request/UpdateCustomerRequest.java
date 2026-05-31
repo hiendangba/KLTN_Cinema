@@ -4,7 +4,12 @@ import com.cinema.Enum.UserEnum;
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -16,7 +21,6 @@ import java.time.LocalDate;
 @Getter
 @Setter
 @AllArgsConstructor
-
 public class UpdateCustomerRequest {
 
     @NotBlank(message = "Tên không được để trống")
@@ -41,6 +45,4 @@ public class UpdateCustomerRequest {
     @Pattern(regexp = "^(0[0-9]{9}|\\+84[0-9]{9})$", message = "Số điện thoại không hợp lệ")
     @Column(length = 15)
     private String phone;
-
-    private UserEnum.UserRole role;
 }

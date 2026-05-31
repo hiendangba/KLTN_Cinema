@@ -13,6 +13,7 @@ service IdentityInternalService {
   rpc UnlockUserAccount(UnlockUserAccountRequest) returns (cinema.common.v1.OperationReply);
   rpc GetUserAccountByUserId(GetUserAccountByUserIdRequest) returns (GetUserAccountByUserIdReply);
   rpc UpdateUserAccountByUserId(UpdateUserAccountByUserIdRequest) returns (cinema.common.v1.OperationReply);
+  rpc ChangePasswordByUserId(ChangePasswordByUserIdRequest) returns (cinema.common.v1.OperationReply);
 }
 
 message LockUserAccountRequest {
@@ -30,6 +31,12 @@ message GetUserAccountByUserIdRequest {
 message UpdateUserAccountByUserIdRequest {
   string user_id = 1;
   string email = 2;
+}
+
+message ChangePasswordByUserIdRequest {
+  string user_id = 1;
+  string old_password = 2;
+  string new_password = 3;
 }
 
 message IdentityAccountPayload {
