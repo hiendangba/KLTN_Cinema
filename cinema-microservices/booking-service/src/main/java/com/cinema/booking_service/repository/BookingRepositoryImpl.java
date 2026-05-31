@@ -2,6 +2,7 @@ package com.cinema.booking_service.repository;
 
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.entity.Booking;
+import com.cinema.booking_service.enums.BookingStatus;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
@@ -122,6 +123,54 @@ public class BookingRepositoryImpl {
         cq.orderBy(
                 cb.asc(root.get("showtimeStartDateTime")),
                 cb.asc(root.get("showtimeId")),
+                cb.asc(root.get("id")));
+
+        return entityManager.createQuery(cq).getResultList();
+    }
+
+    public List<Booking> findAllForBookingRevenueReport(
+            Collection<UUID> cinemaIds,
+            LocalDateTime from,
+            LocalDateTime to,
+            Collection<BookingStatus> statuses) {
+        return findAllForBookingRevenueReport(cinemaIds, null, from, to, statuses);
+    }
+
+    public List<Booking> findAllForBookingRevenueReport(
+            Collection<UUID> cinemaIds,
+            Collection<UUID> filmIds,
+            LocalDateTime from,
+            LocalDateTime to,
+            Collection<BookingStatus> statuses) {
+        if (cinemaIds == null || cinemaIds.isEmpty()) {
+            return List.of();
+        }
+
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Booking> cq = cb.createQuery(Booking.class);
+        Root<Booking> root = cq.from(Booking.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.isFalse(root.get("isDeleted")));
+        predicates.add(root.get("cinemaId").in(cinemaIds));
+
+        if (filmIds != null && !filmIds.isEmpty()) {
+            predicates.add(root.get("filmId").in(filmIds));
+        }
+        if (from != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("timeCreated"), from));
+        }
+        if (to != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("timeCreated"), to));
+        }
+        if (statuses != null && !statuses.isEmpty()) {
+            predicates.add(root.get("bookingStatus").in(statuses));
+        }
+
+        cq.select(root);
+        cq.where(predicates.toArray(new Predicate[0]));
+        cq.orderBy(
+                cb.desc(root.get("timeCreated")),
                 cb.asc(root.get("id")));
 
         return entityManager.createQuery(cq).getResultList();

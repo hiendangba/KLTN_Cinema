@@ -1,7 +1,10 @@
 package com.cinema.payment_service.repository;
 
 import com.cinema.payment_service.entity.PromotionFilm;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -12,5 +15,7 @@ public interface PromotionFilmRepository extends JpaRepository<PromotionFilm, UU
 
     List<PromotionFilm> findAllByPromotionIdIn(Collection<UUID> promotionIds);
 
-    void deleteByPromotionId(UUID promotionId);
+    @Modifying(flushAutomatically = true)
+    @Query("delete from PromotionFilm pf where pf.promotionId = :promotionId")
+    void deleteByPromotionId(@Param("promotionId") UUID promotionId);
 }

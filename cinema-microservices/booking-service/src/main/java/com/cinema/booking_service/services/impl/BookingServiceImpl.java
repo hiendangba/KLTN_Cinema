@@ -657,12 +657,12 @@ public class BookingServiceImpl implements BookingService {
                 .map(CinemaGrpcClient.CinemaSummary::id)
                 .toList();
         List<Booking> bookings = requestedFilmIds == null
-                ? bookingRepository.findAllForBookingRevenueReport(
+                ? bookingRepositoryImpl.findAllForBookingRevenueReport(
                         scopedCinemaIds,
                         from,
                         to,
                         EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED))
-                : bookingRepository.findAllForBookingRevenueReport(
+                : bookingRepositoryImpl.findAllForBookingRevenueReport(
                         scopedCinemaIds,
                         requestedFilmIds,
                         from,

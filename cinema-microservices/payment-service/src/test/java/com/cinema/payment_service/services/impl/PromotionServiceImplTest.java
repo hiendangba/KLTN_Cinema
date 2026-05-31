@@ -6,6 +6,8 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.dto.request.PromotionUpsertRequest;
 import com.cinema.payment_service.dto.response.PromotionResponse;
 import com.cinema.payment_service.entity.Promotion;
+import com.cinema.payment_service.entity.PromotionCinema;
+import com.cinema.payment_service.entity.PromotionFilm;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
@@ -21,6 +23,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.ArrayList;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +33,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -157,5 +161,76 @@ class PromotionServiceImplTest {
 
         assertEquals(PromotionStatus.INACTIVE, promotion.getStatus());
         assertEquals(PromotionStatus.INACTIVE, response.getStatus());
+    }
+
+    @Test
+    void updatePromotion_shouldReplaceMappingsUsingBulkDeleteAndSaveAll() {
+        UUID promotionId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+
+        Promotion promotion = new Promotion();
+        promotion.setId(promotionId);
+        promotion.setCode("SALE10");
+        promotion.setName("Sale");
+        promotion.setDiscountType(PromotionDiscountType.PERCENT);
+        promotion.setDiscountValue(BigDecimal.TEN);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setIsDeleted(false);
+
+        when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
+        when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+        when(promotionRepository.findById(promotionId)).thenReturn(Optional.of(promotion));
+        when(promotionRepository.existsByCodeIgnoreCaseAndIsDeletedFalseAndIdNot("SALE10", promotionId))
+                .thenReturn(false);
+        when(promotionRepository.save(any(Promotion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(promotionCinemaRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(promotionFilmRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        PromotionCinema cinemaMapping = new PromotionCinema();
+        cinemaMapping.setPromotionId(promotionId);
+        cinemaMapping.setCinemaId(cinemaId);
+        PromotionFilm filmMapping = new PromotionFilm();
+        filmMapping.setPromotionId(promotionId);
+        filmMapping.setFilmId(filmId);
+        when(promotionCinemaRepository.findAllByPromotionId(promotionId)).thenReturn(List.of(cinemaMapping));
+        when(promotionFilmRepository.findAllByPromotionId(promotionId)).thenReturn(List.of(filmMapping));
+
+        PromotionUpsertRequest request = PromotionUpsertRequest.builder()
+                .code("SALE10")
+                .name("Sale")
+                .discountType(PromotionDiscountType.PERCENT)
+                .discountValue(BigDecimal.TEN)
+                .startAt(LocalDateTime.now().minusDays(1))
+                .endAt(LocalDateTime.now().plusDays(7))
+                .cinemaIds(List.of(cinemaId, cinemaId))
+                .filmIds(List.of(filmId, filmId))
+                .build();
+
+        PromotionResponse response = promotionService.updatePromotion(promotionId, request, httpRequest);
+
+        @SuppressWarnings("rawtypes")
+        ArgumentCaptor<Iterable> cinemaCaptor = ArgumentCaptor.forClass(Iterable.class);
+        @SuppressWarnings("rawtypes")
+        ArgumentCaptor<Iterable> filmCaptor = ArgumentCaptor.forClass(Iterable.class);
+        org.mockito.InOrder order = inOrder(promotionCinemaRepository, promotionFilmRepository);
+        order.verify(promotionCinemaRepository).deleteByPromotionId(promotionId);
+        order.verify(promotionFilmRepository).deleteByPromotionId(promotionId);
+        order.verify(promotionCinemaRepository).saveAll(cinemaCaptor.capture());
+        order.verify(promotionFilmRepository).saveAll(filmCaptor.capture());
+
+        List<PromotionCinema> savedCinemaMappings = new ArrayList<>();
+        cinemaCaptor.getValue().forEach(item -> savedCinemaMappings.add((PromotionCinema) item));
+        List<PromotionFilm> savedFilmMappings = new ArrayList<>();
+        filmCaptor.getValue().forEach(item -> savedFilmMappings.add((PromotionFilm) item));
+
+        assertEquals(1, savedCinemaMappings.size());
+        assertEquals(cinemaId, savedCinemaMappings.get(0).getCinemaId());
+        assertEquals(1, savedFilmMappings.size());
+        assertEquals(filmId, savedFilmMappings.get(0).getFilmId());
+        assertEquals(1, response.getCinemaIds().size());
+        assertEquals(cinemaId, response.getCinemaIds().get(0));
+        assertEquals(1, response.getFilmIds().size());
+        assertEquals(filmId, response.getFilmIds().get(0));
     }
 }

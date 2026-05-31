@@ -123,7 +123,7 @@ class BookingServiceImplTest {
         Booking booking2 = buildBooking(cinema1, film2, BookingStatus.CONFIRMED, BigDecimal.valueOf(80000), BigDecimal.valueOf(20000));
         Booking booking3 = buildBooking(cinema2, film1, BookingStatus.RESERVED, BigDecimal.valueOf(90000), BigDecimal.ZERO);
 
-        when(bookingRepository.findAllForBookingRevenueReport(anyCollection(), anyCollection(), any(), any(), anyCollection()))
+        when(bookingRepositoryImpl.findAllForBookingRevenueReport(anyCollection(), anyCollection(), any(), any(), anyCollection()))
                 .thenAnswer(invocation -> {
                     Collection<UUID> cinemaIds = invocation.getArgument(0);
                     Collection<UUID> filmIds = invocation.getArgument(1);
@@ -146,7 +146,7 @@ class BookingServiceImplTest {
 
         ArgumentCaptor<Collection<UUID>> cinemaIdsCaptor = ArgumentCaptor.forClass(Collection.class);
         ArgumentCaptor<Collection<UUID>> filmIdsCaptor = ArgumentCaptor.forClass(Collection.class);
-        org.mockito.Mockito.verify(bookingRepository).findAllForBookingRevenueReport(
+        org.mockito.Mockito.verify(bookingRepositoryImpl).findAllForBookingRevenueReport(
                 cinemaIdsCaptor.capture(),
                 filmIdsCaptor.capture(),
                 any(),
@@ -181,7 +181,7 @@ class BookingServiceImplTest {
         booking2.setPromotionDiscountAmount(BigDecimal.valueOf(5000));
         booking2.setPayableAmount(BigDecimal.valueOf(145000));
 
-        when(bookingRepository.findAllForBookingRevenueReport(anyCollection(), any(), any(), anyCollection()))
+        when(bookingRepositoryImpl.findAllForBookingRevenueReport(anyCollection(), any(), any(), anyCollection()))
                 .thenReturn(List.of(booking1, booking2));
 
         BookingRevenueReportRequest request = BookingRevenueReportRequest.builder()

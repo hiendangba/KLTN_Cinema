@@ -653,22 +653,26 @@ public class PromotionServiceImpl implements PromotionService {
         promotionCinemaRepository.deleteByPromotionId(promotionId);
         promotionFilmRepository.deleteByPromotionId(promotionId);
 
-        if (cinemaIds != null) {
+        if (cinemaIds != null && !cinemaIds.isEmpty()) {
+            List<PromotionCinema> mappings = new ArrayList<>(cinemaIds.size());
             for (UUID cinemaId : cinemaIds) {
                 PromotionCinema mapping = new PromotionCinema();
                 mapping.setPromotionId(promotionId);
                 mapping.setCinemaId(cinemaId);
-                promotionCinemaRepository.save(mapping);
+                mappings.add(mapping);
             }
+            promotionCinemaRepository.saveAll(mappings);
         }
 
-        if (filmIds != null) {
+        if (filmIds != null && !filmIds.isEmpty()) {
+            List<PromotionFilm> mappings = new ArrayList<>(filmIds.size());
             for (UUID filmId : filmIds) {
                 PromotionFilm mapping = new PromotionFilm();
                 mapping.setPromotionId(promotionId);
                 mapping.setFilmId(filmId);
-                promotionFilmRepository.save(mapping);
+                mappings.add(mapping);
             }
+            promotionFilmRepository.saveAll(mappings);
         }
     }
 
