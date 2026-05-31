@@ -56,14 +56,6 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 
-    @PostMapping("/me/search")
-    public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchMyBookings(
-            @Valid @RequestBody PageRequest<BookingField> request,
-            HttpServletRequest httpRequest) {
-        PageResponse<BookingResponse> response = bookingService.searchMyBookings(request, httpRequest);
-        return ok(response);
-    }
-
     @PostMapping("/me/active/search")
     public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchMyActiveBookings(
             @Valid @RequestBody PageRequest<BookingField> request,
@@ -89,7 +81,7 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 
-    @PostMapping("/cinemas/me/purchased")
+    @PostMapping("/cinemas/me/purchased/search")
     public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchPurchasedBookingsByOperatorCinema(
             @Valid @RequestBody PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
@@ -98,7 +90,7 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 
-    @PostMapping("/cinemas/me/unpaid")
+    @PostMapping("/cinemas/me/unpaid/search")
     public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchUnpaidBookingsByOperatorCinema(
             @Valid @RequestBody PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {

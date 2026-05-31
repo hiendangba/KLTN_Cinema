@@ -21,7 +21,6 @@ Lịch sử booking phải tự đủ dữ liệu để hiển thị và tìm ki
 
 ## Quy tắc đọc lịch sử
 
-- `POST /api/bookings/me/search` dùng cho khách đã đăng nhập.
 - `POST /api/bookings/cinemas/me/search` dùng cho operator/staff.
 - Tìm theo tên khách dựa trên `customerInfo.fullName`.
 - Tìm theo tên phim dựa trên `filmTitle`.

@@ -21,8 +21,6 @@ public interface BookingService {
 
     BookingResponse getBookingById(UUID id, HttpServletRequest httpRequest);
 
-    PageResponse<BookingResponse> searchMyBookings(PageRequest<BookingField> request, HttpServletRequest httpRequest);
-
     PageResponse<BookingResponse> searchMyActiveBookings(PageRequest<BookingField> request, HttpServletRequest httpRequest);
 
     BookingResponse getMyActiveBooking(UUID showtimeId, UUID cinemaId, HttpServletRequest httpRequest);

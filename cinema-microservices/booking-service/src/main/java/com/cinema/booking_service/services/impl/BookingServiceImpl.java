@@ -187,16 +187,6 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<BookingResponse> searchMyBookings(
-            PageRequest<BookingField> request,
-            HttpServletRequest httpRequest) {
-        validateCustomerRole(httpRequest);
-        UUID userId = resolveUserId(httpRequest);
-        return searchBookingsByScope(userId, null, request, buildPurchasedBookingFilters());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public PageResponse<BookingResponse> searchMyActiveBookings(
             PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
