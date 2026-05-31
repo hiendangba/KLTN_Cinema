@@ -1,6 +1,7 @@
 package com.cinema.booking_service.services.impl;
 
 import com.cinema.booking_service.dto.request.BookingRevenueField;
+import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceField;
@@ -26,7 +27,11 @@ import com.cinema.booking_service.repository.BookingRepositoryImpl;
 import com.cinema.booking_service.repository.BookingSeatItemRepository;
 import com.cinema.booking_service.repository.ProductRepository;
 import com.cinema.booking_service.services.SeatLockService;
+import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.request.SortField;
+import com.cinema.exception.BusinessException;
+import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
@@ -43,13 +48,18 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -368,6 +378,296 @@ class BookingServiceImplTest {
         assertEquals(10L, response.total().totalSeatCapacity());
         assertEquals(1, response.items().size());
         assertEquals(showtime1, response.items().get(0).showtimeId());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchMyBookings_shouldForcePurchasedFiltersAndIgnoreClientStatusFilters() {
+        UUID userId = UUID.randomUUID();
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+        when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+
+        when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), isNull(), any()))
+                .thenReturn(0L);
+        when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                eq(userId), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                .thenReturn(List.of());
+
+        PageRequest<BookingField> request = PageRequest.<BookingField>builder()
+                .page(1)
+                .size(10)
+                .filterBy(List.of(
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.BOOKING_STATUS)
+                                .operator("EQ")
+                                .value(BookingStatus.EXPIRED)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.PAYMENT_STATUS)
+                                .operator("EQ")
+                                .value(PaymentStatus.UNPAID)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.FILM_TITLE)
+                                .operator("LIKE")
+                                .value("Avatar")
+                                .build()))
+                .build();
+
+        bookingService.searchMyBookings(request, httpRequest);
+
+        ArgumentCaptor<List> countFilterCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List> searchFilterCaptor = ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
+                eq(userId),
+                isNull(),
+                isNull(),
+                countFilterCaptor.capture());
+        org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
+                eq(userId),
+                isNull(),
+                isNull(),
+                eq(1),
+                eq(10),
+                anyList(),
+                searchFilterCaptor.capture());
+
+        List<FilterField<BookingField>> countFilters = (List<FilterField<BookingField>>) countFilterCaptor.getValue();
+        List<FilterField<BookingField>> searchFilters = (List<FilterField<BookingField>>) searchFilterCaptor.getValue();
+
+        assertEquals(3, countFilters.size());
+        assertEquals(BookingField.FILM_TITLE, countFilters.get(0).getField());
+        assertEquals(BookingField.BOOKING_STATUS, countFilters.get(1).getField());
+        assertEquals(BookingStatus.CONFIRMED, countFilters.get(1).getValue());
+        assertEquals(BookingField.PAYMENT_STATUS, countFilters.get(2).getField());
+        assertEquals(PaymentStatus.PAID, countFilters.get(2).getValue());
+        assertEquals(countFilters, searchFilters);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchMyActiveBookings_shouldForceActiveFiltersAndIgnoreClientStatusFilters() {
+        UUID userId = UUID.randomUUID();
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+        when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+
+        when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), isNull(), any()))
+                .thenReturn(0L);
+        when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                eq(userId), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                .thenReturn(List.of());
+
+        LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+        PageRequest<BookingField> request = PageRequest.<BookingField>builder()
+                .page(1)
+                .size(10)
+                .filterBy(List.of(
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.BOOKING_STATUS)
+                                .operator("EQ")
+                                .value(BookingStatus.CONFIRMED)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.PAYMENT_STATUS)
+                                .operator("EQ")
+                                .value(PaymentStatus.PAID)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.FILM_TITLE)
+                                .operator("LIKE")
+                                .value("Avatar")
+                                .build()))
+                .build();
+
+        bookingService.searchMyActiveBookings(request, httpRequest);
+        LocalDateTime after = LocalDateTime.now().plusSeconds(1);
+
+        ArgumentCaptor<List> countFilterCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List> searchFilterCaptor = ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
+                eq(userId),
+                isNull(),
+                isNull(),
+                countFilterCaptor.capture());
+        org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
+                eq(userId),
+                isNull(),
+                isNull(),
+                eq(1),
+                eq(10),
+                anyList(),
+                searchFilterCaptor.capture());
+
+        List<FilterField<BookingField>> countFilters = (List<FilterField<BookingField>>) countFilterCaptor.getValue();
+        List<FilterField<BookingField>> searchFilters = (List<FilterField<BookingField>>) searchFilterCaptor.getValue();
+
+        assertEquals(4, countFilters.size());
+        assertEquals(BookingField.FILM_TITLE, countFilters.get(0).getField());
+        assertEquals(BookingField.BOOKING_STATUS, countFilters.get(1).getField());
+        assertEquals(List.of(BookingStatus.PENDING, BookingStatus.RESERVED), countFilters.get(1).getValue());
+        assertEquals(BookingField.PAYMENT_STATUS, countFilters.get(2).getField());
+        assertEquals(PaymentStatus.UNPAID, countFilters.get(2).getValue());
+        assertEquals(BookingField.RESERVED_UNTIL, countFilters.get(3).getField());
+        assertEquals("GTE", countFilters.get(3).getOperator());
+        LocalDateTime reservedUntil = (LocalDateTime) countFilters.get(3).getValue();
+        assertTrue(!reservedUntil.isBefore(before));
+        assertTrue(!reservedUntil.isAfter(after));
+        assertEquals(countFilters, searchFilters);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchPurchasedBookingsByOperatorCinema_shouldForcePurchasedFiltersAndIgnoreClientStatusFilters() {
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);
+
+        when(bookingRepositoryImpl.countWithFilter(isNull(), isNull(), isNull(), any()))
+                .thenReturn(0L);
+        when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                isNull(), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                .thenReturn(List.of());
+
+        PageRequest<BookingField> request = PageRequest.<BookingField>builder()
+                .page(1)
+                .size(10)
+                .filterBy(List.of(
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.BOOKING_STATUS)
+                                .operator("EQ")
+                                .value(BookingStatus.EXPIRED)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.PAYMENT_STATUS)
+                                .operator("EQ")
+                                .value(PaymentStatus.UNPAID)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.FILM_TITLE)
+                                .operator("LIKE")
+                                .value("Avatar")
+                                .build()))
+                .build();
+
+        bookingService.searchPurchasedBookingsByOperatorCinema(request, httpRequest);
+
+        ArgumentCaptor<List> countFilterCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List> searchFilterCaptor = ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
+                isNull(),
+                isNull(),
+                isNull(),
+                countFilterCaptor.capture());
+        org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
+                isNull(),
+                isNull(),
+                isNull(),
+                eq(1),
+                eq(10),
+                anyList(),
+                searchFilterCaptor.capture());
+
+        List<FilterField<BookingField>> countFilters = (List<FilterField<BookingField>>) countFilterCaptor.getValue();
+        List<FilterField<BookingField>> searchFilters = (List<FilterField<BookingField>>) searchFilterCaptor.getValue();
+
+        assertEquals(3, countFilters.size());
+        assertEquals(BookingField.FILM_TITLE, countFilters.get(0).getField());
+        assertEquals(BookingField.BOOKING_STATUS, countFilters.get(1).getField());
+        assertEquals(BookingStatus.CONFIRMED, countFilters.get(1).getValue());
+        assertEquals(BookingField.PAYMENT_STATUS, countFilters.get(2).getField());
+        assertEquals(PaymentStatus.PAID, countFilters.get(2).getValue());
+        assertEquals(countFilters, searchFilters);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchUnpaidBookingsByOperatorCinema_shouldForceUnpaidFiltersAndIgnoreClientStatusFilters() {
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_MANAGER);
+        UUID userId = UUID.randomUUID();
+        when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+
+        UUID cinemaId = UUID.randomUUID();
+        when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
+        when(bookingRepositoryImpl.countWithFilter(isNull(), anyCollection(), isNull(), any()))
+                .thenReturn(0L);
+        when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                isNull(), anyCollection(), isNull(), eq(1), eq(10), anyList(), any()))
+                .thenReturn(List.of());
+
+        PageRequest<BookingField> request = PageRequest.<BookingField>builder()
+                .page(1)
+                .size(10)
+                .filterBy(List.of(
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.BOOKING_STATUS)
+                                .operator("EQ")
+                                .value(BookingStatus.CONFIRMED)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.PAYMENT_STATUS)
+                                .operator("EQ")
+                                .value(PaymentStatus.PAID)
+                                .build(),
+                        FilterField.<BookingField>builder()
+                                .field(BookingField.FILM_TITLE)
+                                .operator("LIKE")
+                                .value("Avatar")
+                                .build()))
+                .build();
+
+        bookingService.searchUnpaidBookingsByOperatorCinema(request, httpRequest);
+
+        ArgumentCaptor<Collection<UUID>> cinemaIdsCaptor = ArgumentCaptor.forClass(Collection.class);
+        ArgumentCaptor<List> countFilterCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List> searchFilterCaptor = ArgumentCaptor.forClass(List.class);
+        org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
+                isNull(),
+                cinemaIdsCaptor.capture(),
+                isNull(),
+                countFilterCaptor.capture());
+        org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
+                isNull(),
+                cinemaIdsCaptor.capture(),
+                isNull(),
+                eq(1),
+                eq(10),
+                anyList(),
+                searchFilterCaptor.capture());
+
+        List<FilterField<BookingField>> countFilters = (List<FilterField<BookingField>>) countFilterCaptor.getValue();
+        List<FilterField<BookingField>> searchFilters = (List<FilterField<BookingField>>) searchFilterCaptor.getValue();
+
+        assertEquals(List.of(cinemaId), List.copyOf(cinemaIdsCaptor.getAllValues().get(0)));
+        assertEquals(3, countFilters.size());
+        assertEquals(BookingField.FILM_TITLE, countFilters.get(0).getField());
+        assertEquals(BookingField.BOOKING_STATUS, countFilters.get(1).getField());
+        assertEquals("IN", countFilters.get(1).getOperator());
+        assertEquals(List.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.EXPIRED), countFilters.get(1).getValue());
+        assertEquals(BookingField.PAYMENT_STATUS, countFilters.get(2).getField());
+        assertEquals(PaymentStatus.UNPAID, countFilters.get(2).getValue());
+        assertEquals(countFilters, searchFilters);
+    }
+
+    @Test
+    void getBookingById_shouldForbidCustomerWhenBookingIsNotPaid() {
+        UUID userId = UUID.randomUUID();
+        UUID bookingId = UUID.randomUUID();
+        Booking booking = buildBooking(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                BookingStatus.EXPIRED,
+                BigDecimal.valueOf(100000),
+                BigDecimal.ZERO);
+        booking.setId(bookingId);
+        booking.setUserId(userId);
+        booking.setPaymentStatus(PaymentStatus.UNPAID);
+
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+        when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+        when(bookingRepository.findByIdAndIsDeletedFalse(bookingId)).thenReturn(Optional.of(booking));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> bookingService.getBookingById(bookingId, httpRequest));
+
+        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
     }
 
     private Booking buildBooking(

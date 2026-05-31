@@ -192,31 +192,17 @@ public class BookingServiceImpl implements BookingService {
             HttpServletRequest httpRequest) {
         validateCustomerRole(httpRequest);
         UUID userId = resolveUserId(httpRequest);
+        return searchBookingsByScope(userId, null, request, buildPurchasedBookingFilters());
+    }
 
-        int page = request.getPageOrDefault();
-        int size = request.getSizeOrDefault();
-        String keyword = request.getNormalizedKeyword();
-
-        List<SortField<BookingField>> sortFields = request.getSortBy();
-        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        if (sortFields.stream().noneMatch(sort -> sort != null && sort.getField() == BookingField.TIME_CREATED)) {
-            sortFields.add(new SortField<>(BookingField.TIME_CREATED, "DESC"));
-        }
-
-        long totalElements = bookingRepositoryImpl.countWithFilter(userId, keyword, request.getFilterBy());
-        List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
-                userId, keyword, page, size, sortFields, request.getFilterBy());
-        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
-
-        return PageResponse.<BookingResponse>builder()
-                .data(bookings.stream().map(bookingMapper::toResponse).toList())
-                .currentPage(page)
-                .totalPages(totalPages)
-                .totalElements(totalElements)
-                .size(size)
-                .hasNext(page < totalPages)
-                .hasPrevious(page > 1)
-                .build();
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<BookingResponse> searchMyActiveBookings(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        validateCustomerRole(httpRequest);
+        UUID userId = resolveUserId(httpRequest);
+        return searchBookingsByScope(userId, null, request, buildActiveBookingFilters(LocalDateTime.now()));
     }
 
     @Override
@@ -243,37 +229,25 @@ public class BookingServiceImpl implements BookingService {
             PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
         validateOperatorRole(httpRequest);
-        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
-        UUID userId = null;
-        Set<UUID> accessibleCinemaIds = null;
-        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
-            accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest, role);
-        }
+        return searchBookingsByOperatorCinema(request, httpRequest, List.of());
+    }
 
-        int page = request.getPageOrDefault();
-        int size = request.getSizeOrDefault();
-        String keyword = request.getNormalizedKeyword();
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<BookingResponse> searchPurchasedBookingsByOperatorCinema(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        validateOperatorRole(httpRequest);
+        return searchBookingsByOperatorCinema(request, httpRequest, buildPurchasedBookingFilters());
+    }
 
-        List<SortField<BookingField>> sortFields = request.getSortBy();
-        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        if (sortFields.stream().noneMatch(sort -> sort != null && sort.getField() == BookingField.TIME_CREATED)) {
-            sortFields.add(new SortField<>(BookingField.TIME_CREATED, "DESC"));
-        }
-
-        long totalElements = bookingRepositoryImpl.countWithFilter(userId, accessibleCinemaIds, keyword, request.getFilterBy());
-        List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
-                userId, accessibleCinemaIds, keyword, page, size, sortFields, request.getFilterBy());
-        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
-
-        return PageResponse.<BookingResponse>builder()
-                .data(bookings.stream().map(bookingMapper::toResponse).toList())
-                .currentPage(page)
-                .totalPages(totalPages)
-                .totalElements(totalElements)
-                .size(size)
-                .hasNext(page < totalPages)
-                .hasPrevious(page > 1)
-                .build();
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<BookingResponse> searchUnpaidBookingsByOperatorCinema(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        validateOperatorRole(httpRequest);
+        return searchBookingsByOperatorCinema(request, httpRequest, buildUnpaidBookingFilters());
     }
 
     @Override
@@ -484,6 +458,125 @@ public class BookingServiceImpl implements BookingService {
     private Booking getActiveBookingOrThrow(UUID id) {
         return bookingRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+    }
+
+    private PageResponse<BookingResponse> searchBookingsByOperatorCinema(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest,
+            List<FilterField<BookingField>> forcedFilters) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        UUID userId = null;
+        Set<UUID> accessibleCinemaIds = null;
+        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
+            accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest, role);
+        }
+        return searchBookingsByScope(userId, accessibleCinemaIds, request, forcedFilters);
+    }
+
+    private PageResponse<BookingResponse> searchBookingsByScope(
+            UUID userId,
+            Collection<UUID> accessibleCinemaIds,
+            PageRequest<BookingField> request,
+            List<FilterField<BookingField>> forcedFilters) {
+        int page = request.getPageOrDefault();
+        int size = request.getSizeOrDefault();
+        String keyword = request.getNormalizedKeyword();
+
+        List<SortField<BookingField>> sortFields = request.getSortBy();
+        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
+        if (sortFields.stream().noneMatch(sort -> sort != null && sort.getField() == BookingField.TIME_CREATED)) {
+            sortFields.add(new SortField<>(BookingField.TIME_CREATED, "DESC"));
+        }
+
+        List<FilterField<BookingField>> filterBy = mergeForcedBookingFilters(request.getFilterBy(), forcedFilters);
+        long totalElements = bookingRepositoryImpl.countWithFilter(userId, accessibleCinemaIds, keyword, filterBy);
+        List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                userId, accessibleCinemaIds, keyword, page, size, sortFields, filterBy);
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+
+        return PageResponse.<BookingResponse>builder()
+                .data(bookings.stream().map(bookingMapper::toResponse).toList())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .build();
+    }
+
+    private List<FilterField<BookingField>> mergeForcedBookingFilters(
+            List<FilterField<BookingField>> clientFilters,
+            List<FilterField<BookingField>> forcedFilters) {
+        if (forcedFilters == null || forcedFilters.isEmpty()) {
+            return clientFilters;
+        }
+
+        List<FilterField<BookingField>> mergedFilters = new ArrayList<>();
+        if (clientFilters != null) {
+            for (FilterField<BookingField> filter : clientFilters) {
+                if (filter == null || filter.getField() == null) {
+                    continue;
+                }
+                if (filter.getField() == BookingField.BOOKING_STATUS
+                        || filter.getField() == BookingField.PAYMENT_STATUS) {
+                    continue;
+                }
+                mergedFilters.add(filter);
+            }
+        }
+        mergedFilters.addAll(forcedFilters);
+        return mergedFilters;
+    }
+
+    private List<FilterField<BookingField>> buildPurchasedBookingFilters() {
+        return List.of(
+                FilterField.<BookingField>builder()
+                        .field(BookingField.BOOKING_STATUS)
+                        .operator("EQ")
+                        .value(BookingStatus.CONFIRMED)
+                        .build(),
+                FilterField.<BookingField>builder()
+                        .field(BookingField.PAYMENT_STATUS)
+                        .operator("EQ")
+                        .value(PaymentStatus.PAID)
+                        .build());
+    }
+
+    private List<FilterField<BookingField>> buildActiveBookingFilters(LocalDateTime now) {
+        return List.of(
+                FilterField.<BookingField>builder()
+                        .field(BookingField.BOOKING_STATUS)
+                        .operator("IN")
+                        .value(List.of(BookingStatus.PENDING, BookingStatus.RESERVED))
+                        .build(),
+                FilterField.<BookingField>builder()
+                        .field(BookingField.PAYMENT_STATUS)
+                        .operator("EQ")
+                        .value(PaymentStatus.UNPAID)
+                        .build(),
+                FilterField.<BookingField>builder()
+                        .field(BookingField.RESERVED_UNTIL)
+                        .operator("GTE")
+                        .value(now)
+                        .build());
+    }
+
+    private List<FilterField<BookingField>> buildUnpaidBookingFilters() {
+        return List.of(
+                FilterField.<BookingField>builder()
+                        .field(BookingField.BOOKING_STATUS)
+                        .operator("IN")
+                        .value(List.of(
+                                BookingStatus.PENDING,
+                                BookingStatus.RESERVED,
+                                BookingStatus.EXPIRED))
+                        .build(),
+                FilterField.<BookingField>builder()
+                        .field(BookingField.PAYMENT_STATUS)
+                        .operator("EQ")
+                        .value(PaymentStatus.UNPAID)
+                        .build());
     }
 
     private void validateRevenueReportRequest(BookingRevenueReportRequest request) {
@@ -1452,6 +1545,10 @@ public class BookingServiceImpl implements BookingService {
         if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
             UUID userId = resolveUserId(httpRequest);
             if (!userId.equals(booking.getUserId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            if (booking.getBookingStatus() != BookingStatus.CONFIRMED
+                    || booking.getPaymentStatus() != PaymentStatus.PAID) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
             return;

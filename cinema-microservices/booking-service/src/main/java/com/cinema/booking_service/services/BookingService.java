@@ -23,11 +23,21 @@ public interface BookingService {
 
     PageResponse<BookingResponse> searchMyBookings(PageRequest<BookingField> request, HttpServletRequest httpRequest);
 
+    PageResponse<BookingResponse> searchMyActiveBookings(PageRequest<BookingField> request, HttpServletRequest httpRequest);
+
     BookingResponse getMyActiveBooking(UUID showtimeId, UUID cinemaId, HttpServletRequest httpRequest);
 
     CheckoutContextResponse getCheckoutContext(UUID id, HttpServletRequest httpRequest);
 
     PageResponse<BookingResponse> searchBookingsByOperatorCinema(PageRequest<BookingField> request, HttpServletRequest httpRequest);
+
+    PageResponse<BookingResponse> searchPurchasedBookingsByOperatorCinema(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest);
+
+    PageResponse<BookingResponse> searchUnpaidBookingsByOperatorCinema(
+            PageRequest<BookingField> request,
+            HttpServletRequest httpRequest);
 
     BookingRevenueReportResponse getAllCinemaRevenueReport(BookingRevenueReportRequest request);
 

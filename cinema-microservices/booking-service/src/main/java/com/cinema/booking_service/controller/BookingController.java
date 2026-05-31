@@ -64,6 +64,14 @@ public class BookingController extends BaseController {
         return ok(response);
     }
 
+    @PostMapping("/me/active/search")
+    public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchMyActiveBookings(
+            @Valid @RequestBody PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        PageResponse<BookingResponse> response = bookingService.searchMyActiveBookings(request, httpRequest);
+        return ok(response);
+    }
+
     @GetMapping("/me/active")
     public ResponseEntity<APIResponse<BookingResponse>> getMyActiveBooking(
             @RequestParam(required = false) UUID showtimeId,
@@ -78,6 +86,24 @@ public class BookingController extends BaseController {
             @Valid @RequestBody PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
         PageResponse<BookingResponse> response = bookingService.searchBookingsByOperatorCinema(request, httpRequest);
+        return ok(response);
+    }
+
+    @PostMapping("/cinemas/me/purchased")
+    public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchPurchasedBookingsByOperatorCinema(
+            @Valid @RequestBody PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        PageResponse<BookingResponse> response =
+                bookingService.searchPurchasedBookingsByOperatorCinema(request, httpRequest);
+        return ok(response);
+    }
+
+    @PostMapping("/cinemas/me/unpaid")
+    public ResponseEntity<APIResponse<PageResponse<BookingResponse>>> searchUnpaidBookingsByOperatorCinema(
+            @Valid @RequestBody PageRequest<BookingField> request,
+            HttpServletRequest httpRequest) {
+        PageResponse<BookingResponse> response =
+                bookingService.searchUnpaidBookingsByOperatorCinema(request, httpRequest);
         return ok(response);
     }
 
