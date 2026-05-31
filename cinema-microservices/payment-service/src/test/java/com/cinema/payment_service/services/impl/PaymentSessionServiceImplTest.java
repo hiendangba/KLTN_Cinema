@@ -4,6 +4,7 @@ import com.cinema.payment_service.config.MomoGatewayProperties;
 import com.cinema.payment_service.dto.request.CinemaRevenueField;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
@@ -13,6 +14,7 @@ import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
+import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
@@ -27,6 +29,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -38,6 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -347,6 +351,127 @@ class PaymentSessionServiceImplTest {
         assertEquals(BigDecimal.ZERO.setScale(0), response.total().promotionDiscountAmount());
         assertEquals("", response.total().promotionCode());
         assertEquals("", response.total().promotionName());
+    }
+
+    @Test
+    void handleMomoReturn_shouldMarkPaidAndConfirmBooking() {
+        String orderId = "PAY-" + UUID.randomUUID();
+        PaymentTransaction transaction = buildPendingTransaction(orderId, BigDecimal.valueOf(200000));
+        MomoIpnRequest request = buildSignedMomoRequest(orderId, 200000L, 0, "Successful.", 123456789L);
+
+        when(momoGatewayProperties.getAccessKey()).thenReturn("access-key");
+        when(momoGatewayProperties.getSecretKey()).thenReturn("secret-key");
+        when(paymentTransactionRepository.findByOrderInvoiceNumber(orderId)).thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentSessionService.WebhookProcessingResult result = paymentSessionService.handleMomoReturn(request);
+
+        assertEquals(org.springframework.http.HttpStatus.NO_CONTENT, result.status());
+        assertEquals(PaymentTransactionStatus.PAID, transaction.getStatus());
+        assertEquals("123456789", transaction.getProviderRef());
+        verify(bookingGrpcClient, times(1)).confirmBookingPayment(
+                transaction.getBookingId(),
+                transaction.getAmount(),
+                transaction.getPaymentMethod(),
+                transaction.getProviderRef(),
+                transaction.getOrderInvoiceNumber());
+    }
+
+    @Test
+    void handleMomoReturn_shouldIgnoreDuplicateEvent() {
+        String orderId = "PAY-" + UUID.randomUUID();
+        PaymentTransaction transaction = buildPendingTransaction(orderId, BigDecimal.valueOf(150000));
+        MomoIpnRequest request = buildSignedMomoRequest(orderId, 150000L, 0, "Successful.", 333444555L);
+
+        when(momoGatewayProperties.getAccessKey()).thenReturn("access-key");
+        when(momoGatewayProperties.getSecretKey()).thenReturn("secret-key");
+        when(paymentTransactionRepository.findByOrderInvoiceNumber(orderId)).thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentSessionService.WebhookProcessingResult first = paymentSessionService.handleMomoReturn(request);
+        PaymentSessionService.WebhookProcessingResult second = paymentSessionService.handleMomoReturn(request);
+
+        assertEquals(org.springframework.http.HttpStatus.NO_CONTENT, first.status());
+        assertEquals(org.springframework.http.HttpStatus.NO_CONTENT, second.status());
+        verify(bookingGrpcClient, times(1)).confirmBookingPayment(
+                transaction.getBookingId(),
+                transaction.getAmount(),
+                transaction.getPaymentMethod(),
+                transaction.getProviderRef(),
+                transaction.getOrderInvoiceNumber());
+    }
+
+    private PaymentTransaction buildPendingTransaction(String orderId, BigDecimal amount) {
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.setId(UUID.randomUUID());
+        transaction.setBookingId(UUID.randomUUID());
+        transaction.setShowtimeId(UUID.randomUUID());
+        transaction.setCinemaId(UUID.randomUUID());
+        transaction.setFilmId(UUID.randomUUID());
+        transaction.setUserId(UUID.randomUUID());
+        transaction.setAmount(amount.setScale(0));
+        transaction.setCurrency("VND");
+        transaction.setPaymentMethod("MOMO_QR");
+        transaction.setOrderInvoiceNumber(orderId);
+        transaction.setStatus(PaymentTransactionStatus.PENDING);
+        transaction.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        return transaction;
+    }
+
+    private MomoIpnRequest buildSignedMomoRequest(String orderId, Long amount, Integer resultCode, String message, Long transId) {
+        String requestId = orderId;
+        String orderInfo = "CinemaStar booking test";
+        String orderType = "momo_wallet";
+        String partnerCode = "MOMO";
+        String payType = "qr";
+        String extraData = "";
+        long responseTime = System.currentTimeMillis();
+        String signatureBase = String.join("&",
+                "accessKey=access-key",
+                "amount=" + amount,
+                "extraData=" + extraData,
+                "message=" + message,
+                "orderId=" + orderId,
+                "orderInfo=" + orderInfo,
+                "orderType=" + orderType,
+                "partnerCode=" + partnerCode,
+                "payType=" + payType,
+                "requestId=" + requestId,
+                "responseTime=" + responseTime,
+                "resultCode=" + resultCode,
+                "transId=" + transId);
+        String signature = hmacSha256Hex(signatureBase, "secret-key");
+        return new MomoIpnRequest(
+                partnerCode,
+                orderId,
+                requestId,
+                amount,
+                orderInfo,
+                orderType,
+                transId,
+                resultCode,
+                message,
+                payType,
+                responseTime,
+                extraData,
+                signature);
+    }
+
+    private String hmacSha256Hex(String value, String secretKey) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(secretKey.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] digest = mac.doFinal(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (Exception ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     private PaymentTransaction buildTransaction(

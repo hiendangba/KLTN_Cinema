@@ -40,6 +40,8 @@ public interface PaymentSessionService {
 
     PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId);
 
+    WebhookProcessingResult handleMomoReturn(MomoIpnRequest request);
+
     WebhookProcessingResult handleMomoWebhook(MomoIpnRequest request);
 
     void expireDueSessions();

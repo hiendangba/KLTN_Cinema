@@ -25,18 +25,26 @@ public class PaymentPublicController {
 
   @GetMapping(value = "/payment/result", produces = MediaType.TEXT_HTML_VALUE)
   public ResponseEntity<String> paymentResult(@RequestParam Map<String, String> queryParams) {
-    String orderId = queryParams.getOrDefault("orderId", "");
-    String requestId = queryParams.getOrDefault("requestId", "");
+    MomoIpnRequest callback = MomoIpnRequest.fromQueryParams(queryParams);
+    try {
+      paymentSessionService.handleMomoReturn(callback);
+    } catch (Exception ex) {
+      log.error(
+          "MOMO_RETURN_PROCESSING_FAILED orderId={} requestId={} error={}",
+          callback.orderId() == null ? "" : callback.orderId(),
+          callback.requestId() == null ? "" : callback.requestId(),
+          ex.getMessage());
+    }
+
     String resultCode = queryParams.getOrDefault("resultCode", "");
     String transId = queryParams.getOrDefault("transId", "");
 
     log.info(
         "MOMO_RETURN_RECEIVED orderId={} requestId={} resultCode={} transId={}",
-        orderId,
-        requestId,
+        callback.orderId() == null ? "" : callback.orderId(),
+        callback.requestId() == null ? "" : callback.requestId(),
         resultCode,
         transId);
-
     boolean success = "0".equals(resultCode) || "9000".equals(resultCode);
     String message = success ? "Payment completed." : "Payment not completed.";
     String html = """
