@@ -308,7 +308,7 @@ services:
       - postgres
       - redis
       - booking-service
-    mem_limit: 208m
+    mem_limit: 300m
 
   cinema-service:
     image: ${IMAGE_REPO}/cinema-service:${IMAGE_TAG:-dev}
@@ -339,7 +339,7 @@ services:
       - "8096"
     depends_on:
       - postgres
-    mem_limit: 224m
+    mem_limit: 352m
 
   email-service:
     image: ${IMAGE_REPO}/email-service:${IMAGE_TAG:-dev}
@@ -364,7 +364,7 @@ services:
       - postgres
       - redis
       - rabbitmq
-    mem_limit: 192m
+    mem_limit: 160m
 
   postgres:
     image: postgres:16
@@ -378,7 +378,7 @@ services:
       - ./postgres-init:/docker-entrypoint-initdb.d
     ports:
       - "5433:5432"
-    mem_limit: 240m
+    mem_limit: 300m
 
   redis:
     image: redis:7
@@ -422,7 +422,7 @@ services:
       RABBITMQ_DEFAULT_PASS: admin
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
-    mem_limit: 192m
+    mem_limit: 100m
 
   envoy:
     image: envoyproxy/envoy:v1.31.2
@@ -435,7 +435,7 @@ services:
       - ./envoy/envoy.prod.yaml:/etc/envoy/envoy.yaml:ro
       - ./envoy/certs:/etc/envoy/certs:ro
     command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
-    mem_limit: 50m
+    mem_limit: 70m
 
 volumes:
   pgdata:
