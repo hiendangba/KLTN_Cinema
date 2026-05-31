@@ -75,11 +75,6 @@
                             cluster: identity-service
                             timeout: 15s
                         - match:
-
-                          route:
-                            cluster: identity-service
-                            timeout: 15s
-                        - match:
                             prefix: /api/auth
                           route:
                             cluster: identity-service
