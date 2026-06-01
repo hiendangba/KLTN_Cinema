@@ -34,5 +34,6 @@ public interface BookingMapper {
     @Mapping(target = "productItems", ignore = true)
     Booking toEntity(CreateBookingRequest request);
 
+    @Mapping(target = "cinemaName", ignore = true)
     BookingResponse toResponse(Booking booking);
 }

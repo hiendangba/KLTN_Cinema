@@ -4,7 +4,6 @@ import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceReportRequest;
-import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.BookingResponse;
 import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
 import com.cinema.booking_service.dto.response.CheckoutContextResponse;
@@ -23,7 +22,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -147,15 +145,6 @@ public class BookingController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         CheckoutContextResponse response = bookingService.getCheckoutContext(id, httpRequest);
-        return ok(response);
-    }
-
-    @PatchMapping("/{id}/status")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> updateBookingStatus(
-            @PathVariable UUID id,
-            @Valid @RequestBody UpdateBookingStatusRequest request,
-            HttpServletRequest httpRequest) {
-        ActionMessageResponse response = bookingService.updateBookingStatus(id, request, httpRequest);
         return ok(response);
     }
 

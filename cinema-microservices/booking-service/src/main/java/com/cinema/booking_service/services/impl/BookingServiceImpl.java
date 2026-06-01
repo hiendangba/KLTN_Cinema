@@ -6,7 +6,6 @@ import com.cinema.booking_service.dto.request.BookingRevenueField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceField;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceReportRequest;
-import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.BookingResponse;
 import com.cinema.booking_service.dto.response.BookingRevenueItemResponse;
 import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
@@ -170,7 +169,7 @@ public class BookingServiceImpl implements BookingService {
 
         try {
             Booking saved = bookingRepository.save(booking);
-            return bookingMapper.toResponse(saved);
+            return toBookingResponse(saved);
         } catch (RuntimeException ex) {
             seatLockService.releaseSeats(request.getShowtimeId(), normalizedSeatCodes);
             throw ex;
@@ -182,7 +181,7 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponse getBookingById(UUID id, HttpServletRequest httpRequest) {
         Booking booking = getActiveBookingOrThrow(id);
         authorizeBookingRead(booking, httpRequest);
-        return bookingMapper.toResponse(booking);
+        return toBookingResponse(booking);
     }
 
     @Override
@@ -353,7 +352,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public CheckoutContextResponse getCheckoutContext(UUID id, HttpServletRequest httpRequest) {
         Booking booking = getActiveBookingOrThrow(id);
-        authorizeBookingRead(booking, httpRequest);
+        authorizeBookingCheckoutRead(booking, httpRequest);
 
         LocalDateTime now = LocalDateTime.now();
         long secondsToExpire = booking.getReservedUntil() == null
@@ -374,43 +373,10 @@ public class BookingServiceImpl implements BookingService {
         boolean paymentSessionAllowsPay = paymentSession == null || isPayableSessionStatus(paymentSession.getStatus());
 
         return CheckoutContextResponse.builder()
-                .booking(bookingMapper.toResponse(booking))
+                .booking(toBookingResponse(booking))
                 .paymentSession(paymentSession)
                 .secondsToExpire(secondsToExpire)
                 .canPay(activeStatus && notExpired && unpaid && paymentSessionAllowsPay)
-                .build();
-    }
-
-    @Override
-    @Transactional
-    public ActionMessageResponse updateBookingStatus(UUID id, UpdateBookingStatusRequest request, HttpServletRequest httpRequest) {
-        validateOperatorRole(httpRequest);
-
-        Booking booking = getActiveBookingOrThrow(id);
-        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
-        if (!HeaderNames.ROLE_ADMIN.equals(role)) {
-            Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest, role);
-            if (!accessibleCinemaIds.contains(booking.getCinemaId())) {
-                throw new BusinessException(ErrorCode.FORBIDDEN);
-            }
-        }
-
-        if (request.getBookingStatus() == BookingStatus.EXPIRED) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
-
-        booking.setBookingStatus(request.getBookingStatus());
-        if (request.getPaymentStatus() != null) {
-            booking.setPaymentStatus(request.getPaymentStatus());
-        }
-        bookingRepository.save(booking);
-
-        if (isTerminalStatus(booking.getBookingStatus())) {
-            seatLockService.releaseSeats(booking.getShowtimeId(), extractSeatCodes(booking.getSeatItems()));
-        }
-
-        return ActionMessageResponse.builder()
-                .message("Booking status updated successfully")
                 .build();
     }
 
@@ -474,10 +440,11 @@ public class BookingServiceImpl implements BookingService {
         long totalElements = bookingRepositoryImpl.countWithFilter(userId, accessibleCinemaIds, keyword, filterBy);
         List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
                 userId, accessibleCinemaIds, keyword, page, size, sortFields, filterBy);
+        Map<UUID, String> cinemaNameCache = new LinkedHashMap<>();
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
 
         return PageResponse.<BookingResponse>builder()
-                .data(bookings.stream().map(bookingMapper::toResponse).toList())
+                .data(bookings.stream().map(booking -> toBookingResponse(booking, cinemaNameCache)).toList())
                 .currentPage(page)
                 .totalPages(totalPages)
                 .totalElements(totalElements)
@@ -485,6 +452,37 @@ public class BookingServiceImpl implements BookingService {
                 .hasNext(page < totalPages)
                 .hasPrevious(page > 1)
                 .build();
+    }
+
+    private BookingResponse toBookingResponse(Booking booking) {
+        return toBookingResponse(booking, new LinkedHashMap<>());
+    }
+
+    private BookingResponse toBookingResponse(Booking booking, Map<UUID, String> cinemaNameCache) {
+        BookingResponse response = bookingMapper.toResponse(booking);
+        if (response == null) {
+            return null;
+        }
+        response.setCinemaName(resolveCinemaName(booking == null ? null : booking.getCinemaId(), cinemaNameCache));
+        return response;
+    }
+
+    private String resolveCinemaName(UUID cinemaId, Map<UUID, String> cinemaNameCache) {
+        if (cinemaId == null) {
+            return null;
+        }
+        Map<UUID, String> cache = cinemaNameCache == null ? new LinkedHashMap<>() : cinemaNameCache;
+        if (cache.containsKey(cinemaId)) {
+            return cache.get(cinemaId);
+        }
+        try {
+            String cinemaName = cinemaGrpcClient.getCinemaById(cinemaId).name();
+            cache.put(cinemaId, cinemaName);
+            return cinemaName;
+        } catch (BusinessException ex) {
+            cache.put(cinemaId, null);
+            return null;
+        }
     }
 
     private List<FilterField<BookingField>> mergeForcedBookingFilters(
@@ -1545,6 +1543,27 @@ public class BookingServiceImpl implements BookingService {
         }
 
         throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private void authorizeBookingCheckoutRead(Booking booking, HttpServletRequest httpRequest) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (!HeaderNames.ROLE_CUSTOMER.equals(role)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        UUID userId = resolveUserId(httpRequest);
+        if (!userId.equals(booking.getUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        boolean activeStatus = booking.getBookingStatus() == BookingStatus.PENDING
+                || booking.getBookingStatus() == BookingStatus.RESERVED;
+        boolean notExpired = booking.getReservedUntil() != null && booking.getReservedUntil().isAfter(LocalDateTime.now());
+        boolean unpaid = booking.getPaymentStatus() != PaymentStatus.PAID;
+
+        if (!activeStatus || !notExpired || !unpaid) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
     }
 
     private List<BookingSeatItem> buildSeatItems(

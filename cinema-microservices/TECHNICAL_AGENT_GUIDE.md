@@ -439,7 +439,9 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `POST` | `/api/payments/sessions` | ✅ Authenticated | Tạo phiên thanh toán cho booking hiện tại (có ownership check theo `X-User-ID`). |
 | `GET` | `/api/payments/sessions/{bookingId}` | ✅ Authenticated | Lấy phiên thanh toán mới nhất theo booking (scope theo user). |
 | `POST` | `/api/payments/sessions/{bookingId}/refund` | ✅ Authenticated | Tạo yêu cầu hoàn tiền nội bộ (trạng thái `REFUND_PENDING`). |
-| `GET` | `/api/payments/reconciliation` | ✅ Authenticated | Tổng hợp đối soát theo khoảng thời gian (`from`, `to`). |
+| `GET` | `/api/payments/reconciliation` | ✅ ADMIN | Tổng hợp đối soát theo khoảng thời gian (`from`, `to`). |
+| `POST` | `/api/payments/reconciliation/search` | ✅ ADMIN | Tra cứu đối soát có phân trang/lọc theo `PageRequest<PaymentSessionField>`. |
+| `POST` | `/api/payments/reconciliation/export` | ✅ ADMIN | Xuất Excel đối soát theo cùng bộ lọc với search. |
 | `POST` | `/api/payments/revenues/cinemas/search` | ✅ ADMIN/MGMT | Báo cáo doanh thu payment theo rạp, cho phép lọc `cinemaIds`, `filmIds`. |
 | `POST` | `/api/payments/revenues/cinemas/export` | ✅ ADMIN/MGMT | Xuất Excel báo cáo doanh thu payment theo rạp, hỗ trợ `selectedIds` theo `cinemaId`. |
 | `POST` | `/api/payments/promotions/preview` | ✅ Authenticated | Ước tính giảm giá từ promo code trước checkout. |
@@ -836,13 +838,13 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - Bổ sung API booking:
     - `POST /api/bookings`
     - `GET /api/bookings/{id}`
+    - `GET /api/bookings/{id}/checkout-context`
     - `POST /api/bookings/me/active/search`
     - `POST /api/bookings/me/history/search`
     - `POST /api/bookings/cinemas/me/search`
     - `POST /api/bookings/revenues/cinemas/search`
     - `POST /api/bookings/revenues/cinemas/me/search`
     - `POST /api/bookings/revenues/cinemas/export`
-    - `PATCH /api/bookings/{id}/status`
     - `POST /api/bookings/{id}/cancel`
   - Booking snapshot:
     - Lưu snapshot ngay lúc tạo booking để history/search tự đủ dữ liệu:

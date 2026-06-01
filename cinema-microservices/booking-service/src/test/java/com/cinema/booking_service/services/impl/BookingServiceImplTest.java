@@ -670,6 +670,69 @@ class BookingServiceImplTest {
         assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
     }
 
+    @Test
+    void getCheckoutContext_shouldAllowCustomerOwnerWhenBookingIsActiveAndUnpaid() {
+        UUID userId = UUID.randomUUID();
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        Booking booking = buildBooking(
+                cinemaId,
+                UUID.randomUUID(),
+                BookingStatus.RESERVED,
+                BigDecimal.valueOf(100000),
+                BigDecimal.ZERO);
+        booking.setId(bookingId);
+        booking.setUserId(userId);
+        booking.setReservedUntil(LocalDateTime.now().plusMinutes(10));
+        booking.setBookingStatus(BookingStatus.RESERVED);
+        booking.setPaymentStatus(PaymentStatus.UNPAID);
+
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+        when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+        when(bookingRepository.findByIdAndIsDeletedFalse(bookingId)).thenReturn(Optional.of(booking));
+        when(paymentServiceClient.getSessionByBookingId(eq(bookingId), eq(userId))).thenReturn(null);
+        when(bookingMapper.toResponse(booking)).thenReturn(BookingResponse.builder()
+                .id(bookingId)
+                .cinemaId(cinemaId)
+                .bookingStatus(BookingStatus.RESERVED)
+                .paymentStatus(PaymentStatus.UNPAID)
+                .build());
+        when(cinemaGrpcClient.getCinemaById(cinemaId)).thenReturn(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema Star"));
+
+        var response = bookingService.getCheckoutContext(bookingId, httpRequest);
+
+        assertNotNull(response);
+        assertEquals("Cinema Star", response.getBooking().getCinemaName());
+        assertTrue(response.isCanPay());
+    }
+
+    @Test
+    void getCheckoutContext_shouldForbidCustomerWhoDoesNotOwnBooking() {
+        UUID ownerId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        Booking booking = buildBooking(
+                cinemaId,
+                UUID.randomUUID(),
+                BookingStatus.RESERVED,
+                BigDecimal.valueOf(100000),
+                BigDecimal.ZERO);
+        booking.setId(bookingId);
+        booking.setUserId(ownerId);
+        booking.setReservedUntil(LocalDateTime.now().plusMinutes(10));
+        booking.setPaymentStatus(PaymentStatus.UNPAID);
+
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+        when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(otherUserId.toString());
+        when(bookingRepository.findByIdAndIsDeletedFalse(bookingId)).thenReturn(Optional.of(booking));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> bookingService.getCheckoutContext(bookingId, httpRequest));
+
+        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
+    }
+
     private Booking buildBooking(
             UUID cinemaId,
             UUID filmId,

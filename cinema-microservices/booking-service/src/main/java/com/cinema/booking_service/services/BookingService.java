@@ -4,7 +4,6 @@ import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceReportRequest;
-import com.cinema.booking_service.dto.request.UpdateBookingStatusRequest;
 import com.cinema.booking_service.dto.response.CheckoutContextResponse;
 import com.cinema.booking_service.dto.response.BookingResponse;
 import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
@@ -48,8 +47,6 @@ public interface BookingService {
     ShowtimePerformanceReportResponse getMyShowtimePerformanceReport(
             ShowtimePerformanceReportRequest request,
             HttpServletRequest httpRequest);
-
-    ActionMessageResponse updateBookingStatus(UUID id, UpdateBookingStatusRequest request, HttpServletRequest httpRequest);
 
     ActionMessageResponse cancelBooking(UUID id, HttpServletRequest httpRequest);
 }

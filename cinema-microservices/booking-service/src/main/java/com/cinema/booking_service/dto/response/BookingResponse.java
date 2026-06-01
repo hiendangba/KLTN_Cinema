@@ -4,6 +4,7 @@ import com.cinema.booking_service.enums.BookingStatus;
 import com.cinema.booking_service.enums.PaymentStatus;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -16,8 +17,8 @@ public class BookingResponse {
     private UUID id;
     private UUID showtimeId;
     private UUID cinemaId;
-    // private String cinemaName;
-
+    @Setter
+    private String cinemaName;
     private String filmTitle;
     private LocalDateTime showtimeStartDateTime;
     private LocalDateTime showtimeEndDateTime;

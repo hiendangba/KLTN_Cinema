@@ -7,6 +7,8 @@ import com.cinema.grpc.cinema.CinemaInternalServiceGrpc;
 import com.cinema.grpc.cinema.CinemaPayload;
 import com.cinema.grpc.cinema.GetAllActiveCinemasReply;
 import com.cinema.grpc.cinema.GetAllActiveCinemasRequest;
+import com.cinema.grpc.cinema.GetCinemaByIdReply;
+import com.cinema.grpc.cinema.GetCinemaByIdRequest;
 import com.cinema.grpc.cinema.GetCinemaByUserIdReply;
 import com.cinema.grpc.cinema.GetCinemaByUserIdRequest;
 import com.cinema.grpc.cinema.GetCinemasByUserIdReply;
@@ -64,6 +66,27 @@ public class CinemaGrpcClient {
             return reply.getCinemasList().stream()
                     .map(this::toSummary)
                     .toList();
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+    }
+
+    public CinemaSummary getCinemaById(UUID cinemaId) {
+        try {
+            GetCinemaByIdReply reply = cinemaBlockingStub.getCinemaById(
+                    GetCinemaByIdRequest.newBuilder()
+                            .setCinemaId(cinemaId.toString())
+                            .build());
+
+            if (!reply.getSuccess()) {
+                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.CINEMA_SERVICE_ERROR));
+            }
+
+            if (reply.getCinema() == null || reply.getCinema().getId().isBlank()) {
+                throw new BusinessException(ErrorCode.CINEMA_NOT_FOUND);
+            }
+
+            return toSummary(reply.getCinema());
         } catch (StatusRuntimeException ex) {
             throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
         }

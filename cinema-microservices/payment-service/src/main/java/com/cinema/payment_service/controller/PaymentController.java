@@ -3,10 +3,12 @@ package com.cinema.payment_service.controller;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
+import com.cinema.payment_service.dto.request.PaymentReconciliationReportRequest;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
+import com.cinema.payment_service.dto.response.PaymentReconciliationItemResponse;
 import com.cinema.payment_service.dto.response.PaymentReconciliationResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
@@ -87,9 +89,28 @@ public class PaymentController extends BaseController {
 
     @GetMapping("/reconciliation")
     public ResponseEntity<APIResponse<PaymentReconciliationResponse>> getReconciliation(
+            HttpServletRequest servletRequest,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
-        return ok(paymentSessionService.getReconciliation(from, to));
+        RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_ADMIN);
+        return ok(paymentSessionService.getReconciliation(from, to, servletRequest));
+    }
+
+    @PostMapping("/reconciliation/search")
+    public ResponseEntity<APIResponse<PageResponse<PaymentReconciliationItemResponse>>> searchReconciliation(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody PaymentReconciliationReportRequest request) {
+        RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_ADMIN);
+        return ok(paymentSessionService.searchReconciliation(request, servletRequest));
+    }
+
+    @PostMapping("/reconciliation/export")
+    public ResponseEntity<byte[]> exportReconciliation(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody PaymentReconciliationReportRequest request) {
+        RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_ADMIN);
+        byte[] file = paymentSessionService.exportReconciliation(request, servletRequest);
+        return ExcelExportUtils.buildDownloadResponse(file, "payment_reconciliation.xlsx");
     }
 
     @PostMapping("/revenues/cinemas/search")

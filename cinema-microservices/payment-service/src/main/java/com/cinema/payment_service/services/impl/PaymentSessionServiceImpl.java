@@ -6,6 +6,7 @@ import com.cinema.payment_service.config.MomoGatewayProperties;
 import com.cinema.payment_service.dto.request.CinemaRevenueField;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.request.PaymentReconciliationReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
@@ -13,6 +14,7 @@ import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueItemResponse;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.payment_service.dto.response.CinemaRevenueSummaryResponse;
+import com.cinema.payment_service.dto.response.PaymentReconciliationItemResponse;
 import com.cinema.payment_service.dto.response.PaymentReconciliationResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
@@ -277,10 +279,11 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     @Override
     @Transactional(readOnly = true)
-    public PaymentReconciliationResponse getReconciliation(LocalDateTime from, LocalDateTime to) {
+    public PaymentReconciliationResponse getReconciliation(LocalDateTime from, LocalDateTime to, HttpServletRequest httpRequest) {
         if (from == null || to == null || to.isBefore(from)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN);
 
         List<PaymentTransaction> transactions = paymentTransactionRepository.findAllByTimeCreatedBetween(from, to);
         long pendingCount = 0;
@@ -326,6 +329,131 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .refundedAmount(refundedAmount)
                 .netAmount(paidAmount.subtract(refundedAmount))
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<PaymentReconciliationItemResponse> searchReconciliation(
+            PaymentReconciliationReportRequest request,
+            HttpServletRequest httpRequest) {
+        validateReconciliationReportRequest(request);
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN);
+
+        DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
+        PageRequest<PaymentSessionField> pageRequest = request.getPageRequest();
+        int page = pageRequest.getPageOrDefault();
+        int size = pageRequest.getSizeOrDefault();
+        String keyword = pageRequest.getNormalizedKeyword();
+        List<SortField<PaymentSessionField>> sortFields = normalizeSortFields(pageRequest.getSortBy());
+
+        long totalElements = paymentTransactionRepositoryImpl.countForReconciliationWithFilter(
+                keyword,
+                from,
+                to,
+                pageRequest.getFilterBy());
+        List<PaymentTransaction> transactions = paymentTransactionRepositoryImpl.searchForReconciliationWithPageAndSortAndFilter(
+                keyword,
+                from,
+                to,
+                page,
+                size,
+                sortFields,
+                pageRequest.getFilterBy());
+
+        Map<UUID, String> cinemaNames = resolveCinemaNames(transactions);
+        List<PaymentReconciliationItemResponse> items = transactions.stream()
+                .map(transaction -> toReconciliationItem(transaction, cinemaNames.get(transaction.getCinemaId())))
+                .toList();
+
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+        return PageResponse.<PaymentReconciliationItemResponse>builder()
+                .data(items)
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportReconciliation(PaymentReconciliationReportRequest request, HttpServletRequest httpRequest) {
+        validateReconciliationReportRequest(request);
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN);
+
+        DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
+        PageRequest<PaymentSessionField> pageRequest = request.getPageRequest();
+        List<SortField<PaymentSessionField>> sortFields = normalizeSortFields(pageRequest.getSortBy());
+
+        List<PaymentTransaction> transactions = paymentTransactionRepositoryImpl.findAllForReconciliationExport(
+                pageRequest.getNormalizedKeyword(),
+                from,
+                to,
+                sortFields,
+                pageRequest.getFilterBy());
+        Map<UUID, String> cinemaNames = resolveCinemaNames(transactions);
+        List<PaymentReconciliationItemResponse> items = transactions.stream()
+                .map(transaction -> toReconciliationItem(transaction, cinemaNames.get(transaction.getCinemaId())))
+                .toList();
+
+        return ExcelExportUtils.exportSingleSheet(
+                "Payment Reconciliation",
+                List.of(
+                        "Transaction ID",
+                        "Booking ID",
+                        "Cinema ID",
+                        "Cinema Name",
+                        "Showtime ID",
+                        "User ID",
+                        "Order Invoice Number",
+                        "Provider Ref",
+                        "Status",
+                        "Amount",
+                        "Ticket Subtotal",
+                        "Product Subtotal",
+                        "Refund Amount",
+                        "Payment Method",
+                        "Expires At",
+                        "Paid At",
+                        "Expired At",
+                        "Refunded At",
+                        "Created At",
+                        "Failure Reason",
+                        "Promotion Code",
+                        "Promotion Name",
+                        "Promotion Discount Amount"),
+                items.stream()
+                        .map(item -> Arrays.asList(
+                                item.id(),
+                                item.bookingId(),
+                                item.cinemaId(),
+                                item.cinemaName(),
+                                item.showtimeId(),
+                                item.userId(),
+                                item.orderInvoiceNumber(),
+                                item.providerRef(),
+                                item.status(),
+                                item.amount(),
+                                item.ticketSubtotalSnapshot(),
+                                item.productSubtotalSnapshot(),
+                                item.refundAmount(),
+                                item.paymentMethod(),
+                                item.expiresAt(),
+                                item.paidAt(),
+                                item.expiredAt(),
+                                item.refundedAt(),
+                                item.timeCreated(),
+                                item.failureReason(),
+                                item.promotionCode(),
+                                item.promotionName(),
+                                item.promotionDiscountAmount()))
+                        .toList());
     }
 
     @Override
@@ -916,6 +1044,91 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return null;
         }
         return value.trim();
+    }
+
+    private void validateReconciliationReportRequest(PaymentReconciliationReportRequest request) {
+        if (request == null || request.getPageRequest() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+    }
+
+    private List<SortField<PaymentSessionField>> normalizeSortFields(List<SortField<PaymentSessionField>> sortFields) {
+        List<SortField<PaymentSessionField>> normalized = sortFields == null
+                ? new ArrayList<>()
+                : new ArrayList<>(sortFields);
+        if (normalized.stream().noneMatch(sort -> sort != null && sort.getField() == PaymentSessionField.TIME_CREATED)) {
+            normalized.add(new SortField<>(PaymentSessionField.TIME_CREATED, "DESC"));
+        }
+        return normalized;
+    }
+
+    private Map<UUID, String> resolveCinemaNames(Collection<PaymentTransaction> transactions) {
+        if (transactions == null || transactions.isEmpty()) {
+            return Map.of();
+        }
+
+        List<UUID> cinemaIds = transactions.stream()
+                .filter(transaction -> transaction != null && transaction.getCinemaId() != null)
+                .map(PaymentTransaction::getCinemaId)
+                .distinct()
+                .toList();
+        if (cinemaIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, String> cinemaNames = new LinkedHashMap<>();
+        for (CinemaGrpcClient.CinemaSummary cinema : cinemaGrpcClient.getAllActiveCinemas()) {
+            if (cinema != null && cinema.id() != null) {
+                cinemaNames.put(cinema.id(), normalizeStringValue(cinema.name()));
+            }
+        }
+
+        for (UUID cinemaId : cinemaIds) {
+            if (cinemaNames.containsKey(cinemaId)) {
+                continue;
+            }
+            try {
+                CinemaGrpcClient.CinemaSummary cinema = cinemaGrpcClient.getCinemaById(cinemaId);
+                cinemaNames.put(cinemaId, cinema == null ? "" : normalizeStringValue(cinema.name()));
+            } catch (BusinessException ignored) {
+                cinemaNames.put(cinemaId, "");
+            }
+        }
+
+        return cinemaNames;
+    }
+
+    private PaymentReconciliationItemResponse toReconciliationItem(
+            PaymentTransaction transaction,
+            String cinemaName) {
+        if (transaction == null) {
+            return null;
+        }
+        return PaymentReconciliationItemResponse.builder()
+                .id(transaction.getId())
+                .bookingId(transaction.getBookingId())
+                .cinemaId(transaction.getCinemaId())
+                .cinemaName(normalizeStringValue(cinemaName))
+                .showtimeId(transaction.getShowtimeId())
+                .userId(transaction.getUserId())
+                .orderInvoiceNumber(transaction.getOrderInvoiceNumber())
+                .providerRef(transaction.getProviderRef())
+                .status(transaction.getStatus())
+                .amount(normalizeAmount(transaction.getAmount()))
+                .ticketSubtotalSnapshot(normalizeAmount(transaction.getTicketSubtotalSnapshot()))
+                .productSubtotalSnapshot(normalizeAmount(transaction.getProductSubtotalSnapshot()))
+                .refundAmount(normalizeAmount(transaction.getRefundAmount()))
+                .paymentMethod(transaction.getPaymentMethod())
+                .expiresAt(transaction.getExpiresAt())
+                .paidAt(transaction.getPaidAt())
+                .expiredAt(transaction.getExpiredAt())
+                .refundedAt(transaction.getRefundedAt())
+                .timeCreated(transaction.getTimeCreated())
+                .failureReason(normalizeStringValue(transaction.getFailureReason()))
+                .promotionCode(normalizeStringValue(transaction.getPromotionCode()))
+                .promotionName(normalizeStringValue(transaction.getPromotionName()))
+                .promotionDiscountAmount(normalizeAmount(transaction.getPromotionDiscountAmount()))
+                .build();
     }
 
     private PaymentSessionResponse toResponse(PaymentTransaction transaction) {
