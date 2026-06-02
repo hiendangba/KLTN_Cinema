@@ -387,10 +387,10 @@ class BookingServiceImplTest {
         when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
         when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
 
-        when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), isNull(), any()))
+        when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), anyCollection(), isNull(), any()))
                 .thenReturn(0L);
         when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
-                eq(userId), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                eq(userId), isNull(), anyCollection(), isNull(), eq(1), eq(10), anyList(), any()))
                 .thenReturn(List.of());
 
         LocalDateTime before = LocalDateTime.now().minusSeconds(1);
@@ -423,11 +423,13 @@ class BookingServiceImplTest {
         org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
                 eq(userId),
                 isNull(),
+                anyCollection(),
                 isNull(),
                 countFilterCaptor.capture());
         org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
                 eq(userId),
                 isNull(),
+                anyCollection(),
                 isNull(),
                 eq(1),
                 eq(10),
@@ -458,10 +460,10 @@ class BookingServiceImplTest {
         when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
         when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
 
-        when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), isNull(), any()))
+        when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), anyCollection(), isNull(), any()))
                 .thenReturn(0L);
         when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
-                eq(userId), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                eq(userId), isNull(), anyCollection(), isNull(), eq(1), eq(10), anyList(), any()))
                 .thenReturn(List.of());
 
         PageRequest<BookingField> request = PageRequest.<BookingField>builder()
@@ -492,11 +494,13 @@ class BookingServiceImplTest {
         org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
                 eq(userId),
                 isNull(),
+                anyCollection(),
                 isNull(),
                 countFilterCaptor.capture());
         org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
                 eq(userId),
                 isNull(),
+                anyCollection(),
                 isNull(),
                 eq(1),
                 eq(10),
@@ -520,10 +524,10 @@ class BookingServiceImplTest {
     void searchPurchasedBookingsByOperatorCinema_shouldForcePurchasedFiltersAndIgnoreClientStatusFilters() {
         when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);
 
-        when(bookingRepositoryImpl.countWithFilter(isNull(), isNull(), isNull(), any()))
+        when(bookingRepositoryImpl.countWithFilter(isNull(), isNull(), anyCollection(), isNull(), any()))
                 .thenReturn(0L);
         when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
-                isNull(), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                isNull(), isNull(), anyCollection(), isNull(), eq(1), eq(10), anyList(), any()))
                 .thenReturn(List.of());
 
         PageRequest<BookingField> request = PageRequest.<BookingField>builder()
@@ -554,11 +558,13 @@ class BookingServiceImplTest {
         org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
                 isNull(),
                 isNull(),
+                anyCollection(),
                 isNull(),
                 countFilterCaptor.capture());
         org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
                 isNull(),
                 isNull(),
+                anyCollection(),
                 isNull(),
                 eq(1),
                 eq(10),
@@ -579,6 +585,41 @@ class BookingServiceImplTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void searchPurchasedBookingsByOperatorCinema_shouldResolveCinemaNameKeywordToCinemaIds() {
+        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);
+
+        UUID matchingCinemaId = UUID.randomUUID();
+        UUID otherCinemaId = UUID.randomUUID();
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(matchingCinemaId, "CinemaStar Lê Văn Việt"),
+                new CinemaGrpcClient.CinemaSummary(otherCinemaId, "CinemaStar Quận 1")));
+
+        when(bookingRepositoryImpl.countWithFilter(isNull(), isNull(), anyCollection(), eq("lê văn"), any()))
+                .thenReturn(0L);
+        when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                isNull(), isNull(), anyCollection(), eq("lê văn"), eq(1), eq(10), anyList(), any()))
+                .thenReturn(List.of());
+
+        PageRequest<BookingField> request = PageRequest.<BookingField>builder()
+                .page(1)
+                .size(10)
+                .keyword("Lê Văn")
+                .build();
+
+        bookingService.searchPurchasedBookingsByOperatorCinema(request, httpRequest);
+
+        ArgumentCaptor<Collection<UUID>> keywordCinemaIdsCaptor = ArgumentCaptor.forClass(Collection.class);
+        org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
+                isNull(),
+                isNull(),
+                keywordCinemaIdsCaptor.capture(),
+                eq("lê văn"),
+                any());
+        assertEquals(List.of(matchingCinemaId), List.copyOf(keywordCinemaIdsCaptor.getValue()));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void searchUnpaidBookingsByOperatorCinema_shouldForceUnpaidFiltersAndIgnoreClientStatusFilters() {
         when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_MANAGER);
         UUID userId = UUID.randomUUID();
@@ -586,10 +627,10 @@ class BookingServiceImplTest {
 
         UUID cinemaId = UUID.randomUUID();
         when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
-        when(bookingRepositoryImpl.countWithFilter(isNull(), anyCollection(), isNull(), any()))
+        when(bookingRepositoryImpl.countWithFilter(isNull(), anyCollection(), anyCollection(), isNull(), any()))
                 .thenReturn(0L);
         when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
-                isNull(), anyCollection(), isNull(), eq(1), eq(10), anyList(), any()))
+                isNull(), anyCollection(), anyCollection(), isNull(), eq(1), eq(10), anyList(), any()))
                 .thenReturn(List.of());
 
         PageRequest<BookingField> request = PageRequest.<BookingField>builder()
@@ -621,11 +662,13 @@ class BookingServiceImplTest {
         org.mockito.Mockito.verify(bookingRepositoryImpl).countWithFilter(
                 isNull(),
                 cinemaIdsCaptor.capture(),
+                anyCollection(),
                 isNull(),
                 countFilterCaptor.capture());
         org.mockito.Mockito.verify(bookingRepositoryImpl).searchWithPageAndSortAndFilter(
                 isNull(),
                 cinemaIdsCaptor.capture(),
+                anyCollection(),
                 isNull(),
                 eq(1),
                 eq(10),

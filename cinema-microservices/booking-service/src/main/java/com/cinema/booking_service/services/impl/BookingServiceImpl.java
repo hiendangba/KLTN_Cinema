@@ -437,9 +437,11 @@ public class BookingServiceImpl implements BookingService {
         }
 
         List<FilterField<BookingField>> filterBy = mergeForcedBookingFilters(request.getFilterBy(), forcedFilters);
-        long totalElements = bookingRepositoryImpl.countWithFilter(userId, accessibleCinemaIds, keyword, filterBy);
+        Collection<UUID> keywordCinemaIds = resolveKeywordCinemaIds(keyword, accessibleCinemaIds);
+        long totalElements = bookingRepositoryImpl.countWithFilter(
+                userId, accessibleCinemaIds, keywordCinemaIds, keyword, filterBy);
         List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
-                userId, accessibleCinemaIds, keyword, page, size, sortFields, filterBy);
+                userId, accessibleCinemaIds, keywordCinemaIds, keyword, page, size, sortFields, filterBy);
         Map<UUID, String> cinemaNameCache = new LinkedHashMap<>();
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
 
@@ -465,6 +467,23 @@ public class BookingServiceImpl implements BookingService {
         }
         response.setCinemaName(resolveCinemaName(booking == null ? null : booking.getCinemaId(), cinemaNameCache));
         return response;
+    }
+
+    private Collection<UUID> resolveKeywordCinemaIds(String keyword, Collection<UUID> accessibleCinemaIds) {
+        if (!StringUtils.hasText(keyword)) {
+            return List.of();
+        }
+
+        Set<UUID> accessible = accessibleCinemaIds == null || accessibleCinemaIds.isEmpty()
+                ? null
+                : new java.util.LinkedHashSet<>(accessibleCinemaIds);
+
+        return cinemaGrpcClient.getAllActiveCinemas().stream()
+                .filter(cinema -> cinema != null && cinema.id() != null && cinema.name() != null)
+                .filter(cinema -> accessible == null || accessible.contains(cinema.id()))
+                .filter(cinema -> cinema.name().toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT)))
+                .map(CinemaGrpcClient.CinemaSummary::id)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private String resolveCinemaName(UUID cinemaId, Map<UUID, String> cinemaNameCache) {
