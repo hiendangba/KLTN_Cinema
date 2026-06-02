@@ -3,12 +3,9 @@ package com.cinema.payment_service.services;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
-import com.cinema.payment_service.dto.request.PaymentReconciliationReportRequest;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
-import com.cinema.payment_service.dto.response.PaymentReconciliationItemResponse;
-import com.cinema.payment_service.dto.response.PaymentReconciliationResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
@@ -31,14 +28,6 @@ public interface PaymentSessionService {
             UUID requesterUserId);
 
     PaymentSessionResponse requestRefund(UUID bookingId, UUID requesterUserId, RefundPaymentRequest request);
-
-    PaymentReconciliationResponse getReconciliation(LocalDateTime from, LocalDateTime to, HttpServletRequest httpRequest);
-
-    PageResponse<PaymentReconciliationItemResponse> searchReconciliation(
-            PaymentReconciliationReportRequest request,
-            HttpServletRequest httpRequest);
-
-    byte[] exportReconciliation(PaymentReconciliationReportRequest request, HttpServletRequest httpRequest);
 
     CinemaRevenueReportResponse getAllCinemaRevenueReport(CinemaRevenueReportRequest request);
 

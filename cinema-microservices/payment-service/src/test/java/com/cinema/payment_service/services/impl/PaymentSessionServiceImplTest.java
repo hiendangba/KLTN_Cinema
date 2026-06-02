@@ -4,10 +4,8 @@ import com.cinema.payment_service.config.MomoGatewayProperties;
 import com.cinema.payment_service.dto.request.CinemaRevenueField;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
-import com.cinema.payment_service.dto.request.PaymentReconciliationReportRequest;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
-import com.cinema.payment_service.dto.response.PaymentReconciliationItemResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
@@ -20,7 +18,6 @@ import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
-import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.http.HeaderNames;
 import jakarta.servlet.http.HttpServletRequest;
@@ -363,182 +360,6 @@ class PaymentSessionServiceImplTest {
         assertEquals(BigDecimal.ZERO.setScale(0), response.total().promotionDiscountAmount());
         assertEquals("", response.total().promotionCode());
         assertEquals("", response.total().promotionName());
-    }
-
-    @Test
-    void getReconciliation_shouldRequireAdminRole() {
-        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
-
-        assertThrows(com.cinema.exception.BusinessException.class, () ->
-                paymentSessionService.getReconciliation(
-                        LocalDateTime.of(2026, 5, 29, 0, 0),
-                        LocalDateTime.of(2026, 5, 30, 0, 0),
-                        httpRequest));
-    }
-
-    @Test
-    void getReconciliation_shouldReturnSummaryForAdmin() {
-        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);
-
-        PaymentTransaction transaction = buildTransaction(
-                UUID.randomUUID(),
-                UUID.randomUUID(),
-                PaymentTransactionStatus.PAID,
-                LocalDateTime.of(2026, 5, 29, 12, 0),
-                null,
-                BigDecimal.valueOf(200000),
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                null,
-                null);
-        when(paymentTransactionRepository.findAllByTimeCreatedBetween(
-                LocalDateTime.of(2026, 5, 29, 0, 0),
-                LocalDateTime.of(2026, 5, 30, 0, 0)))
-                .thenReturn(List.of(transaction));
-
-        var response = paymentSessionService.getReconciliation(
-                LocalDateTime.of(2026, 5, 29, 0, 0),
-                LocalDateTime.of(2026, 5, 30, 0, 0),
-                httpRequest);
-
-        assertEquals(1L, response.totalTransactions());
-        assertEquals(1L, response.paidCount());
-        assertEquals(BigDecimal.valueOf(200000), response.paidAmount());
-    }
-
-    @Test
-    void searchReconciliation_shouldRequireAdminRole() {
-        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
-
-        PageRequest<com.cinema.payment_service.dto.request.PaymentSessionField> pageRequest = new PageRequest<>();
-        pageRequest.setPage(1);
-        pageRequest.setSize(10);
-
-        PaymentReconciliationReportRequest request = PaymentReconciliationReportRequest.builder()
-                .dateRange(DateRange.builder()
-                        .from(LocalDateTime.of(2026, 5, 29, 0, 0))
-                        .to(LocalDateTime.of(2026, 5, 30, 0, 0))
-                        .build())
-                .pageRequest(pageRequest)
-                .build();
-
-        assertThrows(com.cinema.exception.BusinessException.class, () ->
-                paymentSessionService.searchReconciliation(request, httpRequest));
-    }
-
-    @Test
-    void searchReconciliation_shouldReturnPagedRowsForAdmin() {
-        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);
-
-        UUID cinemaId = UUID.randomUUID();
-        PaymentTransaction tx1 = buildTransaction(
-                cinemaId,
-                UUID.randomUUID(),
-                PaymentTransactionStatus.PAID,
-                LocalDateTime.of(2026, 5, 29, 12, 0),
-                null,
-                BigDecimal.valueOf(200000),
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                null,
-                null);
-        tx1.setOrderInvoiceNumber("PAY-001");
-        PaymentTransaction tx2 = buildTransaction(
-                cinemaId,
-                UUID.randomUUID(),
-                PaymentTransactionStatus.FAILED,
-                LocalDateTime.of(2026, 5, 29, 13, 0),
-                null,
-                BigDecimal.valueOf(150000),
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                null,
-                null);
-        tx2.setOrderInvoiceNumber("PAY-002");
-
-        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
-                new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema Star")));
-        when(paymentTransactionRepositoryImpl.countForReconciliationWithFilter(
-                any(),
-                any(),
-                any(),
-                any()))
-                .thenReturn(2L);
-        when(paymentTransactionRepositoryImpl.searchForReconciliationWithPageAndSortAndFilter(
-                any(),
-                any(),
-                any(),
-                anyInt(),
-                anyInt(),
-                anyList(),
-                any()))
-                .thenReturn(List.of(tx2, tx1));
-
-        PageRequest<com.cinema.payment_service.dto.request.PaymentSessionField> pageRequest = new PageRequest<>();
-        pageRequest.setPage(1);
-        pageRequest.setSize(10);
-
-        PaymentReconciliationReportRequest request = PaymentReconciliationReportRequest.builder()
-                .dateRange(DateRange.builder()
-                        .from(LocalDateTime.of(2026, 5, 29, 0, 0))
-                        .to(LocalDateTime.of(2026, 5, 30, 0, 0))
-                        .build())
-                .pageRequest(pageRequest)
-                .build();
-
-        var response = paymentSessionService.searchReconciliation(request, httpRequest);
-
-        assertEquals(2L, response.getTotalElements());
-        assertEquals(2, response.getData().size());
-        assertEquals("PAY-002", response.getData().get(0).orderInvoiceNumber());
-        assertEquals("Cinema Star", response.getData().get(0).cinemaName());
-        assertEquals("PAY-001", response.getData().get(1).orderInvoiceNumber());
-    }
-
-    @Test
-    void exportReconciliation_shouldReturnExcelBytes() {
-        when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);
-
-        UUID cinemaId = UUID.randomUUID();
-        PaymentTransaction tx = buildTransaction(
-                cinemaId,
-                UUID.randomUUID(),
-                PaymentTransactionStatus.PAID,
-                LocalDateTime.of(2026, 5, 29, 12, 0),
-                null,
-                BigDecimal.valueOf(200000),
-                BigDecimal.ZERO,
-                BigDecimal.ZERO,
-                null,
-                null);
-        tx.setOrderInvoiceNumber("PAY-001");
-
-        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
-                new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema Star")));
-        when(paymentTransactionRepositoryImpl.findAllForReconciliationExport(
-                any(),
-                any(),
-                any(),
-                anyList(),
-                any()))
-                .thenReturn(List.of(tx));
-
-        PageRequest<com.cinema.payment_service.dto.request.PaymentSessionField> pageRequest = new PageRequest<>();
-        pageRequest.setPage(1);
-        pageRequest.setSize(10);
-
-        PaymentReconciliationReportRequest request = PaymentReconciliationReportRequest.builder()
-                .dateRange(DateRange.builder()
-                        .from(LocalDateTime.of(2026, 5, 29, 0, 0))
-                        .to(LocalDateTime.of(2026, 5, 30, 0, 0))
-                        .build())
-                .pageRequest(pageRequest)
-                .build();
-
-        byte[] bytes = paymentSessionService.exportReconciliation(request, httpRequest);
-
-        assertNotNull(bytes);
-        assertTrue(bytes.length > 0);
     }
 
     @Test

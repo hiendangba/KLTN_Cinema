@@ -68,59 +68,6 @@ public class PaymentTransactionRepositoryImpl {
         return entityManager.createQuery(countQuery).getSingleResult();
     }
 
-    public List<PaymentTransaction> searchForReconciliationWithPageAndSortAndFilter(
-            String keyword,
-            LocalDateTime from,
-            LocalDateTime to,
-            int page,
-            int size,
-            List<SortField<PaymentSessionField>> sortBy,
-            List<FilterField<PaymentSessionField>> filterBy) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<PaymentTransaction> cq = cb.createQuery(PaymentTransaction.class);
-        Root<PaymentTransaction> root = cq.from(PaymentTransaction.class);
-
-        List<Predicate> predicates = buildReconciliationPredicates(cb, root, keyword, from, to, filterBy);
-        cq.where(predicates.toArray(new Predicate[0]));
-        cq.orderBy(buildOrders(cb, root, sortBy));
-
-        TypedQuery<PaymentTransaction> query = entityManager.createQuery(cq);
-        query.setFirstResult(Math.max(0, (page - 1) * size));
-        query.setMaxResults(size);
-        return query.getResultList();
-    }
-
-    public long countForReconciliationWithFilter(
-            String keyword,
-            LocalDateTime from,
-            LocalDateTime to,
-            List<FilterField<PaymentSessionField>> filterBy) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
-        Root<PaymentTransaction> root = countQuery.from(PaymentTransaction.class);
-
-        List<Predicate> predicates = buildReconciliationPredicates(cb, root, keyword, from, to, filterBy);
-        countQuery.select(cb.count(root));
-        countQuery.where(predicates.toArray(new Predicate[0]));
-        return entityManager.createQuery(countQuery).getSingleResult();
-    }
-
-    public List<PaymentTransaction> findAllForReconciliationExport(
-            String keyword,
-            LocalDateTime from,
-            LocalDateTime to,
-            List<SortField<PaymentSessionField>> sortBy,
-            List<FilterField<PaymentSessionField>> filterBy) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<PaymentTransaction> cq = cb.createQuery(PaymentTransaction.class);
-        Root<PaymentTransaction> root = cq.from(PaymentTransaction.class);
-
-        List<Predicate> predicates = buildReconciliationPredicates(cb, root, keyword, from, to, filterBy);
-        cq.where(predicates.toArray(new Predicate[0]));
-        cq.orderBy(buildOrders(cb, root, sortBy));
-        return entityManager.createQuery(cq).getResultList();
-    }
-
     public List<PaymentTransaction> findAllForRevenueReport(
             Collection<UUID> cinemaIds,
             Collection<UUID> filmIds,
@@ -187,34 +134,6 @@ public class PaymentTransactionRepositoryImpl {
         return predicates;
     }
 
-    private List<Predicate> buildReconciliationPredicates(
-            CriteriaBuilder cb,
-            Root<PaymentTransaction> root,
-            String keyword,
-            LocalDateTime from,
-            LocalDateTime to,
-            List<FilterField<PaymentSessionField>> filterBy) {
-        List<Predicate> predicates = new ArrayList<>();
-
-        Predicate keywordPredicate = buildKeywordPredicate(cb, root, keyword);
-        if (keywordPredicate != null) {
-            predicates.add(keywordPredicate);
-        }
-
-        Predicate timeCreatedPredicate = buildTimeCreatedPredicate(cb, root, from, to);
-        if (timeCreatedPredicate != null) {
-            predicates.add(timeCreatedPredicate);
-        }
-
-        if (filterBy != null) {
-            for (FilterField<PaymentSessionField> filter : filterBy) {
-                predicates.add(buildFilterPredicate(cb, root, filter));
-            }
-        }
-
-        return predicates;
-    }
-
     @SuppressWarnings("unchecked")
     private Predicate buildEventTimePredicate(
             CriteriaBuilder cb,
@@ -257,25 +176,6 @@ public class PaymentTransactionRepositoryImpl {
             case "BETWEEN" -> buildBetweenPredicate(cb, root, fieldName, dataType, filter.getValue());
             default -> throw new BusinessException(ErrorCode.INVALID_INPUT);
         };
-    }
-
-    @SuppressWarnings("unchecked")
-    private Predicate buildTimeCreatedPredicate(
-            CriteriaBuilder cb,
-            Root<PaymentTransaction> root,
-            LocalDateTime from,
-            LocalDateTime to) {
-        if (from == null && to == null) {
-            return null;
-        }
-        Path<? extends Comparable<?>> path = comparablePath(root, "timeCreated");
-        if (from == null) {
-            return cb.lessThanOrEqualTo((Path<LocalDateTime>) path, to);
-        }
-        if (to == null) {
-            return cb.greaterThanOrEqualTo((Path<LocalDateTime>) path, from);
-        }
-        return cb.between((Path<LocalDateTime>) path, from, to);
     }
 
     private Predicate buildLikePredicate(

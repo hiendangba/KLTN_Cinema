@@ -36,6 +36,9 @@
 - Bỏ hardcode status ở `ShowTimeRepositoryImpl` để repository chỉ còn là engine filter trung tính; status rule được đẩy lên service layer cho từng API.
 - Thêm filter `STATUS IN [SCHEDULED, ONGOING]` riêng cho `searchShowtimesByFilmId(...)`, đồng thời cho phép `searchShowtimes(...)` nhận status filter từ request mà không bị chặn ngầm.
 - Verify bằng `ShowTimeServiceImplTest` sau khi sửa: `16 tests`, `0 failures`, `0 errors`.
+- Bỏ `GET /api/payments/reconciliation` vì summary đối soát trùng vai trò với report search/export; sau đó cũng bỏ luôn `POST /api/payments/reconciliation/search` và `POST /api/payments/reconciliation/export` để payment-service chỉ còn report doanh thu payment.
+- Thêm [`REPORT_GUIDE.md`](./REPORT_GUIDE.md) để giải thích riêng ý nghĩa các report payment/booking/showtime, kèm ví dụ dùng trong thực tế và câu trả lời ngắn khi bị hỏi vấn đáp.
+- Xóa hẳn reconciliation detail khỏi payment-service: `PaymentController`, `PaymentSessionService`, `PaymentSessionServiceImpl`, `PaymentTransactionRepositoryImpl`, `PaymentSessionServiceImplTest`, và 3 DTO reconciliation đã bị bỏ; verify bằng `PaymentSessionServiceImplTest` pass `6 tests, 0 failures, 0 errors`.
 
 > [!WARNING]
 > **BUG GỐC CỦA LUỒNG GOOGLE LOGIN**
@@ -453,9 +456,6 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `POST` | `/api/payments/sessions` | ✅ Authenticated | Tạo phiên thanh toán cho booking hiện tại (có ownership check theo `X-User-ID`). |
 | `GET` | `/api/payments/sessions/{bookingId}` | ✅ Authenticated | Lấy phiên thanh toán mới nhất theo booking (scope theo user). |
 | `POST` | `/api/payments/sessions/{bookingId}/refund` | ✅ Authenticated | Tạo yêu cầu hoàn tiền nội bộ (trạng thái `REFUND_PENDING`). |
-| `GET` | `/api/payments/reconciliation` | ✅ ADMIN | Tổng hợp đối soát theo khoảng thời gian (`from`, `to`). |
-| `POST` | `/api/payments/reconciliation/search` | ✅ ADMIN | Tra cứu đối soát có phân trang/lọc theo `PageRequest<PaymentSessionField>`. |
-| `POST` | `/api/payments/reconciliation/export` | ✅ ADMIN | Xuất Excel đối soát theo cùng bộ lọc với search. |
 | `POST` | `/api/payments/revenues/cinemas/search` | ✅ ADMIN/MGMT | Báo cáo doanh thu payment theo rạp, cho phép lọc `cinemaIds`, `filmIds`. |
 | `POST` | `/api/payments/revenues/cinemas/export` | ✅ ADMIN/MGMT | Xuất Excel báo cáo doanh thu payment theo rạp, hỗ trợ `selectedIds` theo `cinemaId`. |
 | `POST` | `/api/payments/promotions/preview` | ✅ Authenticated | Ước tính giảm giá từ promo code trước checkout. |
@@ -716,7 +716,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 |---|---|---|
 | **Hall Service (Rạp & Ghế)** | ✅ Hoàn thành | Đã có sơ đồ rạp, phòng chiếu, layout ghế và route gateway đồng bộ. |
 | **Booking Core Service** | ✅ Hoàn thành | Xương sống đặt vé, giữ ghế Redis, booking/product APIs, gRPC nội bộ và rule tối đa 5 vé. |
-| **Payment Integration** | ✅ Hoàn thành core | Đã có session thanh toán, webhook MoMo, confirm booking qua gRPC, refund/reconciliation/promotion preview. |
+| **Payment Integration** | ✅ Hoàn thành core | Đã có session thanh toán, webhook MoMo, confirm booking qua gRPC, refund/promotion preview. |
 
 ### 🗓️ 02/04/2026 — Nâng cấp Phân trang (Offset Pagination)
 **Nội dung cập nhật:**
@@ -920,7 +920,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - Trạng thái mặc định khi tạo nếu request không truyền: `ACTIVE`.
   - Các điểm chưa làm ở phase này:
   - Chưa tách `product-service` riêng khỏi `booking-service`.
-  - Payment đã có session + webhook callback + refund nội bộ + reconciliation/promotion preview, nhưng chưa tích hợp gọi API refund thực tế với cổng thanh toán.
+  - Payment đã có session + webhook callback + refund nội bộ + promotion preview, nhưng chưa tích hợp gọi API refund thực tế với cổng thanh toán.
 ---
 > Hệ thống được thiết kế theo kiến trúc mở và đã được rà soát tổng thể toàn bộ luồng xử lý đến **25/05/2026**. Mục tiêu là sẵn sàng đáp ứng quy mô hệ thống đặt vé trực tuyến yêu cầu High Availability.
 

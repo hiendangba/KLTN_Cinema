@@ -24,8 +24,6 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     List<PaymentTransaction> findAllByStatusAndExpiresAtBefore(PaymentTransactionStatus status,
                                                                LocalDateTime now);
 
-    List<PaymentTransaction> findAllByTimeCreatedBetween(LocalDateTime from, LocalDateTime to);
-
     List<PaymentTransaction> findAllByCinemaIdIsNotNull();
 
     List<PaymentTransaction> findAllByCinemaIdIn(Collection<UUID> cinemaIds);
