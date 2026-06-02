@@ -68,3 +68,9 @@ rabbitmq:
   password: ${SPRING_RABBITMQ_PASSWORD:admin}
 server:
   port: ${SERVER_PORT:8094}
+
+showtime:
+  status-scheduler:
+    scheduled-to-ongoing-cron: ${SHOWTIME_SCHEDULED_TO_ONGOING_CRON:0 0 0 * * *}
+    scheduled-to-ongoing-window-days: ${SHOWTIME_SCHEDULED_TO_ONGOING_WINDOW_DAYS:7}
+    ongoing-to-finished-delay-ms: ${SHOWTIME_ONGOING_TO_FINISHED_DELAY_MS:300000}

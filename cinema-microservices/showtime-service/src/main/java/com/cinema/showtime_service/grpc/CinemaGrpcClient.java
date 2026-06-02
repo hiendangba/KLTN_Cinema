@@ -9,10 +9,12 @@ import com.cinema.grpc.cinema.GetCinemaByIdRequest;
 import com.cinema.grpc.cinema.GetCinemaByUserIdReply;
 import com.cinema.grpc.cinema.GetCinemaByUserIdRequest;
 import com.cinema.grpc.cinema.GetCinemasByUserIdReply;
+import com.cinema.showtime_service.dto.response.CinemaOperatingHoursResponse;
 import io.grpc.StatusRuntimeException;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -95,6 +97,45 @@ public class CinemaGrpcClient {
 
             return reply.getCinema().getName().isBlank() ? null : reply.getCinema().getName();
         } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+    }
+
+    public CinemaOperatingHoursResponse getCinemaById(UUID cinemaId) {
+        try {
+            GetCinemaByIdReply reply = cinemaBlockingStub.getCinemaById(
+                    GetCinemaByIdRequest.newBuilder()
+                            .setCinemaId(cinemaId.toString())
+                            .build());
+
+            if (!reply.getSuccess()) {
+                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.CINEMA_SERVICE_ERROR));
+            }
+
+            if (reply.getCinema() == null || reply.getCinema().getId().isBlank()) {
+                throw new BusinessException(ErrorCode.CINEMA_NOT_FOUND);
+            }
+
+            return CinemaOperatingHoursResponse.builder()
+                    .id(UUID.fromString(reply.getCinema().getId()))
+                    .name(reply.getCinema().getName().isBlank() ? null : reply.getCinema().getName())
+                    .openTime(parseLocalTime(reply.getCinema().getOpenTime()))
+                    .closeTime(parseLocalTime(reply.getCinema().getCloseTime()))
+                    .build();
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+    }
+
+    private LocalTime parseLocalTime(String value) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+        try {
+            return LocalTime.parse(value);
+        } catch (Exception ex) {
             throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
         }
     }

@@ -3,6 +3,7 @@ package com.cinema.showtime_service.repository;
 import com.cinema.showtime_service.entity.ShowTime;
 import io.lettuce.core.dynamic.annotation.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
@@ -62,4 +63,29 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, UUID> {
               AND s.is_deleted = false
             """, nativeQuery = true)
     List<UUID> findActiveFilmIds();
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE show_time
+               SET status = 'ONGOING',
+                   time_updated = :now
+             WHERE is_deleted = false
+               AND status = 'SCHEDULED'
+               AND start_date_time >= :windowStart
+               AND start_date_time <= :now
+            """, nativeQuery = true)
+    int promoteScheduledToOngoing(
+            @Param("windowStart") LocalDateTime windowStart,
+            @Param("now") LocalDateTime now);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE show_time
+               SET status = 'FINISHED',
+                   time_updated = :now
+             WHERE is_deleted = false
+               AND status = 'ONGOING'
+               AND end_date_time <= :now
+            """, nativeQuery = true)
+    int expireOngoingShowtimes(@Param("now") LocalDateTime now);
 }

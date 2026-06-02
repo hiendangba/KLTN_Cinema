@@ -17,6 +17,7 @@ import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
+import com.cinema.showtime_service.dto.response.CinemaOperatingHoursResponse;
 import com.cinema.showtime_service.dto.response.HallResponse;
 import com.cinema.showtime_service.dto.response.PricingPolicyResponse;
 import com.cinema.showtime_service.dto.response.SeatMapCellResponse;
@@ -44,6 +45,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -105,6 +107,11 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 .operator("BETWEEN")
                 .value(List.of(startOfDay, endOfDay))
                 .build());
+        filters.add(FilterField.<ShowTimeField>builder()
+                .field(ShowTimeField.START_DATE_TIME)
+                .operator("GTE")
+                .value(LocalDateTime.now())
+                .build());
 
         if (request.getCinemaId() != null) {
             List<UUID> hallIds = hallGrpcClient.listActiveHallIdsByCinema(request.getCinemaId());
@@ -127,6 +134,36 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 .filterBy(filters)
                 .build();
         return enrichShowtimePage(searchShowtimesBase(scopedRequest));
+    }
+
+    @Override
+    @Transactional
+    public int promoteScheduledShowtimesToOngoing(LocalDateTime now, int windowDays) {
+        LocalDateTime referenceNow = now == null ? LocalDateTime.now() : now;
+        int effectiveWindowDays = Math.max(1, windowDays);
+        LocalDateTime windowStart = referenceNow.minusDays(effectiveWindowDays);
+        int updated = showTimeRepository.promoteScheduledToOngoing(windowStart, referenceNow);
+
+        log.info(
+                "SHOWTIME_STATUS_TRANSITION scheduled->ongoing updated={} now={} windowDays={} windowStart={}",
+                updated,
+                referenceNow,
+                effectiveWindowDays,
+                windowStart);
+        return updated;
+    }
+
+    @Override
+    @Transactional
+    public int expireOngoingShowtimes(LocalDateTime now) {
+        LocalDateTime referenceNow = now == null ? LocalDateTime.now() : now;
+        int updated = showTimeRepository.expireOngoingShowtimes(referenceNow);
+
+        log.info(
+                "SHOWTIME_STATUS_TRANSITION ongoing->finished updated={} now={}",
+                updated,
+                referenceNow);
+        return updated;
     }
 
     private PageResponse<ShowTimeResponse> searchShowtimesBase(PageRequest<ShowTimeField> request) {
@@ -334,16 +371,17 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             ShowTimeCreateRequest showTimeCreateRequest,
             HttpServletRequest httpRequest) {
         validateManagerRole(httpRequest);
+        validateCreateShowTimeRequest(showTimeCreateRequest);
         Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
         UUID hallCinemaId = validateHallInCinema(showTimeCreateRequest.getHallId(), accessibleCinemaIds);
         validatePricingPolicy(showTimeCreateRequest.getPricingPolicyId(), hallCinemaId, accessibleCinemaIds);
 
         FilmResponse filmResponse = filmGrpcClient.getFilmById(showTimeCreateRequest.getFilmId());
+        CinemaOperatingHoursResponse cinemaOperatingHours = cinemaGrpcClient.getCinemaById(hallCinemaId);
 
         long duration = (long) filmResponse.getDuration() + 30;
         LocalDateTime startTime = showTimeCreateRequest.getStartDateTime();
         LocalDateTime endTime = showTimeCreateRequest.getEndDateTime();
-
         if (endTime.isBefore(startTime.plusMinutes(duration))) {
             throw new BusinessException(ErrorCode.INVALID_END_TIME);
         }
@@ -352,23 +390,34 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         List<SuccessResponse<ShowTimeResponse>> showTimeResponses = new ArrayList<>();
         List<ShowTime> createdShowTimes = new ArrayList<>();
 
-        while (startTime.plusMinutes(duration).isBefore(endTime)) {
+        LocalDateTime cursor = startTime;
+        while (!cursor.plusMinutes(duration).isAfter(endTime)) {
+            cursor = normalizeToOperatingWindow(
+                    cursor,
+                    cinemaOperatingHours.getOpenTime(),
+                    cinemaOperatingHours.getCloseTime());
+
+            LocalDateTime slotEnd = cursor.plusMinutes(duration);
+
+            if (slotEnd.isAfter(endTime)) {
+                break;
+            }
+
             Optional<ShowTime> overlapping = showTimeRepository.findOverlapping(
                     showTimeCreateRequest.getHallId(),
-                    startTime,
-                    startTime.plusMinutes(duration));
+                    cursor,
+                    slotEnd);
 
-            if (overlapping.isEmpty()) {
-                showTimeCreateRequest.setStartDateTime(startTime);
-                showTimeCreateRequest.setEndDateTime(startTime.plusMinutes(duration));
-                ShowTime showTime = showTimeMapper.toEntity(showTimeCreateRequest);
-                showTime = showTimeRepository.save(showTime);
-                createdShowTimes.add(showTime);
-                startTime = startTime.plusMinutes(duration);
+            if (overlapping.isPresent()) {
+                cursor = overlapping.get().getEndDateTime();
                 continue;
             }
 
-            startTime = overlapping.get().getEndDateTime();
+            ShowTimeCreateRequest slotRequest = copyCreateRequestWithWindow(showTimeCreateRequest, cursor, slotEnd);
+            ShowTime showTime = showTimeMapper.toEntity(slotRequest);
+            showTime = showTimeRepository.save(showTime);
+            createdShowTimes.add(showTime);
+            cursor = slotEnd;
         }
 
         if (createdShowTimes.isEmpty()) {
@@ -399,12 +448,20 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         UUID hallCinemaId = validateHallInCinema(showTime.getHallId(), accessibleCinemaIds);
         validatePricingPolicy(updateShowTimeRequest.getPricingPolicyId(), hallCinemaId, accessibleCinemaIds);
 
+        CinemaOperatingHoursResponse cinemaOperatingHours = cinemaGrpcClient.getCinemaById(hallCinemaId);
         FilmResponse filmResponse = filmGrpcClient.getFilmById(showTime.getFilmId());
         long duration = (long) filmResponse.getDuration() + 30;
         LocalDateTime requestedStartTime = updateShowTimeRequest.getStartDateTime();
         LocalDateTime requestedEndTime = updateShowTimeRequest.getEndDateTime();
 
         if (requestedEndTime.isBefore(requestedStartTime.plusMinutes(duration))) {
+            throw new BusinessException(ErrorCode.INVALID_END_TIME);
+        }
+
+        if (!isStartWithinOperatingWindow(
+                requestedStartTime,
+                cinemaOperatingHours.getOpenTime(),
+                cinemaOperatingHours.getCloseTime())) {
             throw new BusinessException(ErrorCode.INVALID_END_TIME);
         }
 
@@ -480,6 +537,60 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "showtime_manager_action");
+    }
+
+    private void validateCreateShowTimeRequest(ShowTimeCreateRequest request) {
+        if (request == null
+                || request.getStartDateTime() == null
+                || request.getEndDateTime() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        if (!request.getStartDateTime().isAfter(LocalDateTime.now())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+    }
+
+    private LocalDateTime normalizeToOperatingWindow(LocalDateTime cursor, LocalTime openTime, LocalTime closeTime) {
+        if (cursor == null || openTime == null || closeTime == null) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+
+        LocalDateTime dayOpen = cursor.toLocalDate().atTime(openTime);
+        if (cursor.isBefore(dayOpen)) {
+            return dayOpen;
+        }
+
+        if (cursor.toLocalTime().isAfter(closeTime)) {
+            return cursor.toLocalDate().plusDays(1).atTime(openTime);
+        }
+
+        return cursor;
+    }
+
+    private boolean isStartWithinOperatingWindow(
+            LocalDateTime startDateTime,
+            LocalTime openTime,
+            LocalTime closeTime) {
+        if (startDateTime == null || openTime == null || closeTime == null) {
+            throw new BusinessException(ErrorCode.CINEMA_SERVICE_ERROR);
+        }
+
+        LocalTime startTime = startDateTime.toLocalTime();
+        return !startTime.isBefore(openTime) && !startTime.isAfter(closeTime);
+    }
+
+    private ShowTimeCreateRequest copyCreateRequestWithWindow(ShowTimeCreateRequest source,
+                                                             LocalDateTime startDateTime,
+                                                             LocalDateTime endDateTime) {
+        return ShowTimeCreateRequest.builder()
+                .hallId(source.getHallId())
+                .filmId(source.getFilmId())
+                .pricingPolicyId(source.getPricingPolicyId())
+                .startDateTime(startDateTime)
+                .endDateTime(endDateTime)
+                .status(source.getStatus())
+                .build();
     }
 
     private void validatePricingPolicy(UUID pricingPolicyId, UUID cinemaId, Set<UUID> accessibleCinemaIds) {

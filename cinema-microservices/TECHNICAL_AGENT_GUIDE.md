@@ -23,6 +23,14 @@
 - Google OAuth exchange đã chuyển sang HTTP form-urlencoded (theo đúng shape request `curl` chạy thành công) để tránh lỗi `401` từ client library cũ.
 - Ghi nhận bug quan trọng: request token endpoint gửi sai mẫu payload (JSON) sẽ fail; Google `/token` cần `application/x-www-form-urlencoded` với đủ field chuẩn.
 
+## Changelog ngắn (2026-06-03)
+
+- `showtime-service` chặn `startDateTime` trong quá khứ ngay từ đầu khi tạo suất chiếu.
+- Luồng tạo showtime vẫn giữ buffer 30 phút, nhưng cho phép suất chiếu kết thúc sau `closeTime` nếu giờ bắt đầu hợp lệ.
+- Thêm kiểm tra giờ mở/đóng rạp khi tạo và cập nhật showtime để normalize theo khung vận hành.
+- Bổ sung job chuyển trạng thái showtime `scheduled -> ongoing` và `ongoing -> finished`.
+- Test `ShowTimeServiceImplTest` đã cover các case: start quá khứ, tạo slot qua mốc đóng cửa, cập nhật ngoài giờ vận hành, và scheduler transition.
+
 > [!WARNING]
 > **BUG GỐC CỦA LUỒNG GOOGLE LOGIN**
 > - Bản triển khai ban đầu đã gửi request đổi `code -> token` theo **mẫu sai** (payload kiểu JSON / client library cũ).

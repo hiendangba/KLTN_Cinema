@@ -8,6 +8,7 @@ import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
+import com.cinema.showtime_service.dto.response.CinemaOperatingHoursResponse;
 import com.cinema.showtime_service.dto.response.FilmResponse;
 import com.cinema.showtime_service.dto.response.HallResponse;
 import com.cinema.showtime_service.dto.response.PricingPolicyResponse;
@@ -36,6 +37,7 @@ import jakarta.validation.Validator;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -89,13 +91,15 @@ class ShowTimeServiceImplTest {
         UUID filmId = UUID.randomUUID();
         UUID pricingPolicyId = UUID.randomUUID();
 
-        HttpServletRequest request = managerRequest(userId);
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn("MANAGER");
+        when(request.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
         ShowTimeCreateRequest createRequest = ShowTimeCreateRequest.builder()
                 .hallId(hallId)
                 .filmId(filmId)
                 .pricingPolicyId(pricingPolicyId)
-                .startDateTime(LocalDateTime.now().plusDays(1))
-                .endDateTime(LocalDateTime.now().plusDays(1).plusHours(4))
+                .startDateTime(LocalDate.now().plusDays(1).atTime(9, 0))
+                .endDateTime(LocalDate.now().plusDays(1).atTime(12, 0))
                 .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
                 .build();
 
@@ -120,6 +124,7 @@ class ShowTimeServiceImplTest {
         when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
         when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
         when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
+        when(cinemaGrpcClient.getCinemaById(cinemaId)).thenReturn(cinemaOperatingHours(cinemaId, "08:00", "23:00"));
         when(showTimeRepository.findOverlapping(any(), any(), any())).thenReturn(Optional.empty());
         when(showTimeMapper.toEntity(any(ShowTimeCreateRequest.class))).thenAnswer(invocation -> {
             ShowTimeCreateRequest req = invocation.getArgument(0);
@@ -161,6 +166,115 @@ class ShowTimeServiceImplTest {
         assertNotNull(result.getSuccessResponse());
         assertEquals(1, result.getSuccessResponse().size());
         assertEquals(pricingPolicyId, result.getSuccessResponse().get(0).getData().getPricingPolicyId());
+    }
+
+    @Test
+    void createShowTime_shouldRejectPastStartDateTime() {
+        UUID userId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn("MANAGER");
+        ShowTimeCreateRequest createRequest = ShowTimeCreateRequest.builder()
+                .hallId(hallId)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId)
+                .startDateTime(LocalDateTime.now().minusHours(1))
+                .endDateTime(LocalDateTime.now().plusHours(2))
+                .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> showTimeService.createShowTime(createRequest, request));
+
+        assertEquals(ErrorCode.BAD_REQUEST, ex.getErrorCode());
+        verifyNoInteractions(cinemaGrpcClient);
+        verifyNoInteractions(filmGrpcClient);
+        verifyNoInteractions(hallGrpcClient);
+    }
+
+    @Test
+    void createShowTime_shouldCreateSlotsAcrossCloseTimeWhenStartIsValid() {
+        UUID userId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+
+        HttpServletRequest request = managerRequest(userId);
+        ShowTimeCreateRequest createRequest = ShowTimeCreateRequest.builder()
+                .hallId(hallId)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId)
+                .startDateTime(LocalDate.now().plusDays(1).atTime(22, 0))
+                .endDateTime(LocalDate.now().plusDays(2).atTime(10, 30))
+                .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
+                .build();
+
+        PricingPolicy pricingPolicy = new PricingPolicy();
+        pricingPolicy.setId(pricingPolicyId);
+        pricingPolicy.setCinemaId(cinemaId);
+
+        FilmResponse filmResponse = FilmResponse.builder()
+                .id(filmId)
+                .duration(90)
+                .build();
+
+        when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
+        when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
+        when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
+        when(cinemaGrpcClient.getCinemaById(cinemaId)).thenReturn(cinemaOperatingHours(cinemaId, "08:00", "23:00"));
+        when(showTimeRepository.findOverlapping(any(), any(), any())).thenReturn(Optional.empty());
+        when(showTimeMapper.toEntity(any(ShowTimeCreateRequest.class))).thenAnswer(invocation -> {
+            ShowTimeCreateRequest req = invocation.getArgument(0);
+            ShowTime st = new ShowTime();
+            st.setId(UUID.randomUUID());
+            st.setHallId(req.getHallId());
+            st.setFilmId(req.getFilmId());
+            st.setPricingPolicyId(req.getPricingPolicyId());
+            st.setStartDateTime(req.getStartDateTime());
+            st.setEndDateTime(req.getEndDateTime());
+            st.setStatus(req.getStatus());
+            st.setIsDeleted(false);
+            st.setTimeCreated(LocalDateTime.now());
+            st.setTimeUpdated(LocalDateTime.now());
+            return st;
+        });
+        when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pricingPolicyRepository.findAllById(any())).thenReturn(List.of(pricingPolicy));
+        when(pricingPolicyMapper.toResponse(pricingPolicy)).thenReturn(PricingPolicyResponse.builder().id(pricingPolicyId).build());
+        when(showTimeMapper.toResponse(any(ShowTime.class))).thenAnswer(invocation -> {
+            ShowTime st = invocation.getArgument(0);
+            return ShowTimeResponse.builder()
+                    .id(st.getId())
+                    .hallId(st.getHallId())
+                    .filmId(st.getFilmId())
+                    .pricingPolicyId(st.getPricingPolicyId())
+                    .startDateTime(st.getStartDateTime())
+                    .endDateTime(st.getEndDateTime())
+                    .status(st.getStatus())
+                    .isDeleted(Boolean.TRUE.equals(st.getIsDeleted()))
+                    .timeCreated(st.getTimeCreated())
+                    .timeUpdated(st.getTimeUpdated())
+                    .build();
+        });
+
+        var result = showTimeService.createShowTime(createRequest, request);
+
+        assertNotNull(result);
+        assertEquals(2, result.getSuccessResponse().size());
+        assertEquals(LocalDate.now().plusDays(1).atTime(22, 0),
+                result.getSuccessResponse().get(0).getData().getStartDateTime());
+        assertEquals(LocalDate.now().plusDays(2).atTime(0, 0),
+                result.getSuccessResponse().get(0).getData().getEndDateTime());
+        assertEquals(LocalDate.now().plusDays(2).atTime(8, 0),
+                result.getSuccessResponse().get(1).getData().getStartDateTime());
+        assertEquals(LocalDate.now().plusDays(2).atTime(10, 0),
+                result.getSuccessResponse().get(1).getData().getEndDateTime());
     }
 
     @Test
@@ -233,6 +347,30 @@ class ShowTimeServiceImplTest {
     }
 
     @Test
+    void promoteScheduledShowtimesToOngoing_shouldUseLookbackWindowAndUpdateRepository() {
+        LocalDateTime now = LocalDateTime.of(2026, 6, 3, 10, 15);
+
+        when(showTimeRepository.promoteScheduledToOngoing(now.minusDays(7), now)).thenReturn(3);
+
+        int updated = showTimeService.promoteScheduledShowtimesToOngoing(now, 7);
+
+        assertEquals(3, updated);
+        verify(showTimeRepository).promoteScheduledToOngoing(now.minusDays(7), now);
+    }
+
+    @Test
+    void expireOngoingShowtimes_shouldDelegateToRepository() {
+        LocalDateTime now = LocalDateTime.of(2026, 6, 3, 10, 20);
+
+        when(showTimeRepository.expireOngoingShowtimes(now)).thenReturn(5);
+
+        int updated = showTimeService.expireOngoingShowtimes(now);
+
+        assertEquals(5, updated);
+        verify(showTimeRepository).expireOngoingShowtimes(now);
+    }
+
+    @Test
     void updateShowTime_shouldUpdateStatusInSameRequest() {
         UUID userId = UUID.randomUUID();
         UUID cinemaId = UUID.randomUUID();
@@ -244,8 +382,8 @@ class ShowTimeServiceImplTest {
         HttpServletRequest request = managerRequest(userId);
         UpdateShowTimeRequest updateRequest = UpdateShowTimeRequest.builder()
                 .pricingPolicyId(pricingPolicyId)
-                .startDateTime(LocalDateTime.now().plusDays(1))
-                .endDateTime(LocalDateTime.now().plusDays(1).plusHours(3))
+                .startDateTime(LocalDate.now().plusDays(1).atTime(9, 0))
+                .endDateTime(LocalDate.now().plusDays(1).atTime(12, 0))
                 .status(ShowTimeEnum.ShowTimeStatus.ONGOING)
                 .build();
 
@@ -273,6 +411,7 @@ class ShowTimeServiceImplTest {
         when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
         when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
         when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
+        when(cinemaGrpcClient.getCinemaById(cinemaId)).thenReturn(cinemaOperatingHours(cinemaId, "08:00", "23:00"));
         when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
         when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -287,6 +426,53 @@ class ShowTimeServiceImplTest {
         assertEquals(updateRequest.getStartDateTime(), saved.getStartDateTime());
         assertEquals(updateRequest.getEndDateTime(), saved.getEndDateTime());
         assertEquals(ShowTimeEnum.ShowTimeStatus.ONGOING, saved.getStatus());
+    }
+
+    @Test
+    void updateShowTime_shouldRejectRequestOutsideOperatingHours() {
+        UUID userId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID showTimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+
+        HttpServletRequest request = managerRequest(userId);
+        UpdateShowTimeRequest updateRequest = UpdateShowTimeRequest.builder()
+                .pricingPolicyId(pricingPolicyId)
+                .startDateTime(LocalDate.now().plusDays(1).atTime(23, 30))
+                .endDateTime(LocalDate.now().plusDays(2).atTime(2, 0))
+                .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
+                .build();
+
+        ShowTime existing = new ShowTime();
+        existing.setId(showTimeId);
+        existing.setHallId(hallId);
+        existing.setFilmId(filmId);
+        existing.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        existing.setIsDeleted(false);
+
+        PricingPolicy pricingPolicy = new PricingPolicy();
+        pricingPolicy.setId(pricingPolicyId);
+        pricingPolicy.setCinemaId(cinemaId);
+
+        FilmResponse filmResponse = FilmResponse.builder()
+                .id(filmId)
+                .duration(90)
+                .build();
+
+        when(showTimeRepository.findById(showTimeId)).thenReturn(Optional.of(existing));
+        when(bookingGrpcClient.isShowtimeBooked(showTimeId)).thenReturn(false);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
+        when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
+        when(cinemaGrpcClient.getCinemaById(cinemaId)).thenReturn(cinemaOperatingHours(cinemaId, "08:00", "23:00"));
+        when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> showTimeService.updateShowTime(showTimeId, updateRequest, request));
+
+        assertEquals(ErrorCode.INVALID_END_TIME, ex.getErrorCode());
     }
 
     @Test
@@ -374,6 +560,9 @@ class ShowTimeServiceImplTest {
                 (List<com.cinema.dto.request.FilterField<ShowTimeField>>) filterCaptor.getValue();
         assertTrue(filters.stream().anyMatch(filter -> filter.getField() == ShowTimeField.FILM_ID));
         assertTrue(filters.stream().anyMatch(filter -> filter.getField() == ShowTimeField.START_DATE_TIME));
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == ShowTimeField.START_DATE_TIME
+                        && "GTE".equalsIgnoreCase(filter.getOperator())));
         assertTrue(filters.stream().anyMatch(filter -> filter.getField() == ShowTimeField.HALL_ID));
 
         List<com.cinema.dto.request.SortField<ShowTimeField>> sorts =
@@ -431,6 +620,18 @@ class ShowTimeServiceImplTest {
         when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
         when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1"))))
                 .thenReturn(Map.of("A1", "AVAILABLE"));
+        when(showTimeMapper.toResponse(showTime)).thenReturn(ShowTimeResponse.builder()
+                .id(showtimeId)
+                .hallId(hallId)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId)
+                .startDateTime(showTime.getStartDateTime())
+                .endDateTime(showTime.getEndDateTime())
+                .status(showTime.getStatus())
+                .isDeleted(false)
+                .timeCreated(showTime.getTimeCreated())
+                .timeUpdated(showTime.getTimeUpdated())
+                .build());
 
         var result = showTimeService.getShowTimeById(showtimeId);
 
@@ -485,6 +686,18 @@ class ShowTimeServiceImplTest {
         when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
         when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1"))))
                 .thenReturn(Map.of("A1", "AVAILABLE"));
+        when(showTimeMapper.toResponse(showTime)).thenReturn(ShowTimeResponse.builder()
+                .id(showtimeId)
+                .hallId(hallId)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId)
+                .startDateTime(showTime.getStartDateTime())
+                .endDateTime(showTime.getEndDateTime())
+                .status(showTime.getStatus())
+                .isDeleted(false)
+                .timeCreated(showTime.getTimeCreated())
+                .timeUpdated(showTime.getTimeUpdated())
+                .build());
 
         var result = showTimeService.getShowTimeById(showtimeId);
 
@@ -604,6 +817,30 @@ class ShowTimeServiceImplTest {
         when(seatGrpcClient.getLayoutByHallId(hallId1)).thenReturn(layoutBundle);
         when(seatGrpcClient.getLayoutByHallId(hallId2)).thenReturn(layoutBundle);
         when(bookingGrpcClient.getSeatRuntimeStates(any(), any())).thenReturn(Map.of("A1", "AVAILABLE"));
+        when(showTimeMapper.toResponse(showTime1)).thenReturn(ShowTimeResponse.builder()
+                .id(showtimeId1)
+                .hallId(hallId1)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId1)
+                .startDateTime(showTime1.getStartDateTime())
+                .endDateTime(showTime1.getEndDateTime())
+                .status(showTime1.getStatus())
+                .isDeleted(false)
+                .timeCreated(showTime1.getTimeCreated())
+                .timeUpdated(showTime1.getTimeUpdated())
+                .build());
+        when(showTimeMapper.toResponse(showTime2)).thenReturn(ShowTimeResponse.builder()
+                .id(showtimeId2)
+                .hallId(hallId2)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId2)
+                .startDateTime(showTime2.getStartDateTime())
+                .endDateTime(showTime2.getEndDateTime())
+                .status(showTime2.getStatus())
+                .isDeleted(false)
+                .timeCreated(showTime2.getTimeCreated())
+                .timeUpdated(showTime2.getTimeUpdated())
+                .build());
 
         var result = showTimeService.searchShowtimesByFilmId(filmId, request);
 
@@ -619,5 +856,14 @@ class ShowTimeServiceImplTest {
         when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn("MANAGER");
         when(request.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
         return request;
+    }
+
+    private CinemaOperatingHoursResponse cinemaOperatingHours(UUID cinemaId, String openTime, String closeTime) {
+        return CinemaOperatingHoursResponse.builder()
+                .id(cinemaId)
+                .name("Cinema Alpha")
+                .openTime(LocalTime.parse(openTime))
+                .closeTime(LocalTime.parse(closeTime))
+                .build();
     }
 }

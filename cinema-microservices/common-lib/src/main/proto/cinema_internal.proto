@@ -24,6 +24,8 @@ message GetCinemaByUserIdRequest {
 message CinemaPayload {
   string id = 1;
   string name = 2;
+  string open_time = 3;
+  string close_time = 4;
 }
 
 message GetCinemaByUserIdReply {

@@ -12,6 +12,7 @@ import com.cinema.showtime_service.dto.response.SeatMapResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public interface ShowTimeService {
@@ -32,4 +33,8 @@ public interface ShowTimeService {
     SeatMapResponse getSeatMapByShowtimeId(UUID showtimeId);
 
     PageResponse<ShowTimeResponse> searchShowtimesByFilmId(UUID filmId, SearchShowtimesByFilmRequest request);
+
+    int promoteScheduledShowtimesToOngoing(LocalDateTime now, int windowDays);
+
+    int expireOngoingShowtimes(LocalDateTime now);
 }

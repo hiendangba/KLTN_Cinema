@@ -172,6 +172,8 @@ public class CinemaInternalGrpcService extends CinemaInternalServiceGrpc.CinemaI
         return CinemaPayload.newBuilder()
                 .setId(cinema.getId().toString())
                 .setName(Objects.toString(cinema.getName(), ""))
+                .setOpenTime(cinema.getOpenTime() == null ? "" : cinema.getOpenTime().toString())
+                .setCloseTime(cinema.getCloseTime() == null ? "" : cinema.getCloseTime().toString())
                 .build();
     }
 }
