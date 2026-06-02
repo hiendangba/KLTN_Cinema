@@ -30,6 +30,12 @@
 - Thêm kiểm tra giờ mở/đóng rạp khi tạo và cập nhật showtime để normalize theo khung vận hành.
 - Bổ sung job chuyển trạng thái showtime `scheduled -> ongoing` và `ongoing -> finished`.
 - Test `ShowTimeServiceImplTest` đã cover các case: start quá khứ, tạo slot qua mốc đóng cửa, cập nhật ngoài giờ vận hành, và scheduler transition.
+- `compose.prod.yaml` khai báo sẵn 3 biến scheduler cho `showtime-service` để prod config nhìn rõ giá trị chạy thực tế mà không phụ thuộc env ngoài.
+- `compose.prod.yaml` set `TZ=Asia/Ho_Chi_Minh` và `JAVA_TOOL_OPTIONS=-Duser.timezone=Asia/Ho_Chi_Minh` cho toàn bộ Java service để `LocalDateTime.now()` và scheduler chạy theo giờ Việt Nam.
+- Tách rule search showtime theo đúng nghiệp vụ: `search showtime` giờ có thể lọc mọi trạng thái, gồm cả `FINISHED`, còn `search showtime theo phim` chỉ tự ép `SCHEDULED` + `ONGOING`.
+- Bỏ hardcode status ở `ShowTimeRepositoryImpl` để repository chỉ còn là engine filter trung tính; status rule được đẩy lên service layer cho từng API.
+- Thêm filter `STATUS IN [SCHEDULED, ONGOING]` riêng cho `searchShowtimesByFilmId(...)`, đồng thời cho phép `searchShowtimes(...)` nhận status filter từ request mà không bị chặn ngầm.
+- Verify bằng `ShowTimeServiceImplTest` sau khi sửa: `16 tests`, `0 failures`, `0 errors`.
 
 > [!WARNING]
 > **BUG GỐC CỦA LUỒNG GOOGLE LOGIN**

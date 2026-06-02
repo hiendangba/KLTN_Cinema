@@ -3,6 +3,8 @@ services:
     image: ${IMAGE_REPO}/identity-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
@@ -52,6 +54,8 @@ services:
     image: ${IMAGE_REPO}/user-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
@@ -90,6 +94,8 @@ services:
     image: ${IMAGE_REPO}/film-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
@@ -126,6 +132,8 @@ services:
     image: ${IMAGE_REPO}/showtime-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
@@ -155,6 +163,9 @@ services:
       HALL_GRPC_PORT: 9197
       SEAT_GRPC_HOST: seat-service
       SEAT_GRPC_PORT: 9199
+      SHOWTIME_SCHEDULED_TO_ONGOING_CRON: "0 0 0 * * *"
+      SHOWTIME_SCHEDULED_TO_ONGOING_WINDOW_DAYS: "7"
+      SHOWTIME_ONGOING_TO_FINISHED_DELAY_MS: "300000"
       GRPC_SERVER_PORT: 9194
       SERVER_PORT: 8094
     expose:
@@ -175,6 +186,8 @@ services:
     image: ${IMAGE_REPO}/booking-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
@@ -213,6 +226,8 @@ services:
     image: ${IMAGE_REPO}/payment-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
@@ -250,6 +265,8 @@ services:
     image: ${IMAGE_REPO}/hall-services:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms48m -Xmx288m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       DB_POOL_MAX_SIZE: "4"
@@ -285,6 +302,8 @@ services:
     image: ${IMAGE_REPO}/seat-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms48m -Xmx144m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       DB_POOL_MAX_SIZE: "4"
@@ -314,6 +333,8 @@ services:
     image: ${IMAGE_REPO}/cinema-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms48m -Xmx288m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
@@ -345,6 +366,8 @@ services:
     image: ${IMAGE_REPO}/email-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
       JAVA_OPTS: "-Xms48m -Xmx128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"

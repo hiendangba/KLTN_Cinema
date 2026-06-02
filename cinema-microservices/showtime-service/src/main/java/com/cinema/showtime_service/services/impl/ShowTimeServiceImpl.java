@@ -112,6 +112,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 .operator("GTE")
                 .value(LocalDateTime.now())
                 .build());
+        filters.addAll(buildActiveShowtimeStatusFilters());
 
         if (request.getCinemaId() != null) {
             List<UUID> hallIds = hallGrpcClient.listActiveHallIdsByCinema(request.getCinemaId());
@@ -566,6 +567,16 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         }
 
         return cursor;
+    }
+
+    private List<FilterField<ShowTimeField>> buildActiveShowtimeStatusFilters() {
+        return List.of(FilterField.<ShowTimeField>builder()
+                .field(ShowTimeField.STATUS)
+                .operator("IN")
+                .value(List.of(
+                        ShowTimeEnum.ShowTimeStatus.SCHEDULED,
+                        ShowTimeEnum.ShowTimeStatus.ONGOING))
+                .build());
     }
 
     private boolean isStartWithinOperatingWindow(

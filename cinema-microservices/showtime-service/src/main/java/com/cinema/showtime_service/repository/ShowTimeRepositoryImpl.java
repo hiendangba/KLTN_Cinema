@@ -1,6 +1,5 @@
 package com.cinema.showtime_service.repository;
 
-import com.cinema.Enum.ShowTimeEnum;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
@@ -74,11 +73,6 @@ public class ShowTimeRepositoryImpl {
         if (keywordPredicate != null) {
             predicates.add(keywordPredicate);
         }
-
-        Predicate statusPredicate = root.get(ShowTimeField.STATUS.getEntityField()).in(
-                ShowTimeEnum.ShowTimeStatus.SCHEDULED,
-                ShowTimeEnum.ShowTimeStatus.ONGOING);
-        predicates.add(statusPredicate);
 
         if (filterBy != null) {
             for (FilterField<ShowTimeField> filter : filterBy) {

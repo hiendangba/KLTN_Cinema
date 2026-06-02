@@ -1,6 +1,8 @@
 package com.cinema.showtime_service.services.impl;
 
 import com.cinema.Enum.ShowTimeEnum;
+import com.cinema.dto.request.FilterField;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
@@ -371,6 +373,42 @@ class ShowTimeServiceImplTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void searchShowtimes_shouldAllowFinishedStatusFilter() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn("ADMIN");
+
+        PageRequest<ShowTimeField> pageRequest = PageRequest.<ShowTimeField>builder()
+                .page(1)
+                .size(10)
+                .filterBy(List.of(FilterField.<ShowTimeField>builder()
+                        .field(ShowTimeField.STATUS)
+                        .operator("EQ")
+                        .value(ShowTimeEnum.ShowTimeStatus.FINISHED)
+                        .build()))
+                .build();
+
+        when(showTimeRepositoryImpl.countWithFilter(eq(null), any())).thenReturn(0L);
+        when(showTimeRepositoryImpl.searchWithPageAndSortAndFilter(eq(null), eq(1), eq(10), any(), any()))
+                .thenReturn(List.of());
+
+        var result = showTimeService.searchShowtimes(pageRequest, request);
+
+        assertNotNull(result);
+        assertEquals(0L, result.getTotalElements());
+
+        ArgumentCaptor<List> filterCaptor = ArgumentCaptor.forClass(List.class);
+        verify(showTimeRepositoryImpl).countWithFilter(eq(null), filterCaptor.capture());
+
+        List<FilterField<ShowTimeField>> filters = (List<FilterField<ShowTimeField>>) filterCaptor.getValue();
+        assertEquals(1L, filters.stream().filter(filter -> filter.getField() == ShowTimeField.STATUS).count());
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == ShowTimeField.STATUS
+                        && "EQ".equalsIgnoreCase(filter.getOperator())
+                        && filter.getValue() == ShowTimeEnum.ShowTimeStatus.FINISHED));
+    }
+
+    @Test
     void updateShowTime_shouldUpdateStatusInSameRequest() {
         UUID userId = UUID.randomUUID();
         UUID cinemaId = UUID.randomUUID();
@@ -563,6 +601,9 @@ class ShowTimeServiceImplTest {
         assertTrue(filters.stream().anyMatch(filter ->
                 filter.getField() == ShowTimeField.START_DATE_TIME
                         && "GTE".equalsIgnoreCase(filter.getOperator())));
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == ShowTimeField.STATUS
+                        && "IN".equalsIgnoreCase(filter.getOperator())));
         assertTrue(filters.stream().anyMatch(filter -> filter.getField() == ShowTimeField.HALL_ID));
 
         List<com.cinema.dto.request.SortField<ShowTimeField>> sorts =
