@@ -16,7 +16,6 @@ import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
-import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.FilmResponse;
 import com.cinema.showtime_service.dto.response.HallResponse;
 import com.cinema.showtime_service.dto.response.PricingPolicyResponse;
@@ -428,24 +427,6 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 .message("Cáº­p nháº­t suáº¥t chiáº¿u thÃ nh cÃ´ng")
                 .build();
     }
-
-    @Override
-    @Transactional
-    public ActionMessageResponse updateShowTimeStatus(
-            UUID id,
-            UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
-            HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
-
-        ShowTime showTime = getEditableShowTime(id);
-        validateShowtimeAccess(showTime, resolveAccessibleCinemaIdsByUser(httpRequest));
-        showTime.setStatus(updateShowTimeStatusRequest.getStatus());
-        showTimeRepository.save(showTime);
-        return ActionMessageResponse.builder()
-                .message("Cáº­p nháº­t tráº¡ng thÃ¡i suáº¥t chiáº¿u thÃ nh cÃ´ng")
-                .build();
-    }
-
     @Override
     @Transactional
     public ActionMessageResponse deleteShowTime(UUID id, HttpServletRequest httpRequest) {

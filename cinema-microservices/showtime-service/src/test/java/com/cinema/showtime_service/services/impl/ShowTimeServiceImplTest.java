@@ -233,6 +233,63 @@ class ShowTimeServiceImplTest {
     }
 
     @Test
+    void updateShowTime_shouldUpdateStatusInSameRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID showTimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+
+        HttpServletRequest request = managerRequest(userId);
+        UpdateShowTimeRequest updateRequest = UpdateShowTimeRequest.builder()
+                .pricingPolicyId(pricingPolicyId)
+                .startDateTime(LocalDateTime.now().plusDays(1))
+                .endDateTime(LocalDateTime.now().plusDays(1).plusHours(3))
+                .status(ShowTimeEnum.ShowTimeStatus.ONGOING)
+                .build();
+
+        ShowTime existing = new ShowTime();
+        existing.setId(showTimeId);
+        existing.setHallId(hallId);
+        existing.setFilmId(filmId);
+        existing.setPricingPolicyId(UUID.randomUUID());
+        existing.setStartDateTime(LocalDateTime.now().plusDays(2));
+        existing.setEndDateTime(LocalDateTime.now().plusDays(2).plusHours(3));
+        existing.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        existing.setIsDeleted(false);
+
+        PricingPolicy pricingPolicy = new PricingPolicy();
+        pricingPolicy.setId(pricingPolicyId);
+        pricingPolicy.setCinemaId(cinemaId);
+
+        FilmResponse filmResponse = FilmResponse.builder()
+                .id(filmId)
+                .duration(90)
+                .build();
+
+        when(showTimeRepository.findById(showTimeId)).thenReturn(Optional.of(existing));
+        when(bookingGrpcClient.isShowtimeBooked(showTimeId)).thenReturn(false);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(userId, HeaderNames.ROLE_MANAGER)).thenReturn(List.of(cinemaId));
+        when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
+        when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
+        when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = showTimeService.updateShowTime(showTimeId, updateRequest, request);
+
+        assertNotNull(result);
+        ArgumentCaptor<ShowTime> captor = ArgumentCaptor.forClass(ShowTime.class);
+        verify(showTimeRepository).save(captor.capture());
+
+        ShowTime saved = captor.getValue();
+        assertEquals(pricingPolicyId, saved.getPricingPolicyId());
+        assertEquals(updateRequest.getStartDateTime(), saved.getStartDateTime());
+        assertEquals(updateRequest.getEndDateTime(), saved.getEndDateTime());
+        assertEquals(ShowTimeEnum.ShowTimeStatus.ONGOING, saved.getStatus());
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void searchShowtimesByFilmId_shouldFilterByDateAndCinemaAndSort() {
         UUID filmId = UUID.randomUUID();

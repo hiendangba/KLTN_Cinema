@@ -9,7 +9,6 @@ import com.cinema.dto.response.ResultResponse;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
-import com.cinema.showtime_service.dto.request.UpdateShowTimeStatusRequest;
 import com.cinema.showtime_service.dto.response.SeatMapResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
 import com.cinema.showtime_service.services.ShowTimeService;
@@ -20,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -59,16 +57,6 @@ public class ShowTimeController extends BaseController {
             @Valid @RequestBody UpdateShowTimeRequest updateShowTimeRequest,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = showTimeService.updateShowTime(id, updateShowTimeRequest, httpRequest);
-        return ok(response);
-    }
-
-    @PatchMapping("/{id}")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> updateShowTimeStatus(
-            @Valid @PathVariable UUID id,
-            @Valid @RequestBody UpdateShowTimeStatusRequest updateShowTimeStatusRequest,
-            HttpServletRequest httpRequest) {
-        ActionMessageResponse response = showTimeService.updateShowTimeStatus(id, updateShowTimeStatusRequest,
-                httpRequest);
         return ok(response);
     }
 
