@@ -37,6 +37,7 @@
 - Thêm filter `STATUS IN [SCHEDULED, ONGOING]` riêng cho `searchShowtimesByFilmId(...)`, đồng thời cho phép `searchShowtimes(...)` nhận status filter từ request mà không bị chặn ngầm.
 - Mở rộng keyword search của `booking-service` cho 2 API operator cinema `purchased/search` và `unpaid/search`: keyword giờ là text thuần, tìm case-insensitive theo mã đơn, tên phim, tên khách, SDT, ghế và tên rạp; bỏ nhánh parse UUID cũ để keyword như `123` không còn gây lỗi.
 - Với keyword search booking, `cinemaName` được resolve ở service layer sang danh sách `cinemaId` khớp rồi đẩy xuống repository theo kiểu OR logic, còn `seatCode` được search bằng `EXISTS` trên `booking_seat_item` để không nhân bản dòng kết quả.
+- Sửa lỗi SQL `lower(uuid)` trong keyword search booking: cột UUID `id` chỉ dùng `LIKE` trực tiếp trên cast string, không bọc `LOWER()`; keyword không khớp thì trả rỗng thay vì ném lỗi database.
 - Verify bằng `BookingServiceImplTest` sau khi sửa: `12 tests`, `0 failures`, `0 errors`.
 - Verify bằng `ShowTimeServiceImplTest` sau khi sửa: `16 tests`, `0 failures`, `0 errors`.
 - Bỏ `GET /api/payments/reconciliation` vì summary đối soát trùng vai trò với report search/export; sau đó cũng bỏ luôn `POST /api/payments/reconciliation/search` và `POST /api/payments/reconciliation/export` để payment-service chỉ còn report doanh thu payment.

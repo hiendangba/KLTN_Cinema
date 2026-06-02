@@ -421,8 +421,8 @@ public class BookingRepositoryImpl {
         String normalized = keyword.trim().toLowerCase(Locale.ROOT);
         List<Predicate> predicates = new ArrayList<>();
         predicates.add(cb.like(
-                cb.lower(root.get(BookingField.ID.getEntityField()).as(String.class)),
-                "%" + normalized + "%"));
+                root.get(BookingField.ID.getEntityField()).as(String.class),
+                "%" + keyword.trim() + "%"));
         predicates.add(cb.like(
                 cb.lower(root.get(BookingField.FILM_TITLE.getEntityField()).as(String.class)),
                 "%" + normalized + "%"));
