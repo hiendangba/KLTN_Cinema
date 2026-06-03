@@ -23,6 +23,7 @@ import com.cinema.payment_service.repository.PromotionFilmRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
 import com.cinema.payment_service.services.PromotionService;
 import com.cinema.payment_service.support.PromotionEngine;
+import com.cinema.text.SearchTextUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -373,12 +374,11 @@ public class PromotionServiceImpl implements PromotionService {
         if (!StringUtils.hasText(keyword) || item == null) {
             return true;
         }
-        String normalized = keyword.toLowerCase(Locale.ROOT);
-        return containsIgnoreCase(item.getCode(), normalized)
-                || containsIgnoreCase(item.getName(), normalized)
-                || containsIgnoreCase(item.getDescription(), normalized)
-                || containsIgnoreCase(item.getCreatedByRole(), normalized)
-                || containsIgnoreCase(item.getId() == null ? null : item.getId().toString(), normalized);
+        return SearchTextUtils.containsIgnoreCase(item.getCode(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.getName(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.getDescription(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.getCreatedByRole(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.getId() == null ? null : item.getId().toString(), keyword);
     }
 
     private boolean matchesAllFilters(Promotion item, List<FilterField<PromotionField>> filters) {
@@ -407,7 +407,7 @@ public class PromotionServiceImpl implements PromotionService {
             case "EQ" -> compareValues(fieldValue, PromotionField.convertValue(String.valueOf(rawValue), dataType)) == 0;
             case "NEQ" -> compareValues(fieldValue, PromotionField.convertValue(String.valueOf(rawValue), dataType)) != 0;
             case "LIKE" -> fieldValue instanceof String text
-                    && containsIgnoreCase(text, String.valueOf(rawValue).toLowerCase(Locale.ROOT));
+                    && SearchTextUtils.containsIgnoreCase(text, String.valueOf(rawValue));
             case "GTE" -> compareValues(fieldValue, PromotionField.convertValue(String.valueOf(rawValue), dataType)) >= 0;
             case "LTE" -> compareValues(fieldValue, PromotionField.convertValue(String.valueOf(rawValue), dataType)) <= 0;
             case "IN" -> matchesInValues(fieldValue, rawValue, dataType);
@@ -496,13 +496,6 @@ public class PromotionServiceImpl implements PromotionService {
             }
         }
         return String.valueOf(left).compareToIgnoreCase(String.valueOf(right));
-    }
-
-    private boolean containsIgnoreCase(String text, String keyword) {
-        if (text == null || keyword == null) {
-            return false;
-        }
-        return text.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT));
     }
 
     private List<Promotion> paginate(List<Promotion> items, int page, int size) {

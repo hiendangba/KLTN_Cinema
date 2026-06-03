@@ -6,6 +6,7 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
 import com.cinema.showtime_service.entity.ShowTime;
+import com.cinema.text.SearchTextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -60,6 +61,20 @@ public class ShowTimeRepositoryImpl {
         countQuery.select(cb.count(root));
         countQuery.where(predicates.toArray(new Predicate[0]));
         return entityManager.createQuery(countQuery).getSingleResult();
+    }
+
+    public List<ShowTime> searchAllWithSortAndFilter(
+            List<SortField<ShowTimeField>> sortBy,
+            List<FilterField<ShowTimeField>> filterBy) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<ShowTime> cq = cb.createQuery(ShowTime.class);
+        Root<ShowTime> root = cq.from(ShowTime.class);
+
+        List<Predicate> predicates = buildPredicates(cb, root, null, filterBy);
+        cq.where(predicates.toArray(new Predicate[0]));
+        cq.orderBy(buildOrders(cb, root, sortBy));
+
+        return entityManager.createQuery(cq).getResultList();
     }
 
     private List<Predicate> buildPredicates(
@@ -134,7 +149,7 @@ public class ShowTimeRepositoryImpl {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        return cb.like(cb.lower(root.get(fieldName).as(String.class)), "%" + value.toLowerCase(Locale.ROOT) + "%");
+        return SearchTextUtils.accentInsensitiveLike(cb, root.get(fieldName), value);
     }
 
     private Predicate buildComparePredicate(
@@ -291,9 +306,9 @@ public class ShowTimeRepositoryImpl {
         }
 
         List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.like(root.get(ShowTimeField.HALL_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
-        predicates.add(cb.like(root.get(ShowTimeField.FILM_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
-        predicates.add(cb.like(root.get(ShowTimeField.PRICING_POLICY_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(ShowTimeField.HALL_ID.getEntityField()), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(ShowTimeField.FILM_ID.getEntityField()), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(ShowTimeField.PRICING_POLICY_ID.getEntityField()), keyword));
 
         try {
             UUID keywordUuid = UUID.fromString(keyword);

@@ -409,6 +409,161 @@ class ShowTimeServiceImplTest {
     }
 
     @Test
+    void searchShowtimes_shouldSearchByFilmTitleKeyword() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn("ADMIN");
+
+        UUID filmId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+
+        PageRequest<ShowTimeField> pageRequest = PageRequest.<ShowTimeField>builder()
+                .page(1)
+                .size(10)
+                .keyword("Cuối")
+                .build();
+
+        ShowTime showTime = new ShowTime();
+        showTime.setId(showtimeId);
+        showTime.setHallId(hallId);
+        showTime.setFilmId(filmId);
+        showTime.setPricingPolicyId(pricingPolicyId);
+        showTime.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        showTime.setIsDeleted(false);
+
+        PricingPolicy policy = new PricingPolicy();
+        policy.setId(pricingPolicyId);
+        PricingPolicyResponse policyResponse = PricingPolicyResponse.builder().id(pricingPolicyId).build();
+        FilmResponse filmResponse = FilmResponse.builder()
+                .id(filmId)
+                .title("VENOM: KÈO CUỐI")
+                .build();
+        HallResponse hallResponse = HallResponse.builder()
+                .id(hallId)
+                .cinemaId(cinemaId)
+                .name("Phòng Chiếu CS1")
+                .build();
+        SeatGrpcClient.LayoutBundle layoutBundle = SeatGrpcClient.LayoutBundle.builder()
+                .totalRows(1)
+                .totalCols(1)
+                .screenPosition("TOP")
+                .seats(List.of(
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("A1")
+                                .setRow(1)
+                                .setCol(1)
+                                .setSeatType("STANDARD")
+                                .build()))
+                .cells(List.of())
+                .build();
+
+        when(showTimeRepositoryImpl.searchAllWithSortAndFilter(any(), any())).thenReturn(List.of(showTime));
+        when(showTimeMapper.toResponse(showTime)).thenReturn(ShowTimeResponse.builder()
+                .id(showtimeId)
+                .hallId(hallId)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId)
+                .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
+                .build());
+        when(pricingPolicyRepository.findAllById(List.of(pricingPolicyId))).thenReturn(List.of(policy));
+        when(pricingPolicyMapper.toResponse(policy)).thenReturn(policyResponse);
+        when(filmGrpcClient.getFilmsByIds(List.of(filmId))).thenReturn(Map.of(filmId, filmResponse));
+        when(hallGrpcClient.getHallById(hallId)).thenReturn(hallResponse);
+        when(cinemaGrpcClient.getCinemaNameById(cinemaId)).thenReturn("CinemaStar Lê Văn Việt");
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1"))))
+                .thenReturn(Map.of("A1", "AVAILABLE"));
+
+        var result = showTimeService.searchShowtimes(pageRequest, request);
+
+        assertNotNull(result);
+        assertEquals(1L, result.getTotalElements());
+        assertEquals(1, result.getData().size());
+        assertEquals("VENOM: KÈO CUỐI", result.getData().get(0).getFilm().getTitle());
+        assertEquals("Phòng Chiếu CS1", result.getData().get(0).getHall().getName());
+        verify(showTimeRepositoryImpl).searchAllWithSortAndFilter(any(), any());
+    }
+
+    @Test
+    void searchShowtimes_shouldSearchByHallNameKeyword() {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn("ADMIN");
+
+        UUID filmId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+
+        PageRequest<ShowTimeField> pageRequest = PageRequest.<ShowTimeField>builder()
+                .page(1)
+                .size(10)
+                .keyword("Phòng Chiếu CS1")
+                .build();
+
+        ShowTime showTime = new ShowTime();
+        showTime.setId(showtimeId);
+        showTime.setHallId(hallId);
+        showTime.setFilmId(filmId);
+        showTime.setPricingPolicyId(pricingPolicyId);
+        showTime.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        showTime.setIsDeleted(false);
+
+        PricingPolicy policy = new PricingPolicy();
+        policy.setId(pricingPolicyId);
+        PricingPolicyResponse policyResponse = PricingPolicyResponse.builder().id(pricingPolicyId).build();
+        FilmResponse filmResponse = FilmResponse.builder()
+                .id(filmId)
+                .title("Movie A")
+                .build();
+        HallResponse hallResponse = HallResponse.builder()
+                .id(hallId)
+                .cinemaId(cinemaId)
+                .name("Phòng Chiếu CS1")
+                .build();
+        SeatGrpcClient.LayoutBundle layoutBundle = SeatGrpcClient.LayoutBundle.builder()
+                .totalRows(1)
+                .totalCols(1)
+                .screenPosition("TOP")
+                .seats(List.of(
+                        com.cinema.grpc.seat.LayoutSeatPayload.newBuilder()
+                                .setSeatCode("A1")
+                                .setRow(1)
+                                .setCol(1)
+                                .setSeatType("STANDARD")
+                                .build()))
+                .cells(List.of())
+                .build();
+
+        when(showTimeRepositoryImpl.searchAllWithSortAndFilter(any(), any())).thenReturn(List.of(showTime));
+        when(showTimeMapper.toResponse(showTime)).thenReturn(ShowTimeResponse.builder()
+                .id(showtimeId)
+                .hallId(hallId)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId)
+                .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
+                .build());
+        when(pricingPolicyRepository.findAllById(List.of(pricingPolicyId))).thenReturn(List.of(policy));
+        when(pricingPolicyMapper.toResponse(policy)).thenReturn(policyResponse);
+        when(filmGrpcClient.getFilmsByIds(List.of(filmId))).thenReturn(Map.of(filmId, filmResponse));
+        when(hallGrpcClient.getHallById(hallId)).thenReturn(hallResponse);
+        when(cinemaGrpcClient.getCinemaNameById(cinemaId)).thenReturn("CinemaStar Lê Văn Việt");
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), eq(List.of("A1"))))
+                .thenReturn(Map.of("A1", "AVAILABLE"));
+
+        var result = showTimeService.searchShowtimes(pageRequest, request);
+
+        assertNotNull(result);
+        assertEquals(1L, result.getTotalElements());
+        assertEquals(1, result.getData().size());
+        assertEquals("Phòng Chiếu CS1", result.getData().get(0).getHall().getName());
+        verify(showTimeRepositoryImpl).searchAllWithSortAndFilter(any(), any());
+    }
+
+    @Test
     void updateShowTime_shouldUpdateStatusInSameRequest() {
         UUID userId = UUID.randomUUID();
         UUID cinemaId = UUID.randomUUID();

@@ -35,11 +35,43 @@
 - Tách rule search showtime theo đúng nghiệp vụ: `search showtime` giờ có thể lọc mọi trạng thái, gồm cả `FINISHED`, còn `search showtime theo phim` chỉ tự ép `SCHEDULED` + `ONGOING`.
 - Bỏ hardcode status ở `ShowTimeRepositoryImpl` để repository chỉ còn là engine filter trung tính; status rule được đẩy lên service layer cho từng API.
 - Thêm filter `STATUS IN [SCHEDULED, ONGOING]` riêng cho `searchShowtimesByFilmId(...)`, đồng thời cho phép `searchShowtimes(...)` nhận status filter từ request mà không bị chặn ngầm.
-- Mở rộng keyword search của `booking-service` cho 2 API operator cinema `purchased/search` và `unpaid/search`: keyword giờ là text thuần, tìm case-insensitive theo mã đơn, tên phim, tên khách, SDT, ghế và tên rạp; bỏ nhánh parse UUID cũ để keyword như `123` không còn gây lỗi.
-- Với keyword search booking, `cinemaName` được resolve ở service layer sang danh sách `cinemaId` khớp rồi đẩy xuống repository theo kiểu OR logic, còn `seatCode` được search bằng `EXISTS` trên `booking_seat_item` để không nhân bản dòng kết quả.
+- Mở rộng keyword search của `booking-service` cho 2 API operator cinema `purchased/search` và `unpaid/search`: keyword giờ là text thuần, tìm case-insensitive theo mã đơn, tên phim, tên khách, SDT và ghế; bỏ nhánh parse UUID cũ để keyword như `123` không còn gây lỗi.
+- Với keyword search booking, `seatCode` được search bằng `EXISTS` trên `booking_seat_item` để không nhân bản dòng kết quả; `cinemaName` không còn tham gia keyword search, vì dropdown rạp đã là filter riêng.
 - Sửa lỗi SQL `lower(uuid)` trong keyword search booking: cột UUID `id` chỉ dùng `LIKE` trực tiếp trên cast string, không bọc `LOWER()`; keyword không khớp thì trả rỗng thay vì ném lỗi database.
+- Khi cần `LIKE` trên UUID `booking.id`, dùng `concat('', id)` để ép PostgreSQL cast sang text trước rồi mới lower/like; `.as(String.class)` của Criteria không đáng tin cậy cho PostgreSQL trong case này.
+- Search booking theo tên phim/tên khách/số điện thoại/ghế đã chuyển sang accent-insensitive: keyword được strip dấu bằng `Normalizer`, còn phía SQL dùng `translate(lower(field), ...)` để `Cuối` có thể match `KÈO CUỐI` thay vì chỉ match khi gõ đúng nguyên dấu.
+- Lý do phải làm vậy: `lower()` chỉ giải quyết hoa/thường, không xử lý bỏ dấu tiếng Việt; nếu không normalize hai phía thì search text có dấu rất dễ bị lọt mất kết quả dù UI và data đều đúng.
+- Verify bằng `booking-service` compile lại thành công sau khi đổi keyword predicate (`BUILD SUCCESS`), chưa có integration test DB riêng cho accent search nên vẫn cần chú ý khi deploy lên môi trường thật.
 - Verify bằng `BookingServiceImplTest` sau khi sửa: `12 tests`, `0 failures`, `0 errors`.
 - Verify bằng `ShowTimeServiceImplTest` sau khi sửa: `16 tests`, `0 failures`, `0 errors`.
+- Đồng bộ helper search accent-insensitive ra nhiều service khác bằng `common-lib/src/main/java/com/cinema/text/SearchTextUtils.java`.
+  - helper normalize keyword bằng `Normalizer` + `đ/Đ -> d`
+  - SQL `LIKE` dùng `translate(lower(field), ...)` để match tiếng Việt có dấu và không dấu
+  - repository áp dụng ở `cinema-service`, `film-service`, `booking-service`, `payment-service`
+  - in-memory search áp dụng ở `payment-service` (`PromotionServiceImpl`) và `showtime-service` (`PricingPolicyServiceImpl`)
+- Giữ nguyên các nhánh exact-match / UUID / status / date / between; chỉ đổi behavior search text người dùng nhìn thấy.
+- Verify build:
+  - `common-lib` install pass
+  - `booking-service` compile + `BookingServiceImplTest` pass
+  - `payment-service` compile + `PaymentSessionServiceImplTest` pass
+  - `payment-service` compile + `PromotionServiceImplTest` pass
+  - `showtime-service` compile + `ShowTimeServiceImplTest` pass
+  - `cinema-service` và `film-service` compile pass; test service hiện tại trong workspace có fixture/mock lệch sẵn nên không dùng làm blocker cho đổi search accent-insensitive này.
+- Mở rộng accent-insensitive search tiếp sang:
+  - `hall-service` search hall name/cinemaId bằng helper chung
+  - `showtime-service` keyword/search predicate bằng helper chung cho các UUID field liên quan showtime
+  - `user-service` 3 endpoint `/staffs/search`, `/customers/search`, `/managers/search` dùng repository custom để search theo keyword accent-insensitive trên `id`, `name`, `email`, `phone`, `bankCode`, `accountNumber`, `accountName`
+- `user-service` search giờ không còn chỉ page theo role; keyword text có dấu được normalize bằng helper chung và search theo role vẫn giữ nguyên.
+- Verify build bổ sung:
+  - `booking-service` reactor compile pass với `common-lib`
+  - `user-service`, `showtime-service`, `hall-service` reactor compile pass với `common-lib`
+- Test hiện có của `cinema-service` và `film-service` vẫn có fixture/mock lệch sẵn ở workspace nên không dùng để chặn thay đổi search accent-insensitive; logic compile/runtime của các search path đã được xác nhận qua build.
+- Đổi `/api/cinemas/me` sang `POST /api/cinemas/me/search` để giữ đúng scope quyền hiện tại nhưng trả về `PageResponse<CinemaResponse>` giống các search endpoint khác; manager/staff chỉ nhìn thấy rạp trong phạm vi của họ và vẫn chỉ lấy cinema `ACTIVE`.
+- `CinemaServiceImpl` tách pipeline search page chung ra helper riêng để `searchCinemas(...)` và `searchMyManagedCinemas(...)` dùng lại toàn bộ keyword/filter/sort/page/enrich logic, chỉ khác phần scope quyền.
+- Verify bằng `CinemaServiceImplTest` mới cho `/api/cinemas/me/search`:
+  - manager thấy đúng rạp của mình
+  - staff thấy đúng rạp được gán
+  - 2 test mục tiêu pass `2 tests, 0 failures, 0 errors`
 - Bỏ `GET /api/payments/reconciliation` vì summary đối soát trùng vai trò với report search/export; sau đó cũng bỏ luôn `POST /api/payments/reconciliation/search` và `POST /api/payments/reconciliation/export` để payment-service chỉ còn report doanh thu payment.
 - Thêm [`REPORT_GUIDE.md`](./REPORT_GUIDE.md) để giải thích riêng ý nghĩa các report payment/booking/showtime, kèm ví dụ dùng trong thực tế và câu trả lời ngắn khi bị hỏi vấn đáp.
 - Xóa hẳn reconciliation detail khỏi payment-service: `PaymentController`, `PaymentSessionService`, `PaymentSessionServiceImpl`, `PaymentTransactionRepositoryImpl`, `PaymentSessionServiceImplTest`, và 3 DTO reconciliation đã bị bỏ; verify bằng `PaymentSessionServiceImplTest` pass `6 tests, 0 failures, 0 errors`.
@@ -1395,6 +1427,45 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - Compile/test full trong môi trường local đang bị chặn bởi lỗi generated/gRPC có sẵn của repo, không phải do logic mới.
 - Ghi chú deploy:
   - Rebuild/redeploy tối thiểu `showtime-service` khi phát hành thay đổi API này.
+
+### 2026-06-03 Showtime keyword search theo tên phim và phòng
+- Yêu cầu:
+  - `GET/POST /api/showtimes/search` cần tìm được theo tên phim và tên phòng như placeholder FE `Tìm phim, rạp, phòng...`.
+  - Không để keyword text của showtime search bị khóa cứng vào UUID hall/film/pricingPolicy nữa.
+- Quyết định:
+  - `showtime-service` chuyển keyword search sang lọc accent-insensitive ở service layer sau khi enrich film/hall/cinema name.
+  - Keyword bây giờ match được:
+    - mã showtime / hallId / filmId / pricingPolicyId
+    - tên phim
+    - tên phòng
+    - tên rạp trong `hall.cinemaName`
+  - `searchShowtimesByFilmId(...)` không enrich lặp nữa để tránh gọi `cinemaGrpcClient.getCinemaNameById(...)` hai lần cho cùng một rạp.
+- Files đã cập nhật:
+  - `showtime-service/src/main/java/com/cinema/showtime_service/services/impl/ShowTimeServiceImpl.java`
+  - `showtime-service/src/main/java/com/cinema/showtime_service/repository/ShowTimeRepositoryImpl.java`
+  - `showtime-service/src/test/java/com/cinema/showtime_service/services/impl/ShowTimeServiceImplTest.java`
+- Verify:
+  - `showtime-service\mvnw.cmd -pl showtime-service -Dtest=ShowTimeServiceImplTest test`
+  - `BUILD SUCCESS`
+  - `18 tests, 0 failures, 0 errors`
+- Risk:
+  - keyword search của showtime hiện lọc sau enrichment nên nếu dữ liệu trả về rất lớn sẽ có chi phí gRPC + in-memory filter; cần tối ưu lại nếu sau này list showtime tăng mạnh.
+
+### 2026-06-03 Đồng bộ tên `hall-service`
+- Yêu cầu:
+  - bỏ tên `hall-services` lệch chuẩn để local/prod cùng dùng một tên service thống nhất là `hall-service`.
+- Quyết định:
+  - `hall-service/src/main/resources/application.yaml` đổi default `APP_NAME` và Redis client name sang `hall-service`.
+  - `envoy/envoy.prod.yaml` và `envoy/envoy.local.yaml` đổi cluster/route từ `hall-services` sang `hall-service`.
+  - `compose.prod.yaml` vốn đã dùng `hall-service`, nên không cần đổi thêm.
+- Files đã cập nhật:
+  - `hall-service/src/main/resources/application.yaml`
+  - `envoy/envoy.prod.yaml`
+  - `envoy/envoy.local.yaml`
+- Verify:
+  - `rg -n "hall-services" compose.prod.yaml compose.local.yaml envoy\\envoy.prod.yaml envoy\\envoy.local.yaml hall-service\\src\\main\\resources\\application.yaml` không còn match.
+- Risk:
+  - cần recreate lại `hall-service` và reload Envoy để các cấu hình tên mới ăn vào runtime.
 
 
 

@@ -99,41 +99,7 @@ public class CinemaServiceImpl implements CinemaService {
         if (scopedRequest == null) {
             return emptyCinemaPageResponse(request);
         }
-
-        String keyword = scopedRequest.getNormalizedKeyword();
-        int page = scopedRequest.getPageOrDefault();
-        int size = scopedRequest.getSizeOrDefault();
-
-        List<SortField<CinemaField>> sortFields = scopedRequest.getSortBy();
-        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
-        boolean hasIdSort = sortFields.stream()
-                .anyMatch(sort -> sort != null && sort.getField() == CinemaField.ID);
-        if (!hasIdSort) {
-            sortFields.add(new SortField<>(CinemaField.ID, "ASC"));
-        }
-
-        List<FilterField<CinemaField>> filterFields = scopedRequest.getFilterBy();
-        long totalElements = cinemaRepositoryImpl.countWithFilter(keyword, filterFields);
-        List<Cinema> cinemas = cinemaRepositoryImpl.searchWithPageAndSortAndFilter(
-                keyword, page, size, sortFields, filterFields);
-
-        Map<UUID, List<UUID>> staffByCinema = mapActiveStaffIdsByCinema(cinemas);
-        List<CinemaResponse> data = cinemas.stream()
-                .map(cinema -> cinemaMapper.toResponse(cinema, staffByCinema.getOrDefault(cinema.getId(), List.of())))
-                .collect(java.util.stream.Collectors.toList());
-        populateManagerNames(data);
-
-        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
-
-        return PageResponse.<CinemaResponse>builder()
-                .data(data)
-                .currentPage(page)
-                .totalPages(totalPages)
-                .totalElements(totalElements)
-                .size(size)
-                .hasNext(page < totalPages)
-                .hasPrevious(page > 1)
-                .build();
+        return searchCinemaPageInternal(scopedRequest);
     }
 
     // Cap nhat thong tin rap; flow nay chua cho doi ma rap.
@@ -282,6 +248,18 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     @Transactional(readOnly = true)
+    public PageResponse<CinemaResponse> searchMyManagedCinemas(PageRequest<CinemaField> request,
+                                                                HttpServletRequest httpRequest) {
+        validateSelfReadRole(httpRequest);
+        PageRequest<CinemaField> scopedRequest = scopeMyCinemaSearchRequest(request, httpRequest);
+        if (scopedRequest == null) {
+            return emptyCinemaPageResponse(request);
+        }
+        return searchCinemaPageInternal(scopedRequest);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<CinemaResponse> getAllActiveCinemas() {
         return mapManagedCinemasToResponses(cinemaRepository.findAllByIsDeletedFalseOrderByCreatedAtDesc());
     }
@@ -339,6 +317,44 @@ public class CinemaServiceImpl implements CinemaService {
         CinemaResponse response = cinemaMapper.toResponse(cinema, staffIds);
         populateManagerName(response);
         return response;
+    }
+
+    // Chuoi search page chung cho search rap.
+    private PageResponse<CinemaResponse> searchCinemaPageInternal(PageRequest<CinemaField> scopedRequest) {
+        String keyword = scopedRequest.getNormalizedKeyword();
+        int page = scopedRequest.getPageOrDefault();
+        int size = scopedRequest.getSizeOrDefault();
+
+        List<SortField<CinemaField>> sortFields = scopedRequest.getSortBy();
+        sortFields = sortFields == null ? new ArrayList<>() : new ArrayList<>(sortFields);
+        boolean hasIdSort = sortFields.stream()
+                .anyMatch(sort -> sort != null && sort.getField() == CinemaField.ID);
+        if (!hasIdSort) {
+            sortFields.add(new SortField<>(CinemaField.ID, "ASC"));
+        }
+
+        List<FilterField<CinemaField>> filterFields = scopedRequest.getFilterBy();
+        long totalElements = cinemaRepositoryImpl.countWithFilter(keyword, filterFields);
+        List<Cinema> cinemas = cinemaRepositoryImpl.searchWithPageAndSortAndFilter(
+                keyword, page, size, sortFields, filterFields);
+
+        Map<UUID, List<UUID>> staffByCinema = mapActiveStaffIdsByCinema(cinemas);
+        List<CinemaResponse> data = cinemas.stream()
+                .map(cinema -> cinemaMapper.toResponse(cinema, staffByCinema.getOrDefault(cinema.getId(), List.of())))
+                .collect(java.util.stream.Collectors.toList());
+        populateManagerNames(data);
+
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+
+        return PageResponse.<CinemaResponse>builder()
+                .data(data)
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .build();
     }
 
     // Chi lay staff active cua rap.
@@ -562,6 +578,54 @@ public class CinemaServiceImpl implements CinemaService {
         List<FilterField<CinemaField>> filterFields = request.getFilterBy() == null
                 ? new ArrayList<>()
                 : new ArrayList<>(request.getFilterBy());
+
+        if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            filterFields.add(FilterField.<CinemaField>builder()
+                    .field(CinemaField.MANAGER_ID)
+                    .operator("EQ")
+                    .value(userId)
+                    .build());
+        } else if (HeaderNames.ROLE_STAFF.equals(role)) {
+            CinemaStaff staffLink = cinemaStaffRepository.findByStaffId(userId)
+                    .filter(CinemaStaff::getActive)
+                    .orElse(null);
+            if (staffLink == null) {
+                return null;
+            }
+            filterFields.add(FilterField.<CinemaField>builder()
+                    .field(CinemaField.ID)
+                    .operator("EQ")
+                    .value(staffLink.getCinemaId())
+                    .build());
+        }
+
+        return PageRequest.<CinemaField>builder()
+                .page(request.getPage())
+                .size(request.getSize())
+                .keyword(request.getKeyword())
+                .sortBy(request.getSortBy() == null ? null : new ArrayList<>(request.getSortBy()))
+                .filterBy(filterFields)
+                .build();
+    }
+
+    private PageRequest<CinemaField> scopeMyCinemaSearchRequest(PageRequest<CinemaField> request,
+                                                                HttpServletRequest httpRequest) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        UUID userId = RequestAuthUtils.requireUserId(httpRequest);
+
+        List<FilterField<CinemaField>> filterFields = request.getFilterBy() == null
+                ? new ArrayList<>()
+                : new ArrayList<>(request.getFilterBy());
+        filterFields.add(FilterField.<CinemaField>builder()
+                .field(CinemaField.STATUS)
+                .operator("EQ")
+                .value(CinemaStatus.ACTIVE)
+                .build());
 
         if (HeaderNames.ROLE_MANAGER.equals(role)) {
             filterFields.add(FilterField.<CinemaField>builder()

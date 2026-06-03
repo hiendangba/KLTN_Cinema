@@ -221,6 +221,106 @@ class CinemaServiceImplTest {
     }
 
     @Test
+    void searchMyManagedCinemas_scopesResultsToManagerOwnership() {
+        UUID managerId = UUID.randomUUID();
+        MockHttpServletRequest request = managerRequest(managerId);
+        Cinema owned = cinema("OWNED", managerId);
+        owned.setStatus(CinemaStatus.ACTIVE);
+
+        when(cinemaRepositoryImpl.countWithFilter(any(), anyList())).thenReturn(1L);
+        when(cinemaRepositoryImpl.searchWithPageAndSortAndFilter(any(), anyInt(), anyInt(), anyList(), anyList()))
+                .thenAnswer(invocation -> {
+                    List<com.cinema.dto.request.FilterField<CinemaField>> filters = invocation.getArgument(4);
+                    assertThat(filters).anyMatch(filter ->
+                            filter.getField() == CinemaField.MANAGER_ID
+                                    && "EQ".equalsIgnoreCase(filter.getOperator())
+                                    && managerId.equals(filter.getValue()));
+                    assertThat(filters).anyMatch(filter ->
+                            filter.getField() == CinemaField.STATUS
+                                    && "EQ".equalsIgnoreCase(filter.getOperator())
+                                    && CinemaStatus.ACTIVE.equals(filter.getValue()));
+                    return List.of(owned);
+                });
+        when(cinemaStaffRepository.findByCinemaIdInAndActiveTrue(anyList())).thenReturn(List.of());
+        when(cinemaMapper.toResponse(any(Cinema.class), anyList())).thenAnswer(invocation -> {
+            Cinema cinema = invocation.getArgument(0);
+            List<UUID> staffIds = invocation.getArgument(1);
+            return CinemaResponse.builder()
+                    .id(cinema.getId())
+                    .code(cinema.getCode())
+                    .name(cinema.getName())
+                    .managerId(cinema.getManagerId())
+                    .staffIds(staffIds)
+                    .build();
+        });
+        when(userGrpcClient.getUserNameById(managerId)).thenReturn("Manager One");
+
+        PageRequest<CinemaField> pageRequest = PageRequest.<CinemaField>builder()
+                .page(1)
+                .size(20)
+                .keyword("OWNED")
+                .build();
+
+        PageResponse<CinemaResponse> response = cinemaService.searchMyManagedCinemas(pageRequest, request);
+
+        assertThat(response.getData()).hasSize(1);
+        assertThat(response.getData().get(0).getName()).isEqualTo(owned.getName());
+        assertThat(response.getTotalElements()).isEqualTo(1L);
+        assertThat(response.getData()).allMatch(item -> "Manager One".equals(item.getManagerName()));
+    }
+
+    @Test
+    void searchMyManagedCinemas_scopesResultsToStaffAssignment() {
+        UUID managerId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID assignedCinemaId = UUID.randomUUID();
+        MockHttpServletRequest request = staffRequest(staffId);
+        Cinema assigned = cinema("ASSIGNED", managerId);
+        assigned.setId(assignedCinemaId);
+        assigned.setStatus(CinemaStatus.ACTIVE);
+        CinemaStaff staffLink = cinemaStaff(assignedCinemaId, staffId, true);
+
+        when(cinemaStaffRepository.findByStaffId(staffId)).thenReturn(Optional.of(staffLink));
+        when(cinemaRepositoryImpl.countWithFilter(any(), anyList())).thenReturn(1L);
+        when(cinemaRepositoryImpl.searchWithPageAndSortAndFilter(any(), anyInt(), anyInt(), anyList(), anyList()))
+                .thenAnswer(invocation -> {
+                    List<com.cinema.dto.request.FilterField<CinemaField>> filters = invocation.getArgument(4);
+                    assertThat(filters).anyMatch(filter ->
+                            filter.getField() == CinemaField.ID
+                                    && "EQ".equalsIgnoreCase(filter.getOperator())
+                                    && assignedCinemaId.equals(filter.getValue()));
+                    assertThat(filters).anyMatch(filter ->
+                            filter.getField() == CinemaField.STATUS
+                                    && "EQ".equalsIgnoreCase(filter.getOperator())
+                                    && CinemaStatus.ACTIVE.equals(filter.getValue()));
+                    return List.of(assigned);
+                });
+        when(cinemaStaffRepository.findByCinemaIdInAndActiveTrue(anyList())).thenReturn(List.of());
+        when(cinemaMapper.toResponse(any(Cinema.class), anyList())).thenAnswer(invocation -> {
+            Cinema cinema = invocation.getArgument(0);
+            return CinemaResponse.builder()
+                    .id(cinema.getId())
+                    .code(cinema.getCode())
+                    .name(cinema.getName())
+                    .managerId(cinema.getManagerId())
+                    .build();
+        });
+        when(userGrpcClient.getUserNameById(managerId)).thenReturn("Manager One");
+
+        PageRequest<CinemaField> pageRequest = PageRequest.<CinemaField>builder()
+                .page(1)
+                .size(20)
+                .keyword("ASSIGNED")
+                .build();
+
+        PageResponse<CinemaResponse> response = cinemaService.searchMyManagedCinemas(pageRequest, request);
+
+        assertThat(response.getData()).hasSize(1);
+        assertThat(response.getData().get(0).getName()).isEqualTo(assigned.getName());
+        assertThat(response.getTotalElements()).isEqualTo(1L);
+    }
+
+    @Test
     void getCinemaById_allowsAdminAccess() {
         UUID cinemaId = UUID.randomUUID();
         UUID managerId = UUID.randomUUID();
@@ -322,7 +422,7 @@ class CinemaServiceImplTest {
         PageResponse<CinemaResponse> response = withRequestContext(request, () -> cinemaService.searchCinemas(pageRequest));
 
         assertThat(response.getData()).hasSize(1);
-        assertThat(response.getData().get(0).getName()).isEqualTo("OWNED");
+        assertThat(response.getData().get(0).getName()).isEqualTo(owned.getName());
         assertThat(response.getData()).allMatch(item -> "Manager One".equals(item.getManagerName()));
     }
 
@@ -367,7 +467,7 @@ class CinemaServiceImplTest {
         PageResponse<CinemaResponse> response = withRequestContext(request, () -> cinemaService.searchCinemas(pageRequest));
 
         assertThat(response.getData()).hasSize(1);
-        assertThat(response.getData().get(0).getName()).isEqualTo("ASSIGNED");
+        assertThat(response.getData().get(0).getName()).isEqualTo(assigned.getName());
     }
 
     private MockHttpServletRequest adminRequest() {

@@ -47,6 +47,7 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.excel.ExcelExportUtils;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
+import com.cinema.text.SearchTextUtils;
 import com.github.f4b6a3.uuid.UuidCreator;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -437,11 +438,10 @@ public class BookingServiceImpl implements BookingService {
         }
 
         List<FilterField<BookingField>> filterBy = mergeForcedBookingFilters(request.getFilterBy(), forcedFilters);
-        Collection<UUID> keywordCinemaIds = resolveKeywordCinemaIds(keyword, accessibleCinemaIds);
         long totalElements = bookingRepositoryImpl.countWithFilter(
-                userId, accessibleCinemaIds, keywordCinemaIds, keyword, filterBy);
+                userId, accessibleCinemaIds, keyword, filterBy);
         List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
-                userId, accessibleCinemaIds, keywordCinemaIds, keyword, page, size, sortFields, filterBy);
+                userId, accessibleCinemaIds, keyword, page, size, sortFields, filterBy);
         Map<UUID, String> cinemaNameCache = new LinkedHashMap<>();
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
 
@@ -467,23 +467,6 @@ public class BookingServiceImpl implements BookingService {
         }
         response.setCinemaName(resolveCinemaName(booking == null ? null : booking.getCinemaId(), cinemaNameCache));
         return response;
-    }
-
-    private Collection<UUID> resolveKeywordCinemaIds(String keyword, Collection<UUID> accessibleCinemaIds) {
-        if (!StringUtils.hasText(keyword)) {
-            return List.of();
-        }
-
-        Set<UUID> accessible = accessibleCinemaIds == null || accessibleCinemaIds.isEmpty()
-                ? null
-                : new java.util.LinkedHashSet<>(accessibleCinemaIds);
-
-        return cinemaGrpcClient.getAllActiveCinemas().stream()
-                .filter(cinema -> cinema != null && cinema.id() != null && cinema.name() != null)
-                .filter(cinema -> accessible == null || accessible.contains(cinema.id()))
-                .filter(cinema -> cinema.name().toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT)))
-                .map(CinemaGrpcClient.CinemaSummary::id)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     private String resolveCinemaName(UUID cinemaId, Map<UUID, String> cinemaNameCache) {
@@ -909,13 +892,12 @@ public class BookingServiceImpl implements BookingService {
         if (!StringUtils.hasText(keyword) || item == null) {
             return true;
         }
-        String normalized = keyword.trim().toLowerCase(Locale.ROOT);
-        return containsIgnoreCase(item.showtimeId() == null ? null : item.showtimeId().toString(), normalized)
-                || containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(), normalized)
-                || containsIgnoreCase(item.filmId() == null ? null : item.filmId().toString(), normalized)
-                || containsIgnoreCase(item.hallId() == null ? null : item.hallId().toString(), normalized)
-                || containsIgnoreCase(item.startDateTime() == null ? null : item.startDateTime().toString(), normalized)
-                || containsIgnoreCase(item.endDateTime() == null ? null : item.endDateTime().toString(), normalized);
+        return SearchTextUtils.containsIgnoreCase(item.showtimeId() == null ? null : item.showtimeId().toString(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.filmId() == null ? null : item.filmId().toString(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.hallId() == null ? null : item.hallId().toString(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.startDateTime() == null ? null : item.startDateTime().toString(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.endDateTime() == null ? null : item.endDateTime().toString(), keyword);
     }
 
     private boolean matchesAllShowtimePerformanceFilters(
@@ -948,7 +930,7 @@ public class BookingServiceImpl implements BookingService {
             case "EQ" -> compareValues(fieldValue, ShowtimePerformanceField.convertValue(String.valueOf(rawValue), dataType)) == 0;
             case "NEQ" -> compareValues(fieldValue, ShowtimePerformanceField.convertValue(String.valueOf(rawValue), dataType)) != 0;
             case "LIKE" -> fieldValue instanceof String text
-                    && containsIgnoreCase(text, String.valueOf(rawValue).toLowerCase(Locale.ROOT));
+                    && SearchTextUtils.containsIgnoreCase(text, String.valueOf(rawValue));
             case "GTE" -> compareValues(fieldValue, ShowtimePerformanceField.convertValue(String.valueOf(rawValue), dataType)) >= 0;
             case "LTE" -> compareValues(fieldValue, ShowtimePerformanceField.convertValue(String.valueOf(rawValue), dataType)) <= 0;
             case "IN" -> matchesShowtimePerformanceInValues(fieldValue, rawValue, dataType);
@@ -1244,9 +1226,8 @@ public class BookingServiceImpl implements BookingService {
         if (!StringUtils.hasText(keyword) || item == null) {
             return true;
         }
-        String normalized = keyword.trim().toLowerCase(Locale.ROOT);
-        return containsIgnoreCase(item.cinemaName(), normalized)
-                || containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(), normalized);
+        return SearchTextUtils.containsIgnoreCase(item.cinemaName(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(), keyword);
     }
 
     private boolean matchesAllFilters(
@@ -1277,7 +1258,7 @@ public class BookingServiceImpl implements BookingService {
             case "EQ" -> compareValues(fieldValue, BookingRevenueField.convertValue(String.valueOf(rawValue), dataType)) == 0;
             case "NEQ" -> compareValues(fieldValue, BookingRevenueField.convertValue(String.valueOf(rawValue), dataType)) != 0;
             case "LIKE" -> fieldValue instanceof String text
-                    && containsIgnoreCase(text, String.valueOf(rawValue).toLowerCase(Locale.ROOT));
+                    && SearchTextUtils.containsIgnoreCase(text, String.valueOf(rawValue));
             case "GTE" -> compareValues(fieldValue, BookingRevenueField.convertValue(String.valueOf(rawValue), dataType)) >= 0;
             case "LTE" -> compareValues(fieldValue, BookingRevenueField.convertValue(String.valueOf(rawValue), dataType)) <= 0;
             case "IN" -> matchesInValues(fieldValue, rawValue, dataType);
@@ -1383,13 +1364,6 @@ public class BookingServiceImpl implements BookingService {
             }
         }
         return String.valueOf(left).compareToIgnoreCase(String.valueOf(right));
-    }
-
-    private boolean containsIgnoreCase(String text, String keyword) {
-        if (text == null || keyword == null) {
-            return false;
-        }
-        return text.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT));
     }
 
     private List<BookingRevenueItemResponse> paginate(List<BookingRevenueItemResponse> items, int page, int size) {

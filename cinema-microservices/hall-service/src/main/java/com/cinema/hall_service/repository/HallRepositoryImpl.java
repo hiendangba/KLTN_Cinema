@@ -6,6 +6,7 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.hall_service.dto.request.HallField;
 import com.cinema.hall_service.entity.Hall;
+import com.cinema.text.SearchTextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -131,7 +132,7 @@ public class HallRepositoryImpl {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        return cb.like(cb.lower(root.get(fieldName).as(String.class)), "%" + value.toLowerCase(Locale.ROOT) + "%");
+        return SearchTextUtils.accentInsensitiveLike(cb, root.get(fieldName), value);
     }
 
     private Predicate buildComparePredicate(
@@ -288,8 +289,8 @@ public class HallRepositoryImpl {
         }
 
         List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.like(cb.lower(root.get(HallField.NAME.getEntityField())), "%" + keyword.toLowerCase() + "%"));
-        predicates.add(cb.like(root.get(HallField.CINEMA_ID.getEntityField()).as(String.class), "%" + keyword + "%"));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(HallField.NAME.getEntityField()), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(HallField.CINEMA_ID.getEntityField()), keyword));
 
         try {
             UUID keywordUuid = UUID.fromString(keyword);

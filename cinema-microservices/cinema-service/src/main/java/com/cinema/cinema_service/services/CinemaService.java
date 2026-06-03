@@ -41,6 +41,8 @@ public interface CinemaService {
 
     List<CinemaResponse> getMyManagedCinemas(HttpServletRequest httpRequest);
 
+    PageResponse<CinemaResponse> searchMyManagedCinemas(PageRequest<CinemaField> request, HttpServletRequest httpRequest);
+
     List<CinemaResponse> getAllActiveCinemas();
 
     List<CinemaResponse> getCinemasByManagerId(UUID managerId);

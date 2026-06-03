@@ -6,6 +6,7 @@ import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.text.SearchTextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -201,7 +202,7 @@ public class CinemaRepositoryImpl {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        return cb.like(cb.lower(root.get(fieldName).as(String.class)), "%" + value.toLowerCase(Locale.ROOT) + "%");
+        return SearchTextUtils.accentInsensitiveLike(cb, root.get(fieldName), value);
     }
 
     private Predicate buildComparePredicate(
@@ -374,11 +375,10 @@ public class CinemaRepositoryImpl {
         }
 
         List<Predicate> predicates = new ArrayList<>();
-        String likeValue = "%" + keyword.toLowerCase(Locale.ROOT) + "%";
-        predicates.add(cb.like(cb.lower(root.get(CinemaField.CODE.getEntityField())), likeValue));
-        predicates.add(cb.like(cb.lower(root.get(CinemaField.NAME.getEntityField())), likeValue));
-        predicates.add(cb.like(cb.lower(root.get(CinemaField.ADDRESS.getEntityField())), likeValue));
-        predicates.add(cb.like(cb.lower(root.get(CinemaField.PHONE.getEntityField())), likeValue));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(CinemaField.CODE.getEntityField()), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(CinemaField.NAME.getEntityField()), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(CinemaField.ADDRESS.getEntityField()), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get(CinemaField.PHONE.getEntityField()), keyword));
 
         try {
             UUID keywordUuid = UUID.fromString(keyword);

@@ -6,6 +6,7 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.entity.Film;
+import com.cinema.text.SearchTextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -177,7 +178,7 @@ public class FilmRepositoryImpl {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        return cb.like(cb.lower(root.get(fieldName).as(String.class)), "%" + value.toLowerCase(Locale.ROOT) + "%");
+        return SearchTextUtils.accentInsensitiveLike(cb, root.get(fieldName), value);
     }
 
     private Predicate buildComparePredicate(
@@ -348,13 +349,12 @@ public class FilmRepositoryImpl {
         if (keyword == null || keyword.isEmpty()) {
             return null;
         }
-        String keywordLower = keyword.toLowerCase();
         return cb.or(
-                cb.like(cb.lower(root.get(FilmField.TITLE.getEntityField())), "%" + keywordLower + "%"),
-                cb.like(cb.lower(root.get(FilmField.DIRECTOR.getEntityField())), "%" + keywordLower + "%"),
-                cb.like(cb.lower(root.get(FilmField.ACTOR.getEntityField())), "%" + keywordLower + "%"),
-                cb.like(cb.lower(root.get(FilmField.TYPE.getEntityField())), "%" + keywordLower + "%"),
-                cb.like(cb.lower(root.get(FilmField.COUNTRY.getEntityField())), "%" + keywordLower + "%"),
-                cb.like(cb.lower(root.get(FilmField.LANGUAGE.getEntityField())), "%" + keywordLower + "%"));
+                SearchTextUtils.accentInsensitiveLike(cb, root.get(FilmField.TITLE.getEntityField()), keyword),
+                SearchTextUtils.accentInsensitiveLike(cb, root.get(FilmField.DIRECTOR.getEntityField()), keyword),
+                SearchTextUtils.accentInsensitiveLike(cb, root.get(FilmField.ACTOR.getEntityField()), keyword),
+                SearchTextUtils.accentInsensitiveLike(cb, root.get(FilmField.TYPE.getEntityField()), keyword),
+                SearchTextUtils.accentInsensitiveLike(cb, root.get(FilmField.COUNTRY.getEntityField()), keyword),
+                SearchTextUtils.accentInsensitiveLike(cb, root.get(FilmField.LANGUAGE.getEntityField()), keyword));
     }
 }

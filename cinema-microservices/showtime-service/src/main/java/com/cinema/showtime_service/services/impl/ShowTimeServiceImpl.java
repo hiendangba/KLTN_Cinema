@@ -12,6 +12,7 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
+import com.cinema.text.SearchTextUtils;
 import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.ShowTimeField;
@@ -134,7 +135,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                         new SortField<>(ShowTimeField.ID, "ASC")))
                 .filterBy(filters)
                 .build();
-        return enrichShowtimePage(searchShowtimesBase(scopedRequest));
+        return searchShowtimesBase(scopedRequest);
     }
 
     @Override
@@ -185,17 +186,25 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         }
 
         List<FilterField<ShowTimeField>> filterFields = request.getFilterBy();
-        long totalElements = showTimeRepositoryImpl.countWithFilter(keyword, filterFields);
-        List<ShowTime> showTimes = showTimeRepositoryImpl.searchWithPageAndSortAndFilter(
-                keyword, page, size, sortFields, filterFields);
-        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+        if (keyword == null || keyword.isBlank()) {
+            long totalElements = showTimeRepositoryImpl.countWithFilter(keyword, filterFields);
+            List<ShowTime> showTimes = showTimeRepositoryImpl.searchWithPageAndSortAndFilter(
+                    keyword, page, size, sortFields, filterFields);
+            int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+            return enrichShowtimePage(buildShowtimePageResponse(showTimes, page, size, totalElements, totalPages));
+        }
 
-        Map<UUID, PricingPolicyResponse> pricingPolicyMap = getPricingPolicyResponseMap(showTimes);
+        List<ShowTime> allShowTimes = showTimeRepositoryImpl.searchAllWithSortAndFilter(sortFields, filterFields);
+        List<ShowTimeResponse> showtimeResponses = enrichShowtimeResponses(buildShowtimeResponses(allShowTimes));
+        List<ShowTimeResponse> matchedShowtimes = showtimeResponses.stream()
+                .filter(showtime -> matchesShowtimeKeyword(showtime, keyword))
+                .collect(Collectors.toList());
+        int totalElements = matchedShowtimes.size();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+        List<ShowTimeResponse> pageData = slicePage(matchedShowtimes, page, size);
 
         return PageResponse.<ShowTimeResponse>builder()
-                .data(showTimes.stream()
-                        .map(showTime -> toShowTimeResponse(showTime, pricingPolicyMap.get(showTime.getPricingPolicyId())))
-                        .collect(Collectors.toList()))
+                .data(pageData)
                 .currentPage(page)
                 .totalPages(totalPages)
                 .totalElements(totalElements)
@@ -263,9 +272,44 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     }
 
     private PageResponse<ShowTimeResponse> enrichShowtimePage(PageResponse<ShowTimeResponse> base) {
-        List<ShowTimeResponse> showtimes = new ArrayList<>(base.getData());
+        List<ShowTimeResponse> showtimes = enrichShowtimeResponses(new ArrayList<>(base.getData()));
+        return PageResponse.<ShowTimeResponse>builder()
+                .data(showtimes)
+                .currentPage(base.getCurrentPage())
+                .totalPages(base.getTotalPages())
+                .totalElements(base.getTotalElements())
+                .size(base.getSize())
+                .hasNext(base.isHasNext())
+                .hasPrevious(base.isHasPrevious())
+                .build();
+    }
+
+    private PageResponse<ShowTimeResponse> buildShowtimePageResponse(List<ShowTime> showTimes,
+                                                                      int page,
+                                                                      int size,
+                                                                      long totalElements,
+                                                                      int totalPages) {
+        return PageResponse.<ShowTimeResponse>builder()
+                .data(buildShowtimeResponses(showTimes))
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .build();
+    }
+
+    private List<ShowTimeResponse> buildShowtimeResponses(List<ShowTime> showTimes) {
+        Map<UUID, PricingPolicyResponse> pricingPolicyMap = getPricingPolicyResponseMap(showTimes);
+        return showTimes.stream()
+                .map(showTime -> toShowTimeResponse(showTime, pricingPolicyMap.get(showTime.getPricingPolicyId())))
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    private List<ShowTimeResponse> enrichShowtimeResponses(List<ShowTimeResponse> showtimes) {
         if (showtimes.isEmpty()) {
-            return base;
+            return showtimes;
         }
 
         List<UUID> filmIds = showtimes.stream()
@@ -292,15 +336,35 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             showtime.setAvailableSeats(stats.availableSeats());
         });
 
-        return PageResponse.<ShowTimeResponse>builder()
-                .data(showtimes)
-                .currentPage(base.getCurrentPage())
-                .totalPages(base.getTotalPages())
-                .totalElements(base.getTotalElements())
-                .size(base.getSize())
-                .hasNext(base.isHasNext())
-                .hasPrevious(base.isHasPrevious())
-                .build();
+        return showtimes;
+    }
+
+    private List<ShowTimeResponse> slicePage(List<ShowTimeResponse> showtimes, int page, int size) {
+        if (showtimes.isEmpty()) {
+            return List.of();
+        }
+
+        int fromIndex = Math.max(0, (page - 1) * size);
+        if (fromIndex >= showtimes.size()) {
+            return List.of();
+        }
+
+        int toIndex = Math.min(fromIndex + size, showtimes.size());
+        return new ArrayList<>(showtimes.subList(fromIndex, toIndex));
+    }
+
+    private boolean matchesShowtimeKeyword(ShowTimeResponse showtime, String keyword) {
+        if (showtime == null || keyword == null || keyword.isBlank()) {
+            return false;
+        }
+
+        return SearchTextUtils.containsIgnoreCase(String.valueOf(showtime.getId()), keyword)
+                || SearchTextUtils.containsIgnoreCase(String.valueOf(showtime.getHallId()), keyword)
+                || SearchTextUtils.containsIgnoreCase(String.valueOf(showtime.getFilmId()), keyword)
+                || SearchTextUtils.containsIgnoreCase(String.valueOf(showtime.getPricingPolicyId()), keyword)
+                || SearchTextUtils.containsIgnoreCase(showtime.getFilm() == null ? null : showtime.getFilm().getTitle(), keyword)
+                || SearchTextUtils.containsIgnoreCase(showtime.getHall() == null ? null : showtime.getHall().getName(), keyword)
+                || SearchTextUtils.containsIgnoreCase(showtime.getHall() == null ? null : showtime.getHall().getCinemaName(), keyword);
     }
 
     @Override

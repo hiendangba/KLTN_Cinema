@@ -563,7 +563,8 @@ public class UserServiceImpl implements UserService {
                 HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
 
         Pageable pageable = pageRequest.toPageable();
-        Page<User> userPage = userRepository.findByRoleAndIsDeletedFalse(UserEnum.UserRole.STAFF, pageable);
+        String keyword = pageRequest.getNormalizedKeyword();
+        Page<User> userPage = userRepository.searchByRoleAndKeyword(UserEnum.UserRole.STAFF, keyword, pageable);
 
         return PageResponse.<UserResponse>builder()
                 .data(userMapper.toUserResponseList(userPage.getContent()))
@@ -582,7 +583,8 @@ public class UserServiceImpl implements UserService {
                 HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
 
         Pageable pageable = pageRequest.toPageable();
-        Page<User> userPage = userRepository.findByRoleAndIsDeletedFalse(UserEnum.UserRole.CUSTOMER, pageable);
+        String keyword = pageRequest.getNormalizedKeyword();
+        Page<User> userPage = userRepository.searchByRoleAndKeyword(UserEnum.UserRole.CUSTOMER, keyword, pageable);
 
         return PageResponse.<UserResponse>builder()
                 .data(userMapper.toUserResponseList(userPage.getContent()))
@@ -600,7 +602,8 @@ public class UserServiceImpl implements UserService {
         RequestAuthUtils.requireRole(request, HeaderNames.ROLE_ADMIN, log, "getAllManager");
 
         Pageable pageable = pageRequest.toPageable();
-        Page<User> userPage = userRepository.findByRoleAndIsDeletedFalse(UserEnum.UserRole.MANAGER, pageable);
+        String keyword = pageRequest.getNormalizedKeyword();
+        Page<User> userPage = userRepository.searchByRoleAndKeyword(UserEnum.UserRole.MANAGER, keyword, pageable);
 
         return PageResponse.<UserResponse>builder()
                 .data(userMapper.toUserResponseList(userPage.getContent()))

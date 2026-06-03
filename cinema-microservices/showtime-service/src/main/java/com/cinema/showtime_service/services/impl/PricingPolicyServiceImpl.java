@@ -19,6 +19,7 @@ import com.cinema.showtime_service.mapper.PricingPolicyMapper;
 import com.cinema.showtime_service.repository.PricingPolicyRepository;
 import com.cinema.showtime_service.repository.ShowTimeRepository;
 import com.cinema.showtime_service.services.PricingPolicyService;
+import com.cinema.text.SearchTextUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -288,12 +289,11 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         if (!StringUtils.hasText(keyword) || item == null) {
             return true;
         }
-        String normalized = keyword.toLowerCase(Locale.ROOT);
-        return containsIgnoreCase(item.getId() == null ? null : item.getId().toString(), normalized)
-                || containsIgnoreCase(item.getName(), normalized)
-                || containsIgnoreCase(item.getCinemaId() == null ? null : item.getCinemaId().toString(), normalized)
-                || containsIgnoreCase(item.getTimeCreated() == null ? null : item.getTimeCreated().toString(), normalized)
-                || containsIgnoreCase(item.getTimeUpdated() == null ? null : item.getTimeUpdated().toString(), normalized);
+        return SearchTextUtils.containsIgnoreCase(item.getId() == null ? null : item.getId().toString(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.getName(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.getCinemaId() == null ? null : item.getCinemaId().toString(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.getTimeCreated() == null ? null : item.getTimeCreated().toString(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.getTimeUpdated() == null ? null : item.getTimeUpdated().toString(), keyword);
     }
 
     private boolean matchesAllFilters(PricingPolicy item, List<FilterField<PricingPolicyField>> filters) {
@@ -323,7 +323,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
             case "EQ" -> compareValues(fieldValue, PricingPolicyField.convertValue(String.valueOf(rawValue), dataType)) == 0;
             case "NEQ" -> compareValues(fieldValue, PricingPolicyField.convertValue(String.valueOf(rawValue), dataType)) != 0;
             case "LIKE" -> fieldValue instanceof String text
-                    && containsIgnoreCase(text, String.valueOf(rawValue).toLowerCase(Locale.ROOT));
+                    && SearchTextUtils.containsIgnoreCase(text, String.valueOf(rawValue));
             case "GTE" -> compareValues(fieldValue, PricingPolicyField.convertValue(String.valueOf(rawValue), dataType)) >= 0;
             case "LTE" -> compareValues(fieldValue, PricingPolicyField.convertValue(String.valueOf(rawValue), dataType)) <= 0;
             case "IN" -> matchesInValues(fieldValue, rawValue, dataType);
@@ -413,13 +413,6 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
             }
         }
         return String.valueOf(left).compareToIgnoreCase(String.valueOf(right));
-    }
-
-    private boolean containsIgnoreCase(String text, String keyword) {
-        if (!StringUtils.hasText(text) || !StringUtils.hasText(keyword)) {
-            return false;
-        }
-        return text.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT));
     }
 
     private List<PricingPolicy> paginate(List<PricingPolicy> items, int page, int size) {

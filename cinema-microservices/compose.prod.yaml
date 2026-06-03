@@ -152,14 +152,14 @@ services:
       SPRING_RABBITMQ_PASSWORD: admin
       USER_SERVICE_URL: http://user-service:8091/api/users
       FILM_SERVICE_URL: http://film-service:8092/api/films
-      HALL_SERVICE_URL: http://hall-services:8097/api/halls
+      HALL_SERVICE_URL: http://hall-service:8097/api/halls
       FILM_GRPC_HOST: film-service
       FILM_GRPC_PORT: 9192
       BOOKING_GRPC_HOST: booking-service
       BOOKING_GRPC_PORT: 9195
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
-      HALL_GRPC_HOST: hall-services
+      HALL_GRPC_HOST: hall-service
       HALL_GRPC_PORT: 9197
       SEAT_GRPC_HOST: seat-service
       SEAT_GRPC_PORT: 9199
@@ -177,7 +177,7 @@ services:
       - rabbitmq
       - booking-service
       - film-service
-      - hall-services
+      - hall-service
       - cinema-service
       - seat-service
     mem_limit: 352m
@@ -261,8 +261,8 @@ services:
       - cinema-service
     mem_limit: 352m
 
-  hall-services:
-    image: ${IMAGE_REPO}/hall-services:${IMAGE_TAG:-dev}
+  hall-service:
+    image: ${IMAGE_REPO}/hall-service:${IMAGE_TAG:-dev}
     pull_policy: always
     environment:
       TZ: Asia/Ho_Chi_Minh
@@ -347,7 +347,7 @@ services:
       DB_PASSWORD: cinema_pass
       USER_GRPC_HOST: user-service
       USER_GRPC_PORT: 9191
-      HALL_GRPC_HOST: hall-services
+      HALL_GRPC_HOST: hall-service
       HALL_GRPC_PORT: 9197
       SHOWTIME_GRPC_HOST: showtime-service
       SHOWTIME_GRPC_PORT: 9194

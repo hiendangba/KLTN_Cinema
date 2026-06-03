@@ -6,6 +6,7 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.entity.PaymentTransaction;
+import com.cinema.text.SearchTextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -191,7 +192,7 @@ public class PaymentTransactionRepositoryImpl {
         if (value.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-        return cb.like(cb.lower(root.get(fieldName).as(String.class)), "%" + value.toLowerCase(Locale.ROOT) + "%");
+        return SearchTextUtils.accentInsensitiveLike(cb, root.get(fieldName), value);
     }
 
     private Predicate buildComparePredicate(
@@ -345,14 +346,10 @@ public class PaymentTransactionRepositoryImpl {
         }
 
         List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.like(root.get("id").as(String.class), "%" + keyword + "%"));
-        predicates.add(cb.like(root.get("bookingId").as(String.class), "%" + keyword + "%"));
-        predicates.add(cb.like(
-                cb.lower(root.get("orderInvoiceNumber").as(String.class)),
-                "%" + keyword.toLowerCase(Locale.ROOT) + "%"));
-        predicates.add(cb.like(
-                cb.lower(root.get("providerRef").as(String.class)),
-                "%" + keyword.toLowerCase(Locale.ROOT) + "%"));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get("id"), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get("bookingId"), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get("orderInvoiceNumber"), keyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(cb, root.get("providerRef"), keyword));
 
         try {
             UUID keywordUuid = UUID.fromString(keyword);

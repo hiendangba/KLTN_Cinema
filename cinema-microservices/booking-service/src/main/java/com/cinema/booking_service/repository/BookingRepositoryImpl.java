@@ -8,6 +8,7 @@ import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.text.SearchTextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -44,13 +45,12 @@ public class BookingRepositoryImpl {
             int size,
             List<SortField<BookingField>> sortBy,
             List<FilterField<BookingField>> filterBy) {
-        return searchWithPageAndSortAndFilter(userId, null, null, keyword, page, size, sortBy, filterBy);
+        return searchWithPageAndSortAndFilter(userId, null, keyword, page, size, sortBy, filterBy);
     }
 
     public List<Booking> searchWithPageAndSortAndFilter(
             UUID userId,
             Collection<UUID> cinemaIds,
-            Collection<UUID> keywordCinemaIds,
             String keyword,
             int page,
             int size,
@@ -60,7 +60,7 @@ public class BookingRepositoryImpl {
         CriteriaQuery<Booking> cq = cb.createQuery(Booking.class);
         Root<Booking> root = cq.from(Booking.class);
 
-        List<Predicate> predicates = buildPredicates(cb, cq, root, userId, cinemaIds, keywordCinemaIds, keyword, filterBy);
+        List<Predicate> predicates = buildPredicates(cb, cq, root, userId, cinemaIds, keyword, filterBy);
         cq.where(predicates.toArray(new Predicate[0]));
         cq.orderBy(buildOrders(cb, root, sortBy));
 
@@ -74,20 +74,19 @@ public class BookingRepositoryImpl {
             UUID userId,
             String keyword,
             List<FilterField<BookingField>> filterBy) {
-        return countWithFilter(userId, null, null, keyword, filterBy);
+        return countWithFilter(userId, null, keyword, filterBy);
     }
 
     public long countWithFilter(
             UUID userId,
             Collection<UUID> cinemaIds,
-            Collection<UUID> keywordCinemaIds,
             String keyword,
             List<FilterField<BookingField>> filterBy) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<Booking> root = countQuery.from(Booking.class);
 
-        List<Predicate> predicates = buildPredicates(cb, countQuery, root, userId, cinemaIds, keywordCinemaIds, keyword, filterBy);
+        List<Predicate> predicates = buildPredicates(cb, countQuery, root, userId, cinemaIds, keyword, filterBy);
         countQuery.select(cb.count(root));
         countQuery.where(predicates.toArray(new Predicate[0]));
         return entityManager.createQuery(countQuery).getSingleResult();
@@ -186,7 +185,6 @@ public class BookingRepositoryImpl {
             Root<Booking> root,
             UUID userId,
             Collection<UUID> cinemaIds,
-            Collection<UUID> keywordCinemaIds,
             String keyword,
             List<FilterField<BookingField>> filterBy) {
         List<Predicate> predicates = new ArrayList<>();
@@ -198,7 +196,7 @@ public class BookingRepositoryImpl {
         }
         predicates.add(cb.isFalse(root.get("isDeleted")));
 
-        Predicate keywordPredicate = buildKeywordPredicate(cb, query, root, keywordCinemaIds, keyword);
+        Predicate keywordPredicate = buildKeywordPredicate(cb, query, root, keyword);
         if (keywordPredicate != null) {
             predicates.add(keywordPredicate);
         }
@@ -250,7 +248,7 @@ public class BookingRepositoryImpl {
         if (value.isEmpty()) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
-        return cb.like(cb.lower(root.get(fieldName).as(String.class)), "%" + value.toLowerCase(Locale.ROOT) + "%");
+        return SearchTextUtils.accentInsensitiveLike(cb, root.get(fieldName), value);
     }
 
     private Predicate buildComparePredicate(
@@ -405,36 +403,42 @@ public class BookingRepositoryImpl {
     }
 
     private Predicate buildKeywordPredicate(CriteriaBuilder cb, Root<Booking> root, String keyword) {
-        return buildKeywordPredicate(cb, null, root, null, keyword);
+        return buildKeywordPredicate(cb, null, root, keyword);
     }
 
     private Predicate buildKeywordPredicate(
             CriteriaBuilder cb,
             CriteriaQuery<?> query,
             Root<Booking> root,
-            Collection<UUID> keywordCinemaIds,
             String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return null;
         }
 
-        String normalized = keyword.trim().toLowerCase(Locale.ROOT);
+        String rawKeyword = keyword.trim();
         List<Predicate> predicates = new ArrayList<>();
-        predicates.add(cb.like(
-                root.get(BookingField.ID.getEntityField()).as(String.class),
-                "%" + keyword.trim() + "%"));
-        predicates.add(cb.like(
-                cb.lower(root.get(BookingField.FILM_TITLE.getEntityField()).as(String.class)),
-                "%" + normalized + "%"));
-        predicates.add(cb.like(
-                cb.lower(root.get("customerInfo").get("fullName").as(String.class)),
-                "%" + normalized + "%"));
-        predicates.add(cb.like(
-                cb.lower(root.get("customerInfo").get("phone").as(String.class)),
-                "%" + normalized + "%"));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(
+                cb,
+                root.get(BookingField.ID.getEntityField()),
+                rawKeyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(
+                cb,
+                root.get(BookingField.FILM_TITLE.getEntityField()),
+                rawKeyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(
+                cb,
+                root.get("customerInfo").get("fullName"),
+                rawKeyword));
+        predicates.add(SearchTextUtils.accentInsensitiveLike(
+                cb,
+                root.get("customerInfo").get("phone"),
+                rawKeyword));
 
-        if (keywordCinemaIds != null && !keywordCinemaIds.isEmpty()) {
-            predicates.add(root.get(BookingField.CINEMA_ID.getEntityField()).in(keywordCinemaIds));
+        if (isUuidKeyword(rawKeyword)) {
+            UUID keywordUuid = UUID.fromString(rawKeyword);
+            predicates.add(cb.equal(root.get(BookingField.ID.getEntityField()), keywordUuid));
+            predicates.add(cb.equal(root.get(BookingField.SHOWTIME_ID.getEntityField()), keywordUuid));
+            predicates.add(cb.equal(root.get(BookingField.CINEMA_ID.getEntityField()), keywordUuid));
         }
 
         if (query != null) {
@@ -443,10 +447,22 @@ public class BookingRepositoryImpl {
             seatSubquery.select(cb.literal(1));
             seatSubquery.where(
                     cb.equal(seatRoot.get("booking").get("id"), root.get(BookingField.ID.getEntityField())),
-                    cb.like(cb.lower(seatRoot.get("seatCode")), "%" + normalized + "%"));
+                    SearchTextUtils.accentInsensitiveLike(cb, seatRoot.get("seatCode"), rawKeyword));
             predicates.add(cb.exists(seatSubquery));
         }
 
         return cb.or(predicates.toArray(new Predicate[0]));
+    }
+
+    private boolean isUuidKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return false;
+        }
+        try {
+            UUID.fromString(keyword.trim());
+            return true;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 }

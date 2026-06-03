@@ -120,9 +120,11 @@ public class CinemaController extends BaseController {
         return ok(response);
     }
 
-    @GetMapping("/me")
-    public ResponseEntity<APIResponse<List<CinemaResponse>>> getMyManagedCinema(HttpServletRequest httpRequest) {
-        List<CinemaResponse> response = cinemaService.getMyManagedCinemas(httpRequest);
+    @PostMapping("/me/search")
+    public ResponseEntity<APIResponse<PageResponse<CinemaResponse>>> searchMyManagedCinemas(
+            @Valid @RequestBody PageRequest<CinemaField> request,
+            HttpServletRequest httpRequest) {
+        PageResponse<CinemaResponse> response = cinemaService.searchMyManagedCinemas(request, httpRequest);
         return ok(response);
     }
 }

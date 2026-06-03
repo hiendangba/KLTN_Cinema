@@ -35,6 +35,7 @@ import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
+import com.cinema.text.SearchTextUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -1362,9 +1363,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         if (!StringUtils.hasText(keyword) || item == null) {
             return true;
         }
-        String normalized = keyword.toLowerCase(Locale.ROOT);
-        return containsIgnoreCase(item.cinemaName(), normalized)
-                || containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(), normalized);
+        return SearchTextUtils.containsIgnoreCase(item.cinemaName(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(), keyword);
     }
 
     private boolean matchesAllFilters(
@@ -1394,7 +1394,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             case "NEQ" ->
                 compareValues(fieldValue, CinemaRevenueField.convertValue(String.valueOf(rawValue), dataType)) != 0;
             case "LIKE" -> fieldValue instanceof String text
-                    && containsIgnoreCase(text, String.valueOf(rawValue).toLowerCase(Locale.ROOT));
+                    && SearchTextUtils.containsIgnoreCase(text, String.valueOf(rawValue));
             case "GTE" ->
                 compareValues(fieldValue, CinemaRevenueField.convertValue(String.valueOf(rawValue), dataType)) >= 0;
             case "LTE" ->
@@ -1508,13 +1508,6 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return typedLeft.compareTo(right);
         }
         return String.valueOf(left).compareTo(String.valueOf(right));
-    }
-
-    private boolean containsIgnoreCase(String value, String keyword) {
-        if (!StringUtils.hasText(value) || !StringUtils.hasText(keyword)) {
-            return false;
-        }
-        return value.toLowerCase(Locale.ROOT).contains(keyword.toLowerCase(Locale.ROOT));
     }
 
     private boolean isBetween(LocalDateTime value, LocalDateTime from, LocalDateTime to) {
