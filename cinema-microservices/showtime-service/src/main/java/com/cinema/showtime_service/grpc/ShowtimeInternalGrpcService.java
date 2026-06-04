@@ -6,6 +6,8 @@ import com.cinema.grpc.showtime.GetShowtimeByIdReply;
 import com.cinema.grpc.showtime.GetShowtimeByIdRequest;
 import com.cinema.grpc.showtime.ListActiveFilmIdsReply;
 import com.cinema.grpc.showtime.ListActiveFilmIdsRequest;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaReply;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaRequest;
 import com.cinema.grpc.showtime.ListActiveShowtimeIdsByHallReply;
 import com.cinema.grpc.showtime.ListActiveShowtimeIdsByHallRequest;
 import com.cinema.grpc.showtime.ShowtimeInternalServiceGrpc;
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -141,6 +144,60 @@ public class ShowtimeInternalGrpcService extends ShowtimeInternalServiceGrpc.Sho
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching active film ids", ex);
             responseObserver.onNext(ListActiveFilmIdsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void listActiveFilmIdsByCinema(ListActiveFilmIdsByCinemaRequest request,
+                                          StreamObserver<ListActiveFilmIdsByCinemaReply> responseObserver) {
+        UUID cinemaId;
+        try {
+            cinemaId = UUID.fromString(request.getCinemaId());
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(ListActiveFilmIdsByCinemaReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+            return;
+        }
+
+        try {
+            List<UUID> hallIds = hallGrpcClient.listActiveHallIdsByCinema(cinemaId);
+            ListActiveFilmIdsByCinemaReply.Builder builder = ListActiveFilmIdsByCinemaReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Active film ids fetched successfully");
+
+            if (hallIds.isEmpty()) {
+                responseObserver.onNext(builder.build());
+                responseObserver.onCompleted();
+                return;
+            }
+
+            showTimeRepository.findActiveFilmIdsByHallIds(hallIds)
+                    .stream()
+                    .distinct()
+                    .map(UUID::toString)
+                    .forEach(builder::addFilmIds);
+
+            responseObserver.onNext(builder.build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(ListActiveFilmIdsByCinemaReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching active film ids by cinema", ex);
+            responseObserver.onNext(ListActiveFilmIdsByCinemaReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())

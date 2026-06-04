@@ -5,6 +5,8 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.GrpcErrorUtils;
 import com.cinema.grpc.showtime.ListActiveFilmIdsReply;
 import com.cinema.grpc.showtime.ListActiveFilmIdsRequest;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaReply;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaRequest;
 import com.cinema.grpc.showtime.ShowtimeInternalServiceGrpc;
 import io.grpc.StatusRuntimeException;
 import org.springframework.grpc.client.GrpcChannelFactory;
@@ -27,6 +29,31 @@ public class ShowtimeGrpcClient {
         try {
             ListActiveFilmIdsReply reply = showtimeBlockingStub.listActiveFilmIds(
                     ListActiveFilmIdsRequest.newBuilder().build());
+
+            if (!reply.getSuccess()) {
+                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.SHOWTIME_SERVICE_ERROR));
+            }
+
+            Set<UUID> filmIds = new LinkedHashSet<>();
+            reply.getFilmIdsList().stream()
+                    .filter(filmId -> filmId != null && !filmId.isBlank())
+                    .forEach(filmId -> filmIds.add(UUID.fromString(filmId)));
+            return filmIds;
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.SHOWTIME_SERVICE_ERROR);
+        } catch (RuntimeException ex) {
+            throw new BusinessException(ErrorCode.SHOWTIME_SERVICE_ERROR);
+        }
+    }
+
+    public Set<UUID> getActiveFilmIdsByCinema(UUID cinemaId) {
+        try {
+            ListActiveFilmIdsByCinemaReply reply = showtimeBlockingStub.listActiveFilmIdsByCinema(
+                    ListActiveFilmIdsByCinemaRequest.newBuilder()
+                            .setCinemaId(cinemaId.toString())
+                            .build());
 
             if (!reply.getSuccess()) {
                 throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.SHOWTIME_SERVICE_ERROR));

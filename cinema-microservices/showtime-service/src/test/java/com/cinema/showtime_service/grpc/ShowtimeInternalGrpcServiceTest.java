@@ -2,6 +2,8 @@ package com.cinema.showtime_service.grpc;
 
 import com.cinema.grpc.showtime.ListActiveFilmIdsReply;
 import com.cinema.grpc.showtime.ListActiveFilmIdsRequest;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaReply;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaRequest;
 import com.cinema.showtime_service.repository.ShowTimeRepository;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class ShowtimeInternalGrpcServiceTest {
@@ -43,6 +46,30 @@ class ShowtimeInternalGrpcServiceTest {
         assertEquals(2, observer.value.getFilmIdsCount());
         assertEquals(film1.toString(), observer.value.getFilmIds(0));
         assertEquals(film2.toString(), observer.value.getFilmIds(1));
+    }
+
+    @Test
+    void listActiveFilmIdsByCinema_shouldReturnDistinctFilmIds() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID hall1 = UUID.randomUUID();
+        UUID hall2 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+        UUID film2 = UUID.randomUUID();
+
+        when(hallGrpcClient.listActiveHallIdsByCinema(cinemaId)).thenReturn(List.of(hall1, hall2));
+        when(showTimeRepository.findActiveFilmIdsByHallIds(List.of(hall1, hall2))).thenReturn(List.of(film1, film2, film1));
+
+        CapturingObserver<ListActiveFilmIdsByCinemaReply> observer = new CapturingObserver<>();
+        grpcService.listActiveFilmIdsByCinema(
+                ListActiveFilmIdsByCinemaRequest.newBuilder().setCinemaId(cinemaId.toString()).build(),
+                observer);
+
+        assertTrue(observer.completed);
+        assertTrue(observer.value.getSuccess());
+        assertEquals(2, observer.value.getFilmIdsCount());
+        assertEquals(film1.toString(), observer.value.getFilmIds(0));
+        assertEquals(film2.toString(), observer.value.getFilmIds(1));
+        verify(hallGrpcClient).listActiveHallIdsByCinema(cinemaId);
     }
 
     private static class CapturingObserver<T> implements StreamObserver<T> {

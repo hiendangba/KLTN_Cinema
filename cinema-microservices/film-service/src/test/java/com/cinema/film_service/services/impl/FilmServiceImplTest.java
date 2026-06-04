@@ -121,6 +121,28 @@ class FilmServiceImplTest {
     }
 
     @Test
+    void searchCustomerFilms_shouldScopeByCinemaIdWhenProvided() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID film1Id = UUID.randomUUID();
+        Film film1 = buildFilm(film1Id, "Film 1", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setCinemaId(cinemaId);
+
+        HttpServletRequest httpRequest = mockRequest("CUSTOMER");
+        when(showtimeGrpcClient.getActiveFilmIdsByCinema(cinemaId)).thenReturn(Set.of(film1Id));
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), anyString(), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(film1));
+        when(filmMapper.toResponse(film1)).thenReturn(toResponse(film1));
+
+        var response = filmService.searchCustomerFilms(request, httpRequest);
+
+        assertEquals(1, response.getSize());
+        assertEquals(1, response.getData().size());
+        verify(showtimeGrpcClient, never()).getActiveFilmIds();
+    }
+
+    @Test
     void searchCustomerFilms_shouldKeepCursorPagination() {
         UUID film1Id = UUID.randomUUID();
         UUID film2Id = UUID.randomUUID();

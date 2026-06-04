@@ -76,6 +76,19 @@
 - Thêm [`REPORT_GUIDE.md`](./REPORT_GUIDE.md) để giải thích riêng ý nghĩa các report payment/booking/showtime, kèm ví dụ dùng trong thực tế và câu trả lời ngắn khi bị hỏi vấn đáp.
 - Xóa hẳn reconciliation detail khỏi payment-service: `PaymentController`, `PaymentSessionService`, `PaymentSessionServiceImpl`, `PaymentTransactionRepositoryImpl`, `PaymentSessionServiceImplTest`, và 3 DTO reconciliation đã bị bỏ; verify bằng `PaymentSessionServiceImplTest` pass `6 tests, 0 failures, 0 errors`.
 
+## Changelog ngắn (2026-06-04)
+
+- Thêm `scripts/import-booking-payment.sh` để seed dữ liệu booking/payment trực tiếp từ các DB thật đang chạy trong container PostgreSQL.
+- Script đọc `user_db`, `showtime_db`, `hall_db`, `seat_db`, `pricing_policy`, `film_db`, rồi sinh 100 booking + 100 payment transaction theo luồng API: `RESERVED/UNPAID` -> `PENDING` -> `CONFIRMED/PAID`.
+- Script cũng seed 1 promotion mẫu trong `payment_db` và gán promotion đó cho 50 booking/payment bất kỳ, đồng thời insert `payment_transaction_promotion` để khớp luồng code checkout/preview/report.
+- Booking seat item được tạo theo ghế thật của từng hall và giá snapshot lấy từ `pricing_policy` theo cinema.
+- Script có thể lọc riêng theo `SHOWTIME_DATE=YYYY-MM-DD` để chỉ seed booking/payment trên đúng ngày showtime cần test/report; khi lọc ngày thì điều kiện này được đẩy xuống SQL từ đầu để không bị cắt mất showtime của đúng ngày đó do `LIMIT` sớm.
+- `order_invoice_number`, `provider_ref`, `webhook_event_key` đã được ghép theo ngày và showtime để không đụng unique khi chạy thêm batch ngày khác.
+- Mục tiêu của script là phục vụ import test/report trên VPS, nên ưu tiên dữ liệu hợp lệ, ổn định và có thể chạy lại với `ON CONFLICT` trên các bảng chính.
+- `film-service` thêm lọc `cinemaId` cho riêng `POST /api/films/customer/search`; admin search vẫn giữ nguyên behavior cũ.
+- `showtime-service` thêm gRPC nội bộ `ListActiveFilmIdsByCinema` để customer search chỉ thấy phim đang chiếu ở đúng rạp được chọn.
+- `common-lib` tắt `clearOutputDirectory` cho `protobuf-maven-plugin` để tránh lỗi dọn thư mục generated-sources trên bind mount/dynamic build environment khi generate gRPC code.
+
 > [!WARNING]
 > **BUG GỐC CỦA LUỒNG GOOGLE LOGIN**
 > - Bản triển khai ban đầu đã gửi request đổi `code -> token` theo **mẫu sai** (payload kiểu JSON / client library cũ).

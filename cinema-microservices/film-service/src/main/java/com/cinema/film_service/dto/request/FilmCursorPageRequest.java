@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -16,4 +18,5 @@ public class FilmCursorPageRequest extends CursorPageRequest<FilmField> {
 
     @Valid
     private DateRange dateRange;
+    private UUID cinemaId;
 }

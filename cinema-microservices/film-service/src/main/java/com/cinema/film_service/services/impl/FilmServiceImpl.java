@@ -129,7 +129,9 @@ public class FilmServiceImpl implements FilmService {
     public CursorPageResponse<FilmResponse> searchCustomerFilms(FilmCursorPageRequest request, HttpServletRequest httpRequest) {
         validateCustomerRole(httpRequest);
 
-        Set<UUID> activeFilmIds = showtimeGrpcClient.getActiveFilmIds();
+        Set<UUID> activeFilmIds = request.getCinemaId() == null
+                ? showtimeGrpcClient.getActiveFilmIds()
+                : showtimeGrpcClient.getActiveFilmIdsByCinema(request.getCinemaId());
         if (activeFilmIds.isEmpty()) {
             return emptyCursorPageResponse();
         }
@@ -160,13 +162,14 @@ public class FilmServiceImpl implements FilmService {
             FilmCursorPageRequest request,
             Set<UUID> activeFilmIds) {
         log.info(
-                "Getting films (cursor={}, size={}, keyword={}, sortBy={}, filterBy={}, dateRange={}, customerScope={})",
+                "Getting films (cursor={}, size={}, keyword={}, sortBy={}, filterBy={}, dateRange={}, cinemaId={}, customerScope={})",
                 request.getCursor(),
                 request.getSize(),
                 request.getKeyword(),
                 request.getSortBy(),
                 request.getFilterBy(),
                 request.getDateRange(),
+                request.getCinemaId(),
                 activeFilmIds != null);
 
         String[] cursorParts = request.getParsedCompositeCursor();

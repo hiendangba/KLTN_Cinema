@@ -64,6 +64,15 @@ public interface ShowTimeRepository extends JpaRepository<ShowTime, UUID> {
             """, nativeQuery = true)
     List<UUID> findActiveFilmIds();
 
+    @Query(value = """
+            SELECT DISTINCT s.film_id
+            FROM show_time s
+            WHERE s.hall_id IN (:hallIds)
+              AND s.status IN ('SCHEDULED', 'ONGOING')
+              AND s.is_deleted = false
+            """, nativeQuery = true)
+    List<UUID> findActiveFilmIdsByHallIds(@Param("hallIds") List<UUID> hallIds);
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             UPDATE show_time
