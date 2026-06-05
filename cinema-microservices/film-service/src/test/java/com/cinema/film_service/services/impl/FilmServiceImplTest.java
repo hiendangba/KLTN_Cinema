@@ -1,6 +1,7 @@
 package com.cinema.film_service.services.impl;
 
 import com.cinema.Enum.FilmEnum;
+import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
@@ -22,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -35,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -88,7 +90,7 @@ class FilmServiceImplTest {
 
         HttpServletRequest httpRequest = mockRequest("CUSTOMER");
         when(showtimeGrpcClient.getActiveFilmIds()).thenReturn(Set.of(film1Id, film2Id));
-        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), anyString(), anyInt(), anyList(), anyList()))
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
                 .thenReturn(List.of(film1, film2));
         when(filmMapper.toResponse(film1)).thenReturn(toResponse(film1));
         when(filmMapper.toResponse(film2)).thenReturn(toResponse(film2));
@@ -102,7 +104,7 @@ class FilmServiceImplTest {
         assertTrue(response.getPrevCursor() == null);
 
         ArgumentCaptor<List<FilterField<FilmField>>> filterCaptor = ArgumentCaptor.forClass(List.class);
-        verify(filmRepositoryImpl).searchWithCursorAndSortAndFilter(any(), anyString(), anyInt(), anyList(), filterCaptor.capture());
+        verify(filmRepositoryImpl).searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), filterCaptor.capture());
 
         List<FilterField<FilmField>> capturedFilters = filterCaptor.getValue();
         assertEquals(2, capturedFilters.size());
@@ -131,7 +133,7 @@ class FilmServiceImplTest {
 
         HttpServletRequest httpRequest = mockRequest("CUSTOMER");
         when(showtimeGrpcClient.getActiveFilmIdsByCinema(cinemaId)).thenReturn(Set.of(film1Id));
-        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), anyString(), anyInt(), anyList(), anyList()))
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
                 .thenReturn(List.of(film1));
         when(filmMapper.toResponse(film1)).thenReturn(toResponse(film1));
 
@@ -154,7 +156,7 @@ class FilmServiceImplTest {
 
         HttpServletRequest httpRequest = mockRequest("CUSTOMER");
         when(showtimeGrpcClient.getActiveFilmIds()).thenReturn(Set.of(film1Id, film2Id));
-        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), anyString(), anyInt(), anyList(), anyList()))
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
                 .thenReturn(List.of(film1, film2));
         when(filmMapper.toResponse(film1)).thenReturn(toResponse(film1));
 
@@ -164,6 +166,54 @@ class FilmServiceImplTest {
         assertEquals(1, response.getData().size());
         assertTrue(response.isHasNext());
         assertNotNull(response.getNextCursor());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchFilms_shouldAddReleaseDateGteFilterWhenOnlyFromProvided() {
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setDateRange(DateRange.builder()
+                .from(LocalDateTime.of(2026, 5, 1, 0, 0))
+                .build());
+
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of());
+
+        var response = filmService.searchFilms(request);
+
+        assertNotNull(response);
+        ArgumentCaptor<List<FilterField<FilmField>>> filterCaptor = ArgumentCaptor.forClass(List.class);
+        verify(filmRepositoryImpl).searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), filterCaptor.capture());
+
+        List<FilterField<FilmField>> filters = filterCaptor.getValue();
+        assertEquals(1, filters.size());
+        assertEquals(FilmField.RELEASE_DATE, filters.get(0).getField());
+        assertEquals("GTE", filters.get(0).getOperator());
+        assertEquals(LocalDate.of(2026, 5, 1), filters.get(0).getValue());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchFilms_shouldAddReleaseDateLteFilterWhenOnlyToProvided() {
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setDateRange(DateRange.builder()
+                .to(LocalDateTime.of(2026, 6, 1, 0, 0))
+                .build());
+
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of());
+
+        var response = filmService.searchFilms(request);
+
+        assertNotNull(response);
+        ArgumentCaptor<List<FilterField<FilmField>>> filterCaptor = ArgumentCaptor.forClass(List.class);
+        verify(filmRepositoryImpl).searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), filterCaptor.capture());
+
+        List<FilterField<FilmField>> filters = filterCaptor.getValue();
+        assertEquals(1, filters.size());
+        assertEquals(FilmField.RELEASE_DATE, filters.get(0).getField());
+        assertEquals("LTE", filters.get(0).getOperator());
+        assertEquals(LocalDate.of(2026, 6, 1), filters.get(0).getValue());
     }
 
     private HttpServletRequest mockRequest(String role) {

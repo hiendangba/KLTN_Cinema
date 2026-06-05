@@ -27,6 +27,7 @@ import com.cinema.booking_service.repository.BookingRepositoryImpl;
 import com.cinema.booking_service.repository.BookingSeatItemRepository;
 import com.cinema.booking_service.repository.ProductRepository;
 import com.cinema.booking_service.services.SeatLockService;
+import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
@@ -198,6 +199,64 @@ class BookingServiceImplTest {
         assertEquals(BigDecimal.valueOf(285000), response.total().payableAmount());
         assertEquals(BigDecimal.valueOf(15000), response.items().get(0).promotionDiscountAmount());
         assertEquals(BigDecimal.valueOf(285000), response.items().get(0).payableAmount());
+    }
+
+    @Test
+    void getAllCinemaRevenueReport_shouldAllowOnlyFromDate() {
+        UUID cinema1 = UUID.randomUUID();
+        LocalDateTime from = LocalDateTime.of(2026, 5, 29, 9, 30);
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+        when(bookingRepositoryImpl.findAllForBookingRevenueReport(anyCollection(), any(), any(), anyCollection()))
+                .thenReturn(List.of());
+
+        BookingRevenueReportRequest request = BookingRevenueReportRequest.builder()
+                .dateRange(DateRange.builder().from(from).build())
+                .pageRequest(PageRequest.<BookingRevenueField>builder()
+                        .page(1)
+                        .size(10)
+                        .build())
+                .build();
+
+        BookingRevenueReportResponse response = bookingService.getAllCinemaRevenueReport(request);
+
+        assertEquals(from, response.from());
+        assertEquals(null, response.to());
+        org.mockito.Mockito.verify(bookingRepositoryImpl).findAllForBookingRevenueReport(
+                anyCollection(),
+                eq(from),
+                isNull(),
+                anyCollection());
+    }
+
+    @Test
+    void getAllCinemaRevenueReport_shouldAllowOnlyToDate() {
+        UUID cinema1 = UUID.randomUUID();
+        LocalDateTime to = LocalDateTime.of(2026, 5, 29, 18, 0);
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+        when(bookingRepositoryImpl.findAllForBookingRevenueReport(anyCollection(), any(), any(), anyCollection()))
+                .thenReturn(List.of());
+
+        BookingRevenueReportRequest request = BookingRevenueReportRequest.builder()
+                .dateRange(DateRange.builder().to(to).build())
+                .pageRequest(PageRequest.<BookingRevenueField>builder()
+                        .page(1)
+                        .size(10)
+                        .build())
+                .build();
+
+        BookingRevenueReportResponse response = bookingService.getAllCinemaRevenueReport(request);
+
+        assertEquals(null, response.from());
+        assertEquals(to, response.to());
+        org.mockito.Mockito.verify(bookingRepositoryImpl).findAllForBookingRevenueReport(
+                anyCollection(),
+                isNull(),
+                eq(to),
+                anyCollection());
     }
 
     @Test
@@ -378,6 +437,36 @@ class BookingServiceImplTest {
         assertEquals(10L, response.total().totalSeatCapacity());
         assertEquals(1, response.items().size());
         assertEquals(showtime1, response.items().get(0).showtimeId());
+    }
+
+    @Test
+    void getAllShowtimePerformanceReport_shouldAllowOnlyFromDate() {
+        UUID cinema1 = UUID.randomUUID();
+        LocalDateTime from = LocalDateTime.of(2026, 5, 29, 18, 0);
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+        when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), any(), any(), any(), any()))
+                .thenReturn(List.of());
+
+        ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
+                .dateRange(DateRange.builder().from(from).build())
+                .pageRequest(PageRequest.<ShowtimePerformanceField>builder()
+                        .page(1)
+                        .size(10)
+                        .build())
+                .build();
+
+        ShowtimePerformanceReportResponse response = bookingService.getAllShowtimePerformanceReport(request);
+
+        assertEquals(from, response.from());
+        assertEquals(null, response.to());
+        org.mockito.Mockito.verify(bookingRepositoryImpl).findAllForShowtimePerformanceReport(
+                anyCollection(),
+                isNull(),
+                eq(from),
+                isNull(),
+                anyCollection());
     }
 
     @Test

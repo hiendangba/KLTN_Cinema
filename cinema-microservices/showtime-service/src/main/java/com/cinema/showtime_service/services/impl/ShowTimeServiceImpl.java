@@ -435,11 +435,12 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     public ResultResponse<ShowTimeResponse> createShowTime(
             ShowTimeCreateRequest showTimeCreateRequest,
             HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
+        validateAdminOrManagerRole(httpRequest);
         validateCreateShowTimeRequest(showTimeCreateRequest);
-        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
-        UUID hallCinemaId = validateHallInCinema(showTimeCreateRequest.getHallId(), accessibleCinemaIds);
-        validatePricingPolicy(showTimeCreateRequest.getPricingPolicyId(), hallCinemaId, accessibleCinemaIds);
+        boolean admin = isAdmin(httpRequest);
+        Set<UUID> accessibleCinemaIds = admin ? Set.of() : resolveAccessibleCinemaIdsByUser(httpRequest);
+        UUID hallCinemaId = validateHallInCinema(showTimeCreateRequest.getHallId(), accessibleCinemaIds, admin);
+        validatePricingPolicy(showTimeCreateRequest.getPricingPolicyId(), hallCinemaId, accessibleCinemaIds, admin);
 
         FilmResponse filmResponse = filmGrpcClient.getFilmById(showTimeCreateRequest.getFilmId());
         CinemaOperatingHoursResponse cinemaOperatingHours = cinemaGrpcClient.getCinemaById(hallCinemaId);
@@ -505,13 +506,14 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             UUID id,
             UpdateShowTimeRequest updateShowTimeRequest,
             HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
+        validateAdminOrManagerRole(httpRequest);
+        boolean admin = isAdmin(httpRequest);
 
         ShowTime showTime = getEditableShowTime(id);
-        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
-        validateShowtimeAccess(showTime, accessibleCinemaIds);
-        UUID hallCinemaId = validateHallInCinema(showTime.getHallId(), accessibleCinemaIds);
-        validatePricingPolicy(updateShowTimeRequest.getPricingPolicyId(), hallCinemaId, accessibleCinemaIds);
+        Set<UUID> accessibleCinemaIds = admin ? Set.of() : resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateShowtimeAccess(showTime, accessibleCinemaIds, admin);
+        UUID hallCinemaId = validateHallInCinema(showTime.getHallId(), accessibleCinemaIds, admin);
+        validatePricingPolicy(updateShowTimeRequest.getPricingPolicyId(), hallCinemaId, accessibleCinemaIds, admin);
 
         CinemaOperatingHoursResponse cinemaOperatingHours = cinemaGrpcClient.getCinemaById(hallCinemaId);
         FilmResponse filmResponse = filmGrpcClient.getFilmById(showTime.getFilmId());
@@ -552,11 +554,12 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     @Override
     @Transactional
     public ActionMessageResponse deleteShowTime(UUID id, HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
+        validateAdminOrManagerRole(httpRequest);
+        boolean admin = isAdmin(httpRequest);
 
         ShowTime showTime = showTimeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.SHOWTIME_NOT_FOUND));
-        validateShowtimeAccess(showTime, resolveAccessibleCinemaIdsByUser(httpRequest));
+        validateShowtimeAccess(showTime, admin ? Set.of() : resolveAccessibleCinemaIdsByUser(httpRequest), admin);
 
         if (bookingGrpcClient.isShowtimeBooked(id)) {
             throw new BusinessException(ErrorCode.NOT_UPDATE_BOOKED_SHOWTIME);
@@ -600,8 +603,17 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         return showTime;
     }
 
-    private void validateManagerRole(HttpServletRequest httpRequest) {
-        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "showtime_manager_action");
+    private void validateAdminOrManagerRole(HttpServletRequest httpRequest) {
+        RequestAuthUtils.requireAnyRole(
+                httpRequest,
+                log,
+                "showtime_write_action",
+                HeaderNames.ROLE_ADMIN,
+                HeaderNames.ROLE_MANAGER);
+    }
+
+    private boolean isAdmin(HttpServletRequest httpRequest) {
+        return HeaderNames.ROLE_ADMIN.equals(RequestAuthUtils.requireRoleHeader(httpRequest));
     }
 
     private void validateCreateShowTimeRequest(ShowTimeCreateRequest request) {
@@ -668,29 +680,33 @@ public class ShowTimeServiceImpl implements ShowTimeService {
                 .build();
     }
 
-    private void validatePricingPolicy(UUID pricingPolicyId, UUID cinemaId, Set<UUID> accessibleCinemaIds) {
+    private void validatePricingPolicy(
+            UUID pricingPolicyId,
+            UUID cinemaId,
+            Set<UUID> accessibleCinemaIds,
+            boolean bypassCinemaAccessCheck) {
         PricingPolicy pricingPolicy = pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
 
         if (!cinemaId.equals(pricingPolicy.getCinemaId())) {
             throw new BusinessException(ErrorCode.PRICING_POLICY_NOT_IN_CINEMA);
         }
-        if (!accessibleCinemaIds.contains(pricingPolicy.getCinemaId())) {
+        if (!bypassCinemaAccessCheck && !accessibleCinemaIds.contains(pricingPolicy.getCinemaId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
 
-    private UUID validateHallInCinema(UUID hallId, Set<UUID> accessibleCinemaIds) {
+    private UUID validateHallInCinema(UUID hallId, Set<UUID> accessibleCinemaIds, boolean bypassCinemaAccessCheck) {
         UUID hallCinemaId = hallGrpcClient.getCinemaIdByHallId(hallId);
-        if (!accessibleCinemaIds.contains(hallCinemaId)) {
+        if (!bypassCinemaAccessCheck && !accessibleCinemaIds.contains(hallCinemaId)) {
             throw new BusinessException(ErrorCode.HALL_NOT_IN_CINEMA);
         }
         return hallCinemaId;
     }
 
-    private void validateShowtimeAccess(ShowTime showTime, Set<UUID> accessibleCinemaIds) {
+    private void validateShowtimeAccess(ShowTime showTime, Set<UUID> accessibleCinemaIds, boolean bypassCinemaAccessCheck) {
         UUID hallCinemaId = hallGrpcClient.getCinemaIdByHallId(showTime.getHallId());
-        if (!accessibleCinemaIds.contains(hallCinemaId)) {
+        if (!bypassCinemaAccessCheck && !accessibleCinemaIds.contains(hallCinemaId)) {
             throw new BusinessException(ErrorCode.HALL_NOT_IN_CINEMA);
         }
     }

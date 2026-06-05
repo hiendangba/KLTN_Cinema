@@ -237,11 +237,30 @@ public class FilmServiceImpl implements FilmService {
             return;
         }
 
-        filterFields.add(FilterField.<FilmField>builder()
-                .field(FilmField.RELEASE_DATE)
-                .operator("BETWEEN")
-                .value(List.of(dateRange.getFrom().toLocalDate(), dateRange.getTo().toLocalDate()))
-                .build());
+        if (dateRange.getFrom() != null && dateRange.getTo() != null) {
+            filterFields.add(FilterField.<FilmField>builder()
+                    .field(FilmField.RELEASE_DATE)
+                    .operator("BETWEEN")
+                    .value(List.of(dateRange.getFrom().toLocalDate(), dateRange.getTo().toLocalDate()))
+                    .build());
+            return;
+        }
+
+        if (dateRange.getFrom() != null) {
+            filterFields.add(FilterField.<FilmField>builder()
+                    .field(FilmField.RELEASE_DATE)
+                    .operator("GTE")
+                    .value(dateRange.getFrom().toLocalDate())
+                    .build());
+        }
+
+        if (dateRange.getTo() != null) {
+            filterFields.add(FilterField.<FilmField>builder()
+                    .field(FilmField.RELEASE_DATE)
+                    .operator("LTE")
+                    .value(dateRange.getTo().toLocalDate())
+                    .build());
+        }
     }
 
     private List<FilterField<FilmField>> scopeCustomerFilters(

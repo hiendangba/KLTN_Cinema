@@ -308,6 +308,83 @@ class ShowTimeServiceImplTest {
     }
 
     @Test
+    void createShowTime_shouldAllowAdminWithoutCinemaAssignment() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+
+        HttpServletRequest request = adminRequest(UUID.randomUUID());
+        ShowTimeCreateRequest createRequest = ShowTimeCreateRequest.builder()
+                .hallId(hallId)
+                .filmId(filmId)
+                .pricingPolicyId(pricingPolicyId)
+                .startDateTime(LocalDate.now().plusDays(1).atTime(9, 0))
+                .endDateTime(LocalDate.now().plusDays(1).atTime(12, 0))
+                .status(ShowTimeEnum.ShowTimeStatus.SCHEDULED)
+                .build();
+
+        PricingPolicy pricingPolicy = new PricingPolicy();
+        pricingPolicy.setId(pricingPolicyId);
+        pricingPolicy.setCinemaId(cinemaId);
+
+        PricingPolicyResponse pricingPolicyResponse = PricingPolicyResponse.builder()
+                .id(pricingPolicyId)
+                .cinemaId(cinemaId)
+                .build();
+
+        FilmResponse filmResponse = FilmResponse.builder()
+                .id(filmId)
+                .duration(90)
+                .build();
+
+        when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
+        when(filmGrpcClient.getFilmById(filmId)).thenReturn(filmResponse);
+        when(cinemaGrpcClient.getCinemaById(cinemaId)).thenReturn(cinemaOperatingHours(cinemaId, "08:00", "23:00"));
+        when(showTimeRepository.findOverlapping(any(), any(), any())).thenReturn(Optional.empty());
+        when(showTimeMapper.toEntity(any(ShowTimeCreateRequest.class))).thenAnswer(invocation -> {
+            ShowTimeCreateRequest req = invocation.getArgument(0);
+            ShowTime st = new ShowTime();
+            st.setId(UUID.randomUUID());
+            st.setHallId(req.getHallId());
+            st.setFilmId(req.getFilmId());
+            st.setPricingPolicyId(req.getPricingPolicyId());
+            st.setStartDateTime(req.getStartDateTime());
+            st.setEndDateTime(req.getEndDateTime());
+            st.setStatus(req.getStatus());
+            st.setIsDeleted(false);
+            st.setTimeCreated(LocalDateTime.now());
+            st.setTimeUpdated(LocalDateTime.now());
+            return st;
+        });
+        when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(pricingPolicyRepository.findAllById(any())).thenReturn(List.of(pricingPolicy));
+        when(pricingPolicyMapper.toResponse(pricingPolicy)).thenReturn(pricingPolicyResponse);
+        when(showTimeMapper.toResponse(any(ShowTime.class))).thenAnswer(invocation -> {
+            ShowTime st = invocation.getArgument(0);
+            return ShowTimeResponse.builder()
+                    .id(st.getId())
+                    .hallId(st.getHallId())
+                    .filmId(st.getFilmId())
+                    .pricingPolicyId(st.getPricingPolicyId())
+                    .startDateTime(st.getStartDateTime())
+                    .endDateTime(st.getEndDateTime())
+                    .status(st.getStatus())
+                    .isDeleted(Boolean.TRUE.equals(st.getIsDeleted()))
+                    .timeCreated(st.getTimeCreated())
+                    .timeUpdated(st.getTimeUpdated())
+                    .build();
+        });
+
+        var result = showTimeService.createShowTime(createRequest, request);
+
+        assertNotNull(result);
+        assertEquals(1, result.getSuccessResponse().size());
+        verify(cinemaGrpcClient, times(0)).getCinemaIdsByUserId(any(), any());
+    }
+
+    @Test
     void updateShowTime_shouldThrowWhenPricingPolicyNotInCinema() {
         UUID userId = UUID.randomUUID();
         UUID cinemaId = UUID.randomUUID();
@@ -346,6 +423,75 @@ class ShowTimeServiceImplTest {
                 () -> showTimeService.updateShowTime(showTimeId, updateRequest, request));
 
         assertEquals(ErrorCode.PRICING_POLICY_NOT_IN_CINEMA, ex.getErrorCode());
+    }
+
+    @Test
+    void updateShowTime_shouldAllowAdminWithoutCinemaAssignment() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID showTimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID pricingPolicyId = UUID.randomUUID();
+
+        HttpServletRequest request = adminRequest(UUID.randomUUID());
+        UpdateShowTimeRequest updateRequest = UpdateShowTimeRequest.builder()
+                .pricingPolicyId(pricingPolicyId)
+                .startDateTime(LocalDateTime.now().plusDays(1).withHour(10).withMinute(0))
+                .endDateTime(LocalDateTime.now().plusDays(1).withHour(12).withMinute(30))
+                .status(ShowTimeEnum.ShowTimeStatus.ONGOING)
+                .build();
+
+        ShowTime existing = new ShowTime();
+        existing.setId(showTimeId);
+        existing.setHallId(hallId);
+        existing.setFilmId(filmId);
+        existing.setPricingPolicyId(pricingPolicyId);
+        existing.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        existing.setIsDeleted(false);
+
+        PricingPolicy pricingPolicy = new PricingPolicy();
+        pricingPolicy.setId(pricingPolicyId);
+        pricingPolicy.setCinemaId(cinemaId);
+
+        when(showTimeRepository.findById(showTimeId)).thenReturn(Optional.of(existing));
+        when(bookingGrpcClient.isShowtimeBooked(showTimeId)).thenReturn(false);
+        when(hallGrpcClient.getCinemaIdByHallId(hallId)).thenReturn(cinemaId);
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(pricingPolicyId)).thenReturn(Optional.of(pricingPolicy));
+        when(cinemaGrpcClient.getCinemaById(cinemaId)).thenReturn(cinemaOperatingHours(cinemaId, "08:00", "23:00"));
+        when(filmGrpcClient.getFilmById(filmId)).thenReturn(FilmResponse.builder().id(filmId).duration(90).build());
+        when(showTimeRepository.findOverlappingExcludingId(showTimeId, hallId,
+                updateRequest.getStartDateTime(), updateRequest.getEndDateTime())).thenReturn(Optional.empty());
+        when(showTimeRepository.save(existing)).thenReturn(existing);
+
+        var result = showTimeService.updateShowTime(showTimeId, updateRequest, request);
+
+        assertNotNull(result);
+        assertEquals(ShowTimeEnum.ShowTimeStatus.ONGOING, existing.getStatus());
+        verify(cinemaGrpcClient, times(0)).getCinemaIdsByUserId(any(), any());
+    }
+
+    @Test
+    void deleteShowTime_shouldAllowAdminWithoutCinemaAssignment() {
+        UUID showTimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+
+        HttpServletRequest request = adminRequest(UUID.randomUUID());
+
+        ShowTime existing = new ShowTime();
+        existing.setId(showTimeId);
+        existing.setHallId(hallId);
+        existing.setStatus(ShowTimeEnum.ShowTimeStatus.SCHEDULED);
+        existing.setIsDeleted(false);
+
+        when(showTimeRepository.findById(showTimeId)).thenReturn(Optional.of(existing));
+        when(bookingGrpcClient.isShowtimeBooked(showTimeId)).thenReturn(false);
+
+        var result = showTimeService.deleteShowTime(showTimeId, request);
+
+        assertNotNull(result);
+        assertTrue(existing.getIsDeleted());
+        verify(showTimeRepository).save(existing);
+        verify(cinemaGrpcClient, times(0)).getCinemaIdsByUserId(any(), any());
     }
 
     @Test
@@ -1051,6 +1197,12 @@ class ShowTimeServiceImplTest {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn("MANAGER");
         when(request.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+        return request;
+    }
+
+    private HttpServletRequest adminRequest(UUID userId) {
+        HttpServletRequest request = mock(HttpServletRequest.class);
+        when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn("ADMIN");
         return request;
     }
 

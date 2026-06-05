@@ -18,6 +18,7 @@ import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
+import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.http.HeaderNames;
 import jakarta.servlet.http.HttpServletRequest;
@@ -45,6 +46,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
@@ -360,6 +362,74 @@ class PaymentSessionServiceImplTest {
         assertEquals(BigDecimal.ZERO.setScale(0), response.total().promotionDiscountAmount());
         assertEquals("", response.total().promotionCode());
         assertEquals("", response.total().promotionName());
+    }
+
+    @Test
+    void getAllCinemaRevenueReport_shouldAllowOnlyFromDate() {
+        UUID cinema1 = UUID.randomUUID();
+        LocalDateTime from = LocalDateTime.of(2026, 5, 29, 9, 30);
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                isNull(),
+                any(),
+                any()))
+                .thenReturn(List.of());
+
+        PageRequest<CinemaRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
+        CinemaRevenueReportRequest request = CinemaRevenueReportRequest.builder()
+                .dateRange(DateRange.builder().from(from).build())
+                .pageRequest(pageRequest)
+                .build();
+
+        CinemaRevenueReportResponse response = paymentSessionService.getAllCinemaRevenueReport(request);
+
+        assertEquals(from, response.from());
+        assertEquals(null, response.to());
+        verify(paymentTransactionRepositoryImpl).findAllForRevenueReport(
+                anyCollection(),
+                isNull(),
+                eq(from),
+                isNull());
+    }
+
+    @Test
+    void getAllCinemaRevenueReport_shouldAllowOnlyToDate() {
+        UUID cinema1 = UUID.randomUUID();
+        LocalDateTime to = LocalDateTime.of(2026, 5, 29, 18, 0);
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                isNull(),
+                any(),
+                any()))
+                .thenReturn(List.of());
+
+        PageRequest<CinemaRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
+        CinemaRevenueReportRequest request = CinemaRevenueReportRequest.builder()
+                .dateRange(DateRange.builder().to(to).build())
+                .pageRequest(pageRequest)
+                .build();
+
+        CinemaRevenueReportResponse response = paymentSessionService.getAllCinemaRevenueReport(request);
+
+        assertEquals(null, response.from());
+        assertEquals(to, response.to());
+        verify(paymentTransactionRepositoryImpl).findAllForRevenueReport(
+                anyCollection(),
+                isNull(),
+                isNull(),
+                eq(to));
     }
 
     @Test

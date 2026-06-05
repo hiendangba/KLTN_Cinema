@@ -58,9 +58,10 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
     @Transactional
     public ActionMessageResponse createPricingPolicy(PricingPolicyCreateRequest request,
                                                      HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
-        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
-        validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds);
+        validateAdminOrManagerRole(httpRequest);
+        boolean admin = isAdmin(httpRequest);
+        Set<UUID> accessibleCinemaIds = admin ? Set.of() : resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds, admin);
         validatePricingOrder(request.getStandardPrice(), request.getVipPrice(), request.getCouplePrice());
 
         PricingPolicy pricingPolicy = pricingPolicyMapper.toEntity(request);
@@ -75,12 +76,13 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
     @Transactional
     public ActionMessageResponse updatePricingPolicy(UUID id, PricingPolicyUpdateRequest request,
                                                      HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
-        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
-        validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds);
+        validateAdminOrManagerRole(httpRequest);
+        boolean admin = isAdmin(httpRequest);
+        Set<UUID> accessibleCinemaIds = admin ? Set.of() : resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds, admin);
 
         PricingPolicy pricingPolicy = getActivePricingPolicy(id);
-        validatePolicyOwnership(pricingPolicy, request.getCinemaId(), accessibleCinemaIds);
+        validatePolicyOwnership(pricingPolicy, request.getCinemaId(), accessibleCinemaIds, admin);
         validatePricingPolicyNotUsed(id);
         validatePricingOrder(request.getStandardPrice(), request.getVipPrice(), request.getCouplePrice());
 
@@ -97,11 +99,12 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
     @Override
     @Transactional
     public ActionMessageResponse deletePricingPolicy(UUID id, HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
-        Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
+        validateAdminOrManagerRole(httpRequest);
+        boolean admin = isAdmin(httpRequest);
+        Set<UUID> accessibleCinemaIds = admin ? Set.of() : resolveAccessibleCinemaIdsByUser(httpRequest);
 
         PricingPolicy pricingPolicy = getActivePricingPolicy(id);
-        validatePolicyAccess(pricingPolicy, accessibleCinemaIds);
+        validatePolicyAccess(pricingPolicy, accessibleCinemaIds, admin);
         validatePricingPolicyNotUsed(id);
         pricingPolicy.setIsDeleted(true);
         pricingPolicyRepository.save(pricingPolicy);
@@ -127,7 +130,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
                 HeaderNames.ROLE_MANAGER,
                 HeaderNames.ROLE_STAFF);
         Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
-        validatePolicyAccess(pricingPolicy, accessibleCinemaIds);
+        validatePolicyAccess(pricingPolicy, accessibleCinemaIds, false);
         return pricingPolicyMapper.toResponse(pricingPolicy);
     }
 
@@ -171,21 +174,37 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
     }
 
-    private void validatePolicyAccess(PricingPolicy pricingPolicy, Set<UUID> accessibleCinemaIds) {
-        if (!accessibleCinemaIds.contains(pricingPolicy.getCinemaId())) {
+    private void validatePolicyAccess(
+            PricingPolicy pricingPolicy,
+            Set<UUID> accessibleCinemaIds,
+            boolean bypassCinemaAccessCheck) {
+        if (!bypassCinemaAccessCheck && !accessibleCinemaIds.contains(pricingPolicy.getCinemaId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
 
-    private void validatePolicyOwnership(PricingPolicy pricingPolicy, UUID requestCinemaId, Set<UUID> accessibleCinemaIds) {
+    private void validatePolicyOwnership(
+            PricingPolicy pricingPolicy,
+            UUID requestCinemaId,
+            Set<UUID> accessibleCinemaIds,
+            boolean bypassCinemaAccessCheck) {
         if (!requestCinemaId.equals(pricingPolicy.getCinemaId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
-        validatePolicyAccess(pricingPolicy, accessibleCinemaIds);
+        validatePolicyAccess(pricingPolicy, accessibleCinemaIds, bypassCinemaAccessCheck);
     }
 
-    private void validateManagerRole(HttpServletRequest httpRequest) {
-        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER, log, "pricing_policy_manager_action");
+    private void validateAdminOrManagerRole(HttpServletRequest httpRequest) {
+        RequestAuthUtils.requireAnyRole(
+                httpRequest,
+                log,
+                "pricing_policy_write_action",
+                HeaderNames.ROLE_ADMIN,
+                HeaderNames.ROLE_MANAGER);
+    }
+
+    private boolean isAdmin(HttpServletRequest httpRequest) {
+        return HeaderNames.ROLE_ADMIN.equals(RequestAuthUtils.requireRoleHeader(httpRequest));
     }
 
     private void validatePricingPolicyNotUsed(UUID pricingPolicyId) {
@@ -427,8 +446,11 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         return new ArrayList<>(items.subList(fromIndex, toIndex));
     }
 
-    private void validateCinemaAccess(UUID cinemaId, Set<UUID> accessibleCinemaIds) {
-        if (cinemaId == null || !accessibleCinemaIds.contains(cinemaId)) {
+    private void validateCinemaAccess(UUID cinemaId, Set<UUID> accessibleCinemaIds, boolean bypassCinemaAccessCheck) {
+        if (cinemaId == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+        if (!bypassCinemaAccessCheck && !accessibleCinemaIds.contains(cinemaId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
     }
