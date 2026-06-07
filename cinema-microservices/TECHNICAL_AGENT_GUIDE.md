@@ -89,6 +89,20 @@
 - `showtime-service` thêm gRPC nội bộ `ListActiveFilmIdsByCinema` để customer search chỉ thấy phim đang chiếu ở đúng rạp được chọn.
 - `common-lib` tắt `clearOutputDirectory` cho `protobuf-maven-plugin` để tránh lỗi dọn thư mục generated-sources trên bind mount/dynamic build environment khi generate gRPC code.
 
+## Changelog ngắn (2026-06-05)
+
+- Sửa 3 file use case DOCX để tách lại theo nghiệp vụ rộng hơn thay vì gộp quá tay theo endpoint:
+  - `Đặc tả usecase identity-user.docx` tăng lên 16 bảng, bổ sung riêng `Xác thực OTP` và `Gửi lại mã OTP`.
+  - `Đặc tả usecase cinema-hall-seat.docx` tăng lên 9 bảng, bổ sung `Tra cứu danh sách rạp chiếu của tôi` và `Xem danh sách nhân sự rạp chiếu`.
+  - `Đặc tả usecase film-showtime-booking-payment.docx` tăng lên 26 bảng, tách `showtime`, `booking`, `payment` thành các use case đọc/chi tiết/lịch sử/báo cáo riêng hơn.
+- Mục tiêu: khớp báo cáo khóa luận với nghiệp vụ thật của repo, giữ `tra cứu/xem` và `quản lý` là nhóm trình bày, không dùng HTTP method làm ranh giới use case.
+- Verification:
+  - đọc lại 3 DOCX bằng `python-docx` và xác nhận đúng số bảng mới
+  - xác nhận từng bảng vẫn giữ cấu trúc `2 cột x 8 dòng`
+  - Word đang mở 3 tài liệu và trạng thái đã `Saved=True` sau khi cập nhật
+- Remaining risk:
+  - chưa render PNG bằng LibreOffice vì môi trường vẫn không có `soffice`; kiểm tra visual layout vẫn là điểm cần chú ý nếu mở file trong Word khác renderer.
+
 > [!WARNING]
 > **BUG GỐC CỦA LUỒNG GOOGLE LOGIN**
 > - Bản triển khai ban đầu đã gửi request đổi `code -> token` theo **mẫu sai** (payload kiểu JSON / client library cũ).
