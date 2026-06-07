@@ -568,7 +568,7 @@ public class CinemaServiceImpl implements CinemaService {
         }
 
         RequestAuthUtils.requireAnyRole(currentRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER,
-                HeaderNames.ROLE_STAFF);
+                HeaderNames.ROLE_STAFF, HeaderNames.ROLE_CUSTOMER);
         String role = RequestAuthUtils.requireRoleHeader(currentRequest);
         if (HeaderNames.ROLE_ADMIN.equals(role)) {
             return request;
@@ -578,6 +578,22 @@ public class CinemaServiceImpl implements CinemaService {
         List<FilterField<CinemaField>> filterFields = request.getFilterBy() == null
                 ? new ArrayList<>()
                 : new ArrayList<>(request.getFilterBy());
+
+        if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
+            filterFields.add(FilterField.<CinemaField>builder()
+                    .field(CinemaField.STATUS)
+                    .operator("EQ")
+                    .value(CinemaStatus.ACTIVE)
+                    .build());
+
+            return PageRequest.<CinemaField>builder()
+                    .page(request.getPage())
+                    .size(request.getSize())
+                    .keyword(request.getKeyword())
+                    .sortBy(request.getSortBy() == null ? null : new ArrayList<>(request.getSortBy()))
+                    .filterBy(filterFields)
+                    .build();
+        }
 
         if (HeaderNames.ROLE_MANAGER.equals(role)) {
             filterFields.add(FilterField.<CinemaField>builder()

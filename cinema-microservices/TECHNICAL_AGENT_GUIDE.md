@@ -1494,5 +1494,19 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - Risk:
   - cần recreate lại `hall-service` và reload Envoy để các cấu hình tên mới ăn vào runtime.
 
+## Changelog ngắn (2026-06-07)
+
+- `cinema-service` mở `POST /api/cinemas/search` cho `ROLE_CUSTOMER`, không còn chặn customer ở tầng scope quyền của service.
+- Hành vi mới: customer được search danh sách rạp để phục vụ filter phía client, nhưng backend tự ép thêm filter `status = ACTIVE` để chỉ trả rạp đang hoạt động.
+- Lý do: frontend customer cần dữ liệu rạp cho các luồng tra cứu/chọn lọc; rule cũ chỉ cho `ADMIN/MANAGER/STAFF` nên customer bị 403 dù không cần quyền quản trị.
+- Files đã cập nhật:
+  - `cinema-service/src/main/java/com/cinema/cinema_service/services/impl/CinemaServiceImpl.java`
+  - `cinema-service/src/test/java/com/cinema/cinema_service/services/impl/CinemaServiceImplTest.java`
+- Verify:
+  - thêm test `searchCinemas_scopesCustomerResultsToActiveCinemas` để khóa rule customer chỉ nhìn thấy cinema `ACTIVE`.
+  - các nhánh scope cũ cho `ADMIN`, `MANAGER`, `STAFF` giữ nguyên.
+- Risk:
+  - thay đổi này chỉ mở `POST /api/cinemas/search`; `GET /api/cinemas/{id}` vẫn không mở cho customer, nên nếu FE cần chi tiết rạp theo id thì sẽ cần mở thêm riêng.
+
 
 

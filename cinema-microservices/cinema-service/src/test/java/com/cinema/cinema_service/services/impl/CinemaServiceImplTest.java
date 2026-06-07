@@ -470,6 +470,45 @@ class CinemaServiceImplTest {
         assertThat(response.getData().get(0).getName()).isEqualTo(assigned.getName());
     }
 
+    @Test
+    void searchCinemas_scopesCustomerResultsToActiveCinemas() {
+        UUID managerId = UUID.randomUUID();
+        MockHttpServletRequest request = customerRequest();
+        Cinema activeCinema = cinema("ACTIVE-CINEMA", managerId);
+
+        when(cinemaRepositoryImpl.countWithFilter(any(), anyList())).thenReturn(1L);
+        when(cinemaRepositoryImpl.searchWithPageAndSortAndFilter(any(), anyInt(), anyInt(), anyList(), anyList()))
+                .thenAnswer(invocation -> {
+                    List<com.cinema.dto.request.FilterField<CinemaField>> filters = invocation.getArgument(4);
+                    assertThat(filters).anyMatch(filter ->
+                            filter.getField() == CinemaField.STATUS
+                                    && "EQ".equalsIgnoreCase(filter.getOperator())
+                                    && CinemaStatus.ACTIVE.equals(filter.getValue()));
+                    return List.of(activeCinema);
+                });
+        when(cinemaStaffRepository.findByCinemaIdInAndActiveTrue(anyList())).thenReturn(List.of());
+        when(cinemaMapper.toResponse(any(Cinema.class), anyList())).thenAnswer(invocation -> {
+            Cinema cinema = invocation.getArgument(0);
+            return CinemaResponse.builder()
+                    .id(cinema.getId())
+                    .name(cinema.getName())
+                    .managerId(cinema.getManagerId())
+                    .build();
+        });
+        when(userGrpcClient.getUserNameById(managerId)).thenReturn("Manager One");
+
+        PageRequest<CinemaField> pageRequest = PageRequest.<CinemaField>builder()
+                .page(1)
+                .size(20)
+                .keyword("cinema")
+                .build();
+
+        PageResponse<CinemaResponse> response = withRequestContext(request, () -> cinemaService.searchCinemas(pageRequest));
+
+        assertThat(response.getData()).hasSize(1);
+        assertThat(response.getData().get(0).getName()).isEqualTo(activeCinema.getName());
+    }
+
     private MockHttpServletRequest adminRequest() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(HeaderNames.X_USER_ROLE, HeaderNames.ROLE_ADMIN);
@@ -488,6 +527,13 @@ class CinemaServiceImplTest {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(HeaderNames.X_USER_ROLE, HeaderNames.ROLE_STAFF);
         request.addHeader(HeaderNames.X_USER_ID, staffId.toString());
+        return request;
+    }
+
+    private MockHttpServletRequest customerRequest() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HeaderNames.X_USER_ROLE, HeaderNames.ROLE_CUSTOMER);
+        request.addHeader(HeaderNames.X_USER_ID, UUID.randomUUID().toString());
         return request;
     }
 
