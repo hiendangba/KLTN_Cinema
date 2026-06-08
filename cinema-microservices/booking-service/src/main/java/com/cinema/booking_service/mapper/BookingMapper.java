@@ -35,5 +35,6 @@ public interface BookingMapper {
     Booking toEntity(CreateBookingRequest request);
 
     @Mapping(target = "cinemaName", ignore = true)
+    @Mapping(target = "hallName", ignore = true)
     BookingResponse toResponse(Booking booking);
 }

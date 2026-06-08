@@ -24,6 +24,7 @@ import com.cinema.booking_service.enums.PaymentStatus;
 import com.cinema.booking_service.enums.ProductStatus;
 import com.cinema.booking_service.grpc.CinemaGrpcClient;
 import com.cinema.booking_service.grpc.FilmGrpcClient;
+import com.cinema.booking_service.grpc.HallGrpcClient;
 import com.cinema.booking_service.http.PaymentServiceClient;
 import com.cinema.booking_service.grpc.SeatGrpcClient;
 import com.cinema.booking_service.grpc.ShowtimeGrpcClient;
@@ -88,6 +89,7 @@ public class BookingServiceImpl implements BookingService {
     private final BookingSeatItemMapper bookingSeatItemMapper;
     private final CinemaGrpcClient cinemaGrpcClient;
     private final FilmGrpcClient filmGrpcClient;
+    private final HallGrpcClient hallGrpcClient;
     private final ShowtimeGrpcClient showtimeGrpcClient;
     private final SeatGrpcClient seatGrpcClient;
     private final SeatLockService seatLockService;
@@ -443,10 +445,18 @@ public class BookingServiceImpl implements BookingService {
         List<Booking> bookings = bookingRepositoryImpl.searchWithPageAndSortAndFilter(
                 userId, accessibleCinemaIds, keyword, page, size, sortFields, filterBy);
         Map<UUID, String> cinemaNameCache = new LinkedHashMap<>();
+        Map<UUID, String> hallNameCache = new LinkedHashMap<>();
+        Map<UUID, ShowtimeGrpcClient.ShowtimeSummary> showtimeCache = prefetchShowtimeSummariesForBookingResponses(
+                bookings.stream()
+                        .map(Booking::getShowtimeId)
+                        .filter(java.util.Objects::nonNull)
+                        .toList());
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
 
         return PageResponse.<BookingResponse>builder()
-                .data(bookings.stream().map(booking -> toBookingResponse(booking, cinemaNameCache)).toList())
+                .data(bookings.stream()
+                        .map(booking -> toBookingResponse(booking, cinemaNameCache, hallNameCache, showtimeCache))
+                        .toList())
                 .currentPage(page)
                 .totalPages(totalPages)
                 .totalElements(totalElements)
@@ -457,15 +467,20 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private BookingResponse toBookingResponse(Booking booking) {
-        return toBookingResponse(booking, new LinkedHashMap<>());
+        return toBookingResponse(booking, new LinkedHashMap<>(), new LinkedHashMap<>(), Map.of());
     }
 
-    private BookingResponse toBookingResponse(Booking booking, Map<UUID, String> cinemaNameCache) {
+    private BookingResponse toBookingResponse(
+            Booking booking,
+            Map<UUID, String> cinemaNameCache,
+            Map<UUID, String> hallNameCache,
+            Map<UUID, ShowtimeGrpcClient.ShowtimeSummary> showtimeCache) {
         BookingResponse response = bookingMapper.toResponse(booking);
         if (response == null) {
             return null;
         }
         response.setCinemaName(resolveCinemaName(booking == null ? null : booking.getCinemaId(), cinemaNameCache));
+        response.setHallName(resolveHallName(booking, hallNameCache, showtimeCache));
         return response;
     }
 
@@ -485,6 +500,64 @@ public class BookingServiceImpl implements BookingService {
             cache.put(cinemaId, null);
             return null;
         }
+    }
+
+    private String resolveHallName(
+            Booking booking,
+            Map<UUID, String> hallNameCache,
+            Map<UUID, ShowtimeGrpcClient.ShowtimeSummary> showtimeCache) {
+        if (booking == null || booking.getShowtimeId() == null) {
+            return null;
+        }
+
+        ShowtimeGrpcClient.ShowtimeSummary showtime = null;
+        boolean hasPrefetchedShowtime = showtimeCache != null && showtimeCache.containsKey(booking.getShowtimeId());
+        if (hasPrefetchedShowtime) {
+            showtime = showtimeCache.get(booking.getShowtimeId());
+        }
+
+        try {
+            if (!hasPrefetchedShowtime && showtime == null) {
+                showtime = showtimeGrpcClient.getShowtimeById(booking.getShowtimeId());
+            }
+            if (showtime == null || showtime.getHallId() == null) {
+                return null;
+            }
+
+            UUID hallId = showtime.getHallId();
+            Map<UUID, String> cache = hallNameCache == null ? new LinkedHashMap<>() : hallNameCache;
+            if (cache.containsKey(hallId)) {
+                return cache.get(hallId);
+            }
+
+            String hallName = hallGrpcClient.getHallById(hallId).name();
+            cache.put(hallId, hallName);
+            return hallName;
+        } catch (BusinessException ex) {
+            if (hallNameCache != null && showtime != null && showtime.getHallId() != null) {
+                hallNameCache.put(showtime.getHallId(), null);
+            }
+            return null;
+        }
+    }
+
+    private Map<UUID, ShowtimeGrpcClient.ShowtimeSummary> prefetchShowtimeSummariesForBookingResponses(Collection<UUID> showtimeIds) {
+        if (showtimeIds == null || showtimeIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, ShowtimeGrpcClient.ShowtimeSummary> result = new LinkedHashMap<>();
+        for (UUID showtimeId : showtimeIds) {
+            if (showtimeId == null || result.containsKey(showtimeId)) {
+                continue;
+            }
+            try {
+                result.put(showtimeId, showtimeGrpcClient.getShowtimeById(showtimeId));
+            } catch (BusinessException ex) {
+                result.put(showtimeId, null);
+            }
+        }
+        return result;
     }
 
     private List<FilterField<BookingField>> mergeForcedBookingFilters(
