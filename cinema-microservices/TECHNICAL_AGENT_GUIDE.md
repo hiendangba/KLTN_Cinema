@@ -89,6 +89,20 @@
 - `showtime-service` thêm gRPC nội bộ `ListActiveFilmIdsByCinema` để customer search chỉ thấy phim đang chiếu ở đúng rạp được chọn.
 - `common-lib` tắt `clearOutputDirectory` cho `protobuf-maven-plugin` để tránh lỗi dọn thư mục generated-sources trên bind mount/dynamic build environment khi generate gRPC code.
 
+## Changelog ngắn (2026-06-05)
+
+- Sửa 3 file use case DOCX để tách lại theo nghiệp vụ rộng hơn thay vì gộp quá tay theo endpoint:
+  - `Đặc tả usecase identity-user.docx` tăng lên 16 bảng, bổ sung riêng `Xác thực OTP` và `Gửi lại mã OTP`.
+  - `Đặc tả usecase cinema-hall-seat.docx` tăng lên 9 bảng, bổ sung `Tra cứu danh sách rạp chiếu của tôi` và `Xem danh sách nhân sự rạp chiếu`.
+  - `Đặc tả usecase film-showtime-booking-payment.docx` tăng lên 26 bảng, tách `showtime`, `booking`, `payment` thành các use case đọc/chi tiết/lịch sử/báo cáo riêng hơn.
+- Mục tiêu: khớp báo cáo khóa luận với nghiệp vụ thật của repo, giữ `tra cứu/xem` và `quản lý` là nhóm trình bày, không dùng HTTP method làm ranh giới use case.
+- Verification:
+  - đọc lại 3 DOCX bằng `python-docx` và xác nhận đúng số bảng mới
+  - xác nhận từng bảng vẫn giữ cấu trúc `2 cột x 8 dòng`
+  - Word đang mở 3 tài liệu và trạng thái đã `Saved=True` sau khi cập nhật
+- Remaining risk:
+  - chưa render PNG bằng LibreOffice vì môi trường vẫn không có `soffice`; kiểm tra visual layout vẫn là điểm cần chú ý nếu mở file trong Word khác renderer.
+
 > [!WARNING]
 > **BUG GỐC CỦA LUỒNG GOOGLE LOGIN**
 > - Bản triển khai ban đầu đã gửi request đổi `code -> token` theo **mẫu sai** (payload kiểu JSON / client library cũ).
@@ -1479,6 +1493,20 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - `rg -n "hall-services" compose.prod.yaml compose.local.yaml envoy\\envoy.prod.yaml envoy\\envoy.local.yaml hall-service\\src\\main\\resources\\application.yaml` không còn match.
 - Risk:
   - cần recreate lại `hall-service` và reload Envoy để các cấu hình tên mới ăn vào runtime.
+
+## Changelog ngắn (2026-06-07)
+
+- `cinema-service` mở `POST /api/cinemas/search` cho `ROLE_CUSTOMER`, không còn chặn customer ở tầng scope quyền của service.
+- Hành vi mới: customer được search danh sách rạp để phục vụ filter phía client, nhưng backend tự ép thêm filter `status = ACTIVE` để chỉ trả rạp đang hoạt động.
+- Lý do: frontend customer cần dữ liệu rạp cho các luồng tra cứu/chọn lọc; rule cũ chỉ cho `ADMIN/MANAGER/STAFF` nên customer bị 403 dù không cần quyền quản trị.
+- Files đã cập nhật:
+  - `cinema-service/src/main/java/com/cinema/cinema_service/services/impl/CinemaServiceImpl.java`
+  - `cinema-service/src/test/java/com/cinema/cinema_service/services/impl/CinemaServiceImplTest.java`
+- Verify:
+  - thêm test `searchCinemas_scopesCustomerResultsToActiveCinemas` để khóa rule customer chỉ nhìn thấy cinema `ACTIVE`.
+  - các nhánh scope cũ cho `ADMIN`, `MANAGER`, `STAFF` giữ nguyên.
+- Risk:
+  - thay đổi này chỉ mở `POST /api/cinemas/search`; `GET /api/cinemas/{id}` vẫn không mở cho customer, nên nếu FE cần chi tiết rạp theo id thì sẽ cần mở thêm riêng.
 
 
 
