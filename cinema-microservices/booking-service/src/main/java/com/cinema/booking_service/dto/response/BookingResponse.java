@@ -19,6 +19,8 @@ public class BookingResponse {
     private UUID cinemaId;
     @Setter
     private String cinemaName;
+    @Setter
+    private String hallName;
     private String filmTitle;
     private LocalDateTime showtimeStartDateTime;
     private LocalDateTime showtimeEndDateTime;
