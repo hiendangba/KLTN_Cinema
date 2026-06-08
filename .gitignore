@@ -33,3 +33,6 @@ out/
 .env.*.local
 
 .agents
+### CodeGraph ###
+.codegraph/*
+!.codegraph/.gitignore

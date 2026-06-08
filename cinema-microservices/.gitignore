@@ -37,3 +37,6 @@ build/
 
 ### TLS Certificates ###
 envoy/certs/
+
+### CodeGraph ###
+.codegraph/*

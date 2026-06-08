@@ -1560,5 +1560,10 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - File preview giữ cấu trúc bảng 2 cột giống phần đặc tả use case hiện có; chỉ siết lại các trường như `Descriptions`, `Preconditions`, `Postconditions` cho các use case cần chỉnh, còn `Basic Flow`, `Alternative Flows`, `Exceptions` được giữ nguyên để tiện đối chiếu.
 - Kèm theo script `generate_chapter3_usecase_preview.py` để sinh lại file preview từ bản copy báo cáo mới nhất khi cần cập nhật thêm.
 
+## Changelog ngắn (2026-06-09)
+
+- Cập nhật `.gitignore` ở root để bỏ qua toàn bộ file sinh ra trong thư mục `.codegraph`, đồng thời vẫn giữ lại `.codegraph/.gitignore`.
+- Lý do: các file database, WAL/SHM, log và pid trong `.codegraph` là dữ liệu cục bộ theo máy, không nên xuất hiện trong `git status` hoặc bị commit nhầm.
+
 
 
