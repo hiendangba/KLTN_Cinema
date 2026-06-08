@@ -1565,5 +1565,11 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - Cập nhật `.gitignore` ở root để bỏ qua toàn bộ file sinh ra trong thư mục `.codegraph`, đồng thời vẫn giữ lại `.codegraph/.gitignore`.
 - Lý do: các file database, WAL/SHM, log và pid trong `.codegraph` là dữ liệu cục bộ theo máy, không nên xuất hiện trong `git status` hoặc bị commit nhầm.
 
+## Changelog ngắn (2026-06-09)
+
+- Dọn repo khỏi các tài liệu tạm ở root gồm `REDIS_OPTIMIZATION_CHANGELOG_2026-04-21.md`, `RAM_OPTIMIZATION_NOTES.md`, `report_intro_rewrite.md`, `SEAT_SERVICE_MIGRATION_PLAN.md`.
+- Xóa toàn bộ cây `.github/modernize/java-upgrade/...` và dọn nốt thư mục `.github` rỗng còn lại.
+- Lý do: đây là các file/tài liệu phụ trợ hoặc script modernize không còn cần giữ trong repo chính, làm root repo bị loãng và tăng nguy cơ commit nhầm tài liệu tạm.
+
 
 
