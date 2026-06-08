@@ -399,8 +399,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d
-    ports:
-      - "5433:5432"
     mem_limit: 300m
 
   redis:
@@ -457,7 +455,8 @@ services:
     volumes:
       - ./envoy/envoy.prod.yaml:/etc/envoy/envoy.yaml:ro
       - ./envoy/certs:/etc/envoy/certs:ro
-    command: ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
+    command:
+      ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
     mem_limit: 70m
 
 volumes:
