@@ -36,3 +36,4 @@ out/
 ### CodeGraph ###
 .codegraph/*
 !.codegraph/.gitignore
+*.pid
