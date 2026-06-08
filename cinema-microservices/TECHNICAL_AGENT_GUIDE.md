@@ -1508,5 +1508,57 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - Risk:
   - thay đổi này chỉ mở `POST /api/cinemas/search`; `GET /api/cinemas/{id}` vẫn không mở cho customer, nên nếu FE cần chi tiết rạp theo id thì sẽ cần mở thêm riêng.
 
+## Changelog ngắn (2026-06-07)
+
+- Tạo file `report_intro_rewrite.md` chứa bản viết lại hoàn chỉnh cho phần Mở đầu của báo cáo KLTN.
+- Nội dung giữ nguyên cấu trúc 5 mục hiện có của báo cáo, nhưng được viết lại theo hướng ngắn hơn, chặt hơn và giảm lặp giữa `Lý do chọn đề tài`, `Mục đích nghiên cứu`, `Đối tượng và phạm vi`, `Phương pháp`, `Ý nghĩa`.
+- Lý do: phần Mở đầu trong báo cáo hiện tại có ý đúng nhưng còn dàn trải, lặp ý và chưa thật sắc ở giọng văn học thuật; việc tách ra file riêng giúp người dùng tự copy vào Word mà không phải sửa trực tiếp `.docx`.
+- Files đã cập nhật:
+  - `report_intro_rewrite.md`
+  - `TECHNICAL_AGENT_GUIDE.md`
+- Verify:
+  - đối chiếu trực tiếp với phần Mở đầu hiện có trong `Báo cáo KLTN.docx` để giữ nguyên heading và phạm vi nội dung.
+  - rà lại để bảo đảm `1. Lý do chọn đề tài` không lặp nặng với `2. Mục đích nghiên cứu`, và `5.1` / `5.2` không lặp nguyên ý của các mục trước.
+- Risk:
+  - đây là bản thảo ngoài file `.docx`, nên vẫn cần người dùng tự copy vào Word và rà thêm một lượt theo định dạng trường.
+
+## Changelog ngắn (2026-06-08)
+
+- Mở rộng riêng mục `1. Lý do chọn đề tài` trong `report_intro_rewrite.md` theo hướng dài hơn và có chiều sâu hơn để phù hợp kỳ vọng độ dài khoảng 1 đến 1.5 trang Word.
+- Hành vi mới: phần mở đầu không còn quá gọn, mà đi rõ hơn từ bối cảnh chuyển đổi số, đặc thù bài toán rạp chiếu phim, khó khăn vận hành, yêu cầu phân quyền và ý nghĩa học thuật của việc chọn đề tài.
+- Lý do: bản viết lại trước đó chặt và gọn nhưng chưa đủ độ dày theo yêu cầu trình bày của báo cáo KLTN.
+- Files đã cập nhật:
+  - `report_intro_rewrite.md`
+  - `TECHNICAL_AGENT_GUIDE.md`
+- Verify:
+  - rà lại để bảo đảm mục `1. Lý do chọn đề tài` dài hơn rõ rệt nhưng vẫn giữ mạch lập luận và không chuyển thành liệt kê công nghệ.
+- Risk:
+  - sau khi copy vào Word vẫn cần kiểm tra thực tế độ dài theo font, cỡ chữ và khoảng cách đoạn của mẫu trường.
+
+## Changelog ngắn (2026-06-08)
+
+- Biên tập lại toàn bộ phần Mở đầu trong `report_intro_rewrite.md` theo hướng sắc hơn ở phát biểu vấn đề, tách rõ hơn giữa lý do chọn đề tài, mục đích nghiên cứu, phạm vi, phương pháp và ý nghĩa.
+- Hành vi mới: phần Mở đầu không chỉ dài hơn mà còn chặt hơn về lập luận; giảm lặp ý giữa các mục và tăng giọng văn học thuật để phù hợp hơn với tiêu chuẩn chấm điểm KLTN khắt khe.
+- Lý do: người dùng muốn nâng chất lượng phần Mở đầu từ mức “ổn” lên mức có thể cạnh tranh ở vùng trên 9 điểm.
+- Files đã cập nhật:
+  - `report_intro_rewrite.md`
+  - `TECHNICAL_AGENT_GUIDE.md`
+- Verify:
+  - rà lại để bảo đảm `1. Lý do chọn đề tài` nêu rõ bối cảnh, vấn đề, nhu cầu và cơ sở chọn đề tài; `2. Mục đích nghiên cứu` không lặp lại phần lý do; `5.1` và `5.2` tách biệt rõ giữa ý nghĩa học thuật và ý nghĩa thực tiễn.
+- Risk:
+  - sau khi copy vào `.docx`, phần Mở đầu vẫn cần một lượt kiểm tra cảm quan theo đúng font, cỡ chữ và khoảng cách đoạn thực tế của mẫu trường.
+
+## Changelog ngắn (2026-06-08)
+
+- Tạo file `chapter3_usecase_review.md` để rà soát riêng các use case trong `3.3. Đặc tả use case` mà không đụng vào file `.docx` của báo cáo.
+- Nội dung file chia thành bốn nhóm: tên/description quá rộng, use case dễ chồng lấn, use case lõi cần siết điều kiện/luồng, và use case cần xác minh actor/phạm vi quyền.
+- Lý do: người dùng muốn có một tài liệu phụ để tự xem xét và copy chỉnh sửa trong Word, không sửa trực tiếp vào báo cáo.
+
+## Changelog ngắn (2026-06-08)
+
+- Tạo file Word `chapter3_usecase_rewrite_preview.docx` để minh họa trực tiếp cách chỉnh lại các use case cần rà soát trong Chương 3 mà không sửa vào báo cáo gốc.
+- File preview giữ cấu trúc bảng 2 cột giống phần đặc tả use case hiện có; chỉ siết lại các trường như `Descriptions`, `Preconditions`, `Postconditions` cho các use case cần chỉnh, còn `Basic Flow`, `Alternative Flows`, `Exceptions` được giữ nguyên để tiện đối chiếu.
+- Kèm theo script `generate_chapter3_usecase_preview.py` để sinh lại file preview từ bản copy báo cáo mới nhất khi cần cập nhật thêm.
+
 
 
