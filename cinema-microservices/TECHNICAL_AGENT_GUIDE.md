@@ -1640,5 +1640,18 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - file được tạo ở đâu
   - video chunk có phải lưu thành nhiều đoạn lâu dài hay không
 
+## Changelog ngắn (2026-06-09)
+
+- Chuẩn hóa lại cấu trúc module `upload-service` để giống các service khác:
+  - kéo `src/` và `.mvn/` từ `upload-service/upload-service/` lên trực tiếp `upload-service/`
+  - xóa thư mục lồng `upload-service/upload-service/` sau khi đã gom cấu trúc
+- Cập nhật `upload-service/Dockerfile` để build module chuẩn ở root service:
+  - `mvn -DskipTests -pl upload-service -am package`
+  - copy artifact từ `/app/upload-service/target/*.jar`
+- Cập nhật `upload-service/pom.xml` thêm `<relativePath>../pom.xml</relativePath>` để Maven trong Docker resolve đúng parent root.
+- Cập nhật `scripts/build-push-images.ps1` dùng cùng path chuẩn với bản `.sh`:
+  - `./upload-service/Dockerfile`
+- Mục tiêu là để `upload-service` nhìn, build và push image giống hệt các service còn lại, không còn path Dockerfile hay module path đặc biệt.
+
 
 
