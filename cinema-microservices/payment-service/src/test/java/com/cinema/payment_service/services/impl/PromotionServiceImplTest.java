@@ -11,6 +11,7 @@ import com.cinema.payment_service.entity.PromotionFilm;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
+import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
 import com.cinema.payment_service.repository.PromotionFilmRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
@@ -21,7 +22,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mapstruct.factory.Mappers;
 
 import java.util.ArrayList;
 import java.math.BigDecimal;
@@ -55,6 +58,9 @@ class PromotionServiceImplTest {
 
     @Mock
     private PromotionEngine promotionEngine;
+
+    @Spy
+    private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
     @Mock
     private HttpServletRequest httpRequest;
@@ -185,16 +191,6 @@ class PromotionServiceImplTest {
         when(promotionRepository.existsByCodeIgnoreCaseAndIsDeletedFalseAndIdNot("SALE10", promotionId))
                 .thenReturn(false);
         when(promotionRepository.save(any(Promotion.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(promotionCinemaRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(promotionFilmRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        PromotionCinema cinemaMapping = new PromotionCinema();
-        cinemaMapping.setPromotionId(promotionId);
-        cinemaMapping.setCinemaId(cinemaId);
-        PromotionFilm filmMapping = new PromotionFilm();
-        filmMapping.setPromotionId(promotionId);
-        filmMapping.setFilmId(filmId);
-        when(promotionCinemaRepository.findAllByPromotionId(promotionId)).thenReturn(List.of(cinemaMapping));
-        when(promotionFilmRepository.findAllByPromotionId(promotionId)).thenReturn(List.of(filmMapping));
 
         PromotionUpsertRequest request = PromotionUpsertRequest.builder()
                 .code("SALE10")
@@ -232,5 +228,7 @@ class PromotionServiceImplTest {
         assertEquals(cinemaId, response.getCinemaIds().get(0));
         assertEquals(1, response.getFilmIds().size());
         assertEquals(filmId, response.getFilmIds().get(0));
+        assertEquals(1, response.getCinemaCount());
+        assertEquals(1, response.getFilmCount());
     }
 }

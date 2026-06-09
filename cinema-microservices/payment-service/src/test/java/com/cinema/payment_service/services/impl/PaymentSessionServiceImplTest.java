@@ -11,6 +11,7 @@ import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
+import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
@@ -30,6 +31,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mapstruct.factory.Mappers;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -79,6 +81,9 @@ class PaymentSessionServiceImplTest {
 
     @Mock
     private PromotionEngine promotionEngine;
+
+    @Spy
+    private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
     @Mock
     private HttpServletRequest httpRequest;

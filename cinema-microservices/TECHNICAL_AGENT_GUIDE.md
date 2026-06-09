@@ -1653,5 +1653,23 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - `./upload-service/Dockerfile`
 - Mục tiêu là để `upload-service` nhìn, build và push image giống hệt các service còn lại, không còn path Dockerfile hay module path đặc biệt.
 
+## Changelog ngắn (2026-06-09)
+
+- Chuẩn hóa mapping response theo style `user-service` bằng MapStruct:
+  - tạo package `payment-service/src/main/java/com/cinema/payment_service/mapper`
+  - thêm `PaymentMapper` để map `PromotionResponse`, `PaymentSessionResponse`, `PromotionPreviewResponse`
+  - `PromotionServiceImpl`, `PaymentSessionServiceImpl`, `PromotionEngine` đã bỏ builder manual cho các response DTO thuần và chuyển sang gọi mapper
+- Làm sạch thêm một case pure mapping ở `showtime-service`:
+  - thêm `FilmMapper`
+  - `FilmGrpcClient` không còn tự build `FilmResponse` bằng tay từ `FilmPayload`
+- Cập nhật test tương ứng để dùng mapper thật qua `Mappers.getMapper(...)`:
+  - `PromotionServiceImplTest`
+  - `PaymentSessionServiceImplTest`
+  - thêm `PromotionEngineTest`
+- Xác minh lại bằng Maven wrapper của module:
+  - `payment-service` test pass
+  - `showtime-service` test/compile pass trong reactor chạy cùng module
+- Những builder còn lại trong các service hiện tại chủ yếu là pagination/report/aggregation, không phải kiểu DTO mapping thuần nên được giữ nguyên để không làm lẫn business logic với mapping.
+
 
 

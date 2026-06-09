@@ -10,6 +10,7 @@ import com.cinema.payment_service.entity.PromotionFilm;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
+import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
 import com.cinema.payment_service.repository.PromotionFilmRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
@@ -37,6 +38,7 @@ public class PromotionEngine {
     private final PromotionCinemaRepository promotionCinemaRepository;
     private final PromotionFilmRepository promotionFilmRepository;
     private final BookingGrpcClient bookingGrpcClient;
+    private final PaymentMapper paymentMapper;
 
     public PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId) {
         if (request == null || requesterUserId == null) {
@@ -64,13 +66,7 @@ public class PromotionEngine {
                 requesterUserId,
                 false);
 
-        return PromotionPreviewResponse.builder()
-                .promotionCode(quote.promotionCode())
-                .originalAmount(baseAmount)
-                .discountAmount(quote.discountAmount())
-                .finalAmount(baseAmount.subtract(quote.discountAmount()))
-                .note(quote.note())
-                .build();
+        return paymentMapper.toPromotionPreviewResponse(quote, baseAmount);
     }
 
     public PromotionQuote resolvePromotionForCheckout(

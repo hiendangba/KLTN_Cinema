@@ -18,6 +18,7 @@ import com.cinema.payment_service.entity.PromotionFilm;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
+import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
 import com.cinema.payment_service.repository.PromotionFilmRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
@@ -51,6 +52,7 @@ public class PromotionServiceImpl implements PromotionService {
     private final PromotionCinemaRepository promotionCinemaRepository;
     private final PromotionFilmRepository promotionFilmRepository;
     private final CinemaGrpcClient cinemaGrpcClient;
+    private final PaymentMapper paymentMapper;
     private final PromotionEngine promotionEngine;
 
     @Override
@@ -76,7 +78,7 @@ public class PromotionServiceImpl implements PromotionService {
 
         promotion = promotionRepository.save(promotion);
         replaceMappings(promotion.getId(), cinemaIds, filmIds);
-        return toResponse(promotion);
+        return paymentMapper.toPromotionResponse(promotion, cinemaIds, filmIds);
     }
 
     @Override
@@ -104,7 +106,7 @@ public class PromotionServiceImpl implements PromotionService {
 
         promotion = promotionRepository.save(promotion);
         replaceMappings(promotion.getId(), cinemaIds, filmIds);
-        return toResponse(promotion);
+        return paymentMapper.toPromotionResponse(promotion, cinemaIds, filmIds);
     }
 
     @Override
@@ -114,7 +116,10 @@ public class PromotionServiceImpl implements PromotionService {
         UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
         Promotion promotion = getPromotionEntity(id);
         ensureCanViewPromotion(role, requesterUserId, promotion);
-        return toResponse(promotion);
+        return paymentMapper.toPromotionResponse(
+                promotion,
+                loadCinemaIds(promotion.getId()),
+                loadFilmIds(promotion.getId()));
     }
 
     @Override
@@ -524,62 +529,11 @@ public class PromotionServiceImpl implements PromotionService {
         Map<UUID, List<UUID>> filmMap = loadFilmIdsByPromotionIds(promotionIds);
 
         return promotions.stream()
-                .map(promotion -> toResponse(
+                .map(promotion -> paymentMapper.toPromotionResponse(
                         promotion,
                         cinemaMap.getOrDefault(promotion.getId(), List.of()),
                         filmMap.getOrDefault(promotion.getId(), List.of())))
                 .toList();
-    }
-
-    private PromotionResponse toResponse(Promotion promotion) {
-        return toResponse(
-                promotion,
-                loadCinemaIds(promotion == null ? null : promotion.getId()),
-                loadFilmIds(promotion == null ? null : promotion.getId()));
-    }
-
-    private PromotionResponse toResponse(Promotion promotion, List<UUID> cinemaIds, List<UUID> filmIds) {
-        if (promotion == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        List<UUID> normalizedCinemaIds = normalizeUuidList(cinemaIds);
-        List<UUID> normalizedFilmIds = normalizeUuidList(filmIds);
-        return PromotionResponse.builder()
-                .id(promotion.getId())
-                .code(promotion.getCode())
-                .name(promotion.getName())
-                .description(promotion.getDescription())
-                .discountType(promotion.getDiscountType())
-                .discountValue(normalizeNullableAmount(promotion.getDiscountValue()))
-                .minOrderAmount(normalizeNullableAmount(promotion.getMinOrderAmount()))
-                .maxDiscountAmount(normalizeNullableAmount(promotion.getMaxDiscountAmount()))
-                .status(promotion.getStatus())
-                .startAt(promotion.getStartAt())
-                .endAt(promotion.getEndAt())
-                .createdByUserId(promotion.getCreatedByUserId())
-                .createdByRole(promotion.getCreatedByRole())
-                .cinemaIds(normalizedCinemaIds)
-                .filmIds(normalizedFilmIds)
-                .cinemaCount(normalizedCinemaIds.size())
-                .filmCount(normalizedFilmIds.size())
-                .activeNow(isActiveNow(promotion))
-                .timeCreated(promotion.getTimeCreated())
-                .timeUpdated(promotion.getTimeUpdated())
-                .build();
-    }
-
-    private boolean isActiveNow(Promotion promotion) {
-        if (promotion == null || promotion.getStatus() != PromotionStatus.ACTIVE) {
-            return false;
-        }
-        LocalDateTime now = LocalDateTime.now();
-        if (promotion.getStartAt() != null && now.isBefore(promotion.getStartAt())) {
-            return false;
-        }
-        if (promotion.getEndAt() != null && now.isAfter(promotion.getEndAt())) {
-            return false;
-        }
-        return true;
     }
 
     private List<UUID> loadCinemaIds(UUID promotionId) {

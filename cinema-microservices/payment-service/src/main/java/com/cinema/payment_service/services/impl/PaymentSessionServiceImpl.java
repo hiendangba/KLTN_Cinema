@@ -26,6 +26,7 @@ import com.cinema.payment_service.entity.PaymentTransactionPromotion;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
+import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
@@ -77,6 +78,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final MomoGatewayProperties momoGatewayProperties;
     private final MomoPaymentGatewayClient momoPaymentGatewayClient;
     private final PromotionEngine promotionEngine;
+    private final PaymentMapper paymentMapper;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -97,9 +99,15 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByTimeCreatedDesc(
                     bookingId,
                     PaymentTransactionStatus.PAID)
-                    .map(this::toResponse)
+                    .map(transaction -> paymentMapper.toPaymentSessionResponse(
+                            transaction,
+                            readCheckoutFields(transaction.getCheckoutPayloadJson()),
+                            null))
                     .orElseGet(() -> paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId)
-                            .map(this::toResponse)
+                            .map(transaction -> paymentMapper.toPaymentSessionResponse(
+                                    transaction,
+                                    readCheckoutFields(transaction.getCheckoutPayloadJson()),
+                                    null))
                             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND)));
         }
 
@@ -109,7 +117,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             ensureRequesterOwnsTransaction(latest, requesterUserId);
             if (isReusable(latest, bookingContext) && canReuseLatestTransaction(latest, requestedPromotionCode)) {
                 syncBookingPromotionSnapshot(bookingContext, latest, null);
-                return toResponse(latest);
+                return paymentMapper.toPaymentSessionResponse(
+                        latest,
+                        readCheckoutFields(latest.getCheckoutPayloadJson()),
+                        null);
             }
         }
 
@@ -184,7 +195,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 savedTransaction.getStatus(),
                 savedTransaction.getExpiresAt());
         savePromotionSnapshots(savedTransaction, appliedPromotions);
-        return toResponse(savedTransaction, checkoutResult.qrCodeUrl());
+        return paymentMapper.toPaymentSessionResponse(
+                savedTransaction,
+                readCheckoutFields(savedTransaction.getCheckoutPayloadJson()),
+                checkoutResult.qrCodeUrl());
     }
 
     @Override
@@ -197,7 +211,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .findFirstByBookingIdOrderByTimeCreatedDesc(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         ensureRequesterOwnsTransaction(transaction, requesterUserId);
-        return toResponse(transaction);
+        return paymentMapper.toPaymentSessionResponse(
+                transaction,
+                readCheckoutFields(transaction.getCheckoutPayloadJson()),
+                null);
     }
 
     @Override
@@ -228,7 +245,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
 
         return PageResponse.<PaymentSessionResponse>builder()
-                .data(sessions.stream().map(this::toResponse).toList())
+                .data(sessions.stream()
+                        .map(transaction -> paymentMapper.toPaymentSessionResponse(
+                                transaction,
+                                readCheckoutFields(transaction.getCheckoutPayloadJson()),
+                                null))
+                        .toList())
                 .currentPage(page)
                 .totalPages(totalPages)
                 .totalElements(totalElements)
@@ -252,7 +274,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         if (transaction.getStatus() == PaymentTransactionStatus.REFUND_PENDING
                 || transaction.getStatus() == PaymentTransactionStatus.REFUNDED) {
-            return toResponse(transaction);
+            return paymentMapper.toPaymentSessionResponse(
+                    transaction,
+                    readCheckoutFields(transaction.getCheckoutPayloadJson()),
+                    null);
         }
         if (transaction.getStatus() != PaymentTransactionStatus.PAID) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
@@ -272,7 +297,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 : request.getReason().trim());
         transaction.setFailureReason(null);
         paymentTransactionRepository.save(transaction);
-        return toResponse(transaction);
+        return paymentMapper.toPaymentSessionResponse(
+                transaction,
+                readCheckoutFields(transaction.getCheckoutPayloadJson()),
+                null);
     }
 
     @Override
@@ -863,41 +891,6 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return null;
         }
         return value.trim();
-    }
-
-    private PaymentSessionResponse toResponse(PaymentTransaction transaction) {
-        return toResponse(transaction, null);
-    }
-
-    private PaymentSessionResponse toResponse(PaymentTransaction transaction, String qrCodeUrl) {
-        return PaymentSessionResponse.builder()
-                .id(transaction.getId())
-                .bookingId(transaction.getBookingId())
-                .showtimeId(transaction.getShowtimeId())
-                .cinemaId(transaction.getCinemaId())
-                .userId(transaction.getUserId())
-                .amount(transaction.getAmount())
-                .ticketSubtotalSnapshot(transaction.getTicketSubtotalSnapshot())
-                .productSubtotalSnapshot(transaction.getProductSubtotalSnapshot())
-                .currency(transaction.getCurrency())
-                .paymentMethod(transaction.getPaymentMethod())
-                .orderInvoiceNumber(transaction.getOrderInvoiceNumber())
-                .providerRef(transaction.getProviderRef())
-                .payUrl(transaction.getPayUrl())
-                .qrCodeUrl(qrCodeUrl)
-                .checkoutFields(readCheckoutFields(transaction.getCheckoutPayloadJson()))
-                .status(transaction.getStatus())
-                .expiresAt(transaction.getExpiresAt())
-                .paidAt(transaction.getPaidAt())
-                .expiredAt(transaction.getExpiredAt())
-                .failureReason(transaction.getFailureReason())
-                .refundAmount(transaction.getRefundAmount())
-                .refundReason(transaction.getRefundReason())
-                .refundedAt(transaction.getRefundedAt())
-                .promotionCode(transaction.getPromotionCode())
-                .promotionName(transaction.getPromotionName())
-                .promotionDiscountAmount(transaction.getPromotionDiscountAmount())
-                .build();
     }
 
     private Map<String, String> readCheckoutFields(String json) {
