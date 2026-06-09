@@ -1571,5 +1571,74 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - Xóa toàn bộ cây `.github/modernize/java-upgrade/...` và dọn nốt thư mục `.github` rỗng còn lại.
 - Lý do: đây là các file/tài liệu phụ trợ hoặc script modernize không còn cần giữ trong repo chính, làm root repo bị loãng và tăng nguy cơ commit nhầm tài liệu tạm.
 
+## Changelog ngắn (2026-06-09)
+
+- Thêm `upload-service` thật vào reactor build, PostgreSQL bootstrap, `compose.prod.yaml` và cả 2 file Envoy để service upload có thể chạy end-to-end qua `/api/uploads/**` và public media qua `/media/**`.
+- `upload-service` hiện có 2 flow rõ ràng:
+  - `POST /api/uploads/images` nhận batch ảnh tối đa 5 file và trả `APIResponse.data.files`
+  - video lớn đi theo `POST /api/uploads/videos/sessions` -> `PUT /chunks/{index}` -> `POST /complete` -> `GET session status`
+- Tất cả file đang lưu local disk:
+  - public root: `/data/uploads/public`
+  - temp video chunks: `/data/uploads/tmp/video-sessions`
+  - URL public được build theo host hiện tại và serve trực tiếp qua Spring resource mapping `/media/**`; Envoy đã mở public route này và tắt auth cho nó.
+- `common-lib` được mở rộng để upload flow dùng chung chuẩn response/error hiện có:
+  - `BaseController` có thêm overload custom message
+  - `ErrorCode` bổ sung nhóm lỗi upload/video session
+  - `GlobalExceptionHandler` xử lý thêm `MaxUploadSizeExceededException` và `MultipartException`
+- Hạ tầng deploy/build đã được nối đủ cho service mới:
+  - thêm `upload-service/upload-service/Dockerfile`
+  - `scripts/build-push-images.sh` và `scripts/build-push-images.ps1` đã build/push `upload-service`
+  - đồng thời sửa luôn tên image cũ `hall-services` -> `hall-service` để khớp compose/envoy hiện tại
+- Thêm `UPLOAD_FE_AGENT_GUIDE.md` để FE agent có một tài liệu độc lập, bám đúng contract backend hiện tại cho cả flow ảnh (`data.files`) và video chunked (`session -> chunks -> status -> complete`).
+- Verification:
+  - chạy `upload-service\\upload-service\\mvnw.cmd -f ..\\..\\pom.xml -pl common-lib,upload-service/upload-service -am test "-Dtest=UploadServiceImplTest,UploadServiceApplicationTests" "-Dsurefire.failIfNoSpecifiedTests=false"`
+  - `BUILD SUCCESS`
+  - `UploadServiceImplTest`: `6 tests, 0 failures, 0 errors`
+  - `UploadServiceApplicationTests`: `1 test, 0 failures, 0 errors`
+- Remaining risk:
+  - hiện chưa có transcode/thumbnail/video processing; video complete chỉ merge chunk và trả URL file gốc
+  - `/media/**` đang serve bằng Spring resource handler để repo chạy được ngay; lên VPS vẫn có thể đặt nginx phía trước mà không đổi contract
+  - image endpoint đang bắt field multipart tên `files`; nếu FE gửi literal `files[]` thì cần thống nhất lại ở client hoặc mở rộng binder thêm một bước nhỏ
+
+## Changelog ngắn (2026-06-09)
+
+- Chuyển `upload-service` sang **public upload toàn bộ flow**:
+  - cả `POST /api/uploads/images`
+  - lẫn `POST /api/uploads/videos/sessions`, `PUT /chunks/{index}`, `GET session status`, `POST /complete`
+  - đều không còn yêu cầu auth bắt buộc ở gateway hay service
+- Cập nhật `envoy/envoy.local.yaml` và `envoy/envoy.prod.yaml` để disable `ext_authz` cho toàn bộ `/api/uploads/**`, giữ `/media/**` public như trước.
+- Bỏ phụ thuộc `RequestAuthUtils.requireUserId(...)` trong `UploadServiceImpl`; upload giờ chạy được khi không có token/header auth.
+- Vẫn giữ trace người đẩy **nếu có**:
+  - `StoredFile.ownerUserId` và `VideoUploadSession.ownerUserId` đã chuyển sang nullable
+  - nếu request có `X-User-ID` hợp lệ từ upstream đáng tin cậy thì backend vẫn lưu lại
+  - nếu không có thì để `null`, nhưng `createdAt` vẫn luôn được ghi
+- Chốt lại `chunkSize` video là `20MB`:
+  - `upload-service/upload-service/src/main/resources/application.yaml`: `UPLOAD_VIDEO_CHUNK_SIZE:20MB`
+  - `compose.prod.yaml`: default `UPLOAD_VIDEO_CHUNK_SIZE:-20MB`
+  - session response giờ sẽ trả `chunkSize = 20971520`
+- Cập nhật `UPLOAD_FE_AGENT_GUIDE.md` để FE agent hiểu đúng contract mới:
+  - upload API là public, không cần token
+  - ví dụ `fetch` không còn giả định `credentials: include`
+  - ví dụ response chunk/session dùng `20MB`
+- Tiếp tục tinh chỉnh phần trace owner cho public upload:
+  - thêm `RequestAuthUtils.resolveOptionalUserId(HttpServletRequest)` trong `common-lib`
+  - helper này parse `X-User-ID` theo kiểu optional và cache kết quả trong request attribute để không phải đọc/parse lặp nếu cùng request dùng lại
+  - `UploadServiceImpl` chuyển sang dùng helper chung này thay vì tự parse header riêng
+
+## Changelog ngắn (2026-06-09)
+
+- Thêm tài liệu nội bộ [UPLOAD_SERVICE_INTERNAL_FLOW.md](C:/hoctap/Study/KLTN/CinemaStar/cinema-microservices/UPLOAD_SERVICE_INTERNAL_FLOW.md) để mô tả lại toàn bộ luồng chạy của `upload-service` theo đúng code hiện tại.
+- Tài liệu đi theo mạch:
+  - Config -> Entity -> Controller -> Service -> DB/File system -> Response
+  - có mô tả riêng cho từng API ảnh/video
+  - có mục giải thích `/media/**` được map ra local disk như thế nào
+  - có Mermaid sequence diagram cho cả flow ảnh và flow video chunked
+- Mục tiêu là để người đọc/ngẫm lại kiến trúc có thể trả lời nhanh:
+  - request đi vào đâu
+  - service làm gì
+  - DB ghi gì
+  - file được tạo ở đâu
+  - video chunk có phải lưu thành nhiều đoạn lâu dài hay không
+
 
 

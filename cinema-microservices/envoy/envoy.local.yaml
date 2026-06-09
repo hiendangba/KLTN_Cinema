@@ -84,6 +84,24 @@
                               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                               disabled: true
                         - match:
+                            prefix: /media/
+                          route:
+                            cluster: upload-service
+                            timeout: 300s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /api/uploads
+                          route:
+                            cluster: upload-service
+                            timeout: 300s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
                             prefix: /api/users
                           route:
                             cluster: user-service
@@ -283,6 +301,20 @@
                     socket_address:
                       address: host.docker.internal
                       port_value: 8091
+    - name: upload-service
+      connect_timeout: 1s
+      type: LOGICAL_DNS
+      dns_lookup_family: ALL
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: upload-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: host.docker.internal
+                      port_value: 8100
     - name: film-service
       connect_timeout: 1s
       type: LOGICAL_DNS

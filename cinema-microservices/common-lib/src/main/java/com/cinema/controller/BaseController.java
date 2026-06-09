@@ -15,10 +15,20 @@ public abstract class BaseController {
         return ResponseEntity.ok(buildResponse(true, "SUCCESS", "Operation successful", data));
     }
 
+    protected <T> ResponseEntity<APIResponse<T>> ok(String message, T data) {
+        return ResponseEntity.ok(buildResponse(true, "SUCCESS", message, data));
+    }
+
     protected <T> ResponseEntity<APIResponse<T>> created(T data) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(buildResponse(true, "CREATED", "Created successfully", data));
+    }
+
+    protected <T> ResponseEntity<APIResponse<T>> created(String message, T data) {
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(buildResponse(true, "CREATED", message, data));
     }
 
     private <T> APIResponse<T> buildResponse(boolean success, String code, String message, T data) {

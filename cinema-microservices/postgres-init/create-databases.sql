@@ -53,6 +53,12 @@ BEGIN
     ELSE
         ALTER ROLE seat_user WITH LOGIN PASSWORD 'seat_pass';
     END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'upload_user') THEN
+        CREATE ROLE upload_user LOGIN PASSWORD 'upload_pass';
+    ELSE
+        ALTER ROLE upload_user WITH LOGIN PASSWORD 'upload_pass';
+    END IF;
 END
 $$;
 
@@ -74,6 +80,8 @@ SELECT format('CREATE DATABASE %I OWNER %I', 'payment_db', 'payment_user')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'payment_db') \gexec
 SELECT format('CREATE DATABASE %I OWNER %I', 'seat_db', 'seat_user')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'seat_db') \gexec
+SELECT format('CREATE DATABASE %I OWNER %I', 'upload_db', 'upload_user')
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'upload_db') \gexec
 
 ALTER DATABASE identity_db OWNER TO identity_user;
 ALTER DATABASE user_db OWNER TO user_user;
@@ -84,6 +92,7 @@ ALTER DATABASE cinema_db OWNER TO cinema_user;
 ALTER DATABASE booking_db OWNER TO booking_user;
 ALTER DATABASE payment_db OWNER TO payment_user;
 ALTER DATABASE seat_db OWNER TO seat_user;
+ALTER DATABASE upload_db OWNER TO upload_user;
 
 REVOKE ALL ON DATABASE identity_db FROM PUBLIC;
 REVOKE ALL ON DATABASE user_db FROM PUBLIC;
@@ -94,6 +103,7 @@ REVOKE ALL ON DATABASE cinema_db FROM PUBLIC;
 REVOKE ALL ON DATABASE booking_db FROM PUBLIC;
 REVOKE ALL ON DATABASE payment_db FROM PUBLIC;
 REVOKE ALL ON DATABASE seat_db FROM PUBLIC;
+REVOKE ALL ON DATABASE upload_db FROM PUBLIC;
 
 GRANT ALL PRIVILEGES ON DATABASE identity_db TO identity_user;
 GRANT ALL PRIVILEGES ON DATABASE user_db TO user_user;
@@ -104,3 +114,4 @@ GRANT ALL PRIVILEGES ON DATABASE cinema_db TO cinema_user;
 GRANT ALL PRIVILEGES ON DATABASE booking_db TO booking_user;
 GRANT ALL PRIVILEGES ON DATABASE payment_db TO payment_user;
 GRANT ALL PRIVILEGES ON DATABASE seat_db TO seat_user;
+GRANT ALL PRIVILEGES ON DATABASE upload_db TO upload_user;

@@ -83,7 +83,18 @@ public enum ErrorCode {
         CINEMA_SERVICE_ERROR("9105", "Lỗi khi gọi Cinema Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         SHOWTIME_SERVICE_ERROR("9106", "Lỗi khi gọi Showtime Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         SEAT_SERVICE_ERROR("9107", "Lỗi khi gọi Seat Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
-        UN_SUPPORTED_FIELD_TYPE("9103", "Loại dữ liệu của trường không được hỗ trợ", HttpStatus.BAD_REQUEST);
+        UN_SUPPORTED_FIELD_TYPE("9103", "Loại dữ liệu của trường không được hỗ trợ", HttpStatus.BAD_REQUEST),
+        TOO_MANY_FILES("9201", "Mỗi lần chỉ được tải lên tối đa 5 tệp", HttpStatus.BAD_REQUEST),
+        EMPTY_FILE("9202", "Tệp tải lên không được để trống", HttpStatus.BAD_REQUEST),
+        UNSUPPORTED_MEDIA_TYPE_UPLOAD("9203", "Loại tệp tải lên không được hỗ trợ", HttpStatus.BAD_REQUEST),
+        FILE_TOO_LARGE("9204", "Kích thước tệp vượt quá giới hạn cho phép", HttpStatus.PAYLOAD_TOO_LARGE),
+        REQUEST_TOO_LARGE("9205", "Tổng dung lượng tải lên vượt quá giới hạn cho phép", HttpStatus.PAYLOAD_TOO_LARGE),
+        VIDEO_UPLOAD_SESSION_NOT_FOUND("9206", "Không tìm thấy phiên tải video", HttpStatus.NOT_FOUND),
+        VIDEO_UPLOAD_SESSION_EXPIRED("9207", "Phiên tải video đã hết hạn", HttpStatus.GONE),
+        VIDEO_UPLOAD_SESSION_INVALID_STATE("9208", "Phiên tải video không ở trạng thái hợp lệ", HttpStatus.BAD_REQUEST),
+        VIDEO_UPLOAD_CHUNK_OUT_OF_RANGE("9209", "Chunk video vượt ngoài phạm vi cho phép", HttpStatus.BAD_REQUEST),
+        VIDEO_UPLOAD_INCOMPLETE("9210", "Video chưa được tải đủ các chunk", HttpStatus.BAD_REQUEST),
+        UPLOAD_FAILED("9211", "Tải tệp thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR);
 
         private final String code;
         private final String message;

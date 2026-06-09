@@ -10,7 +10,34 @@ import java.util.UUID;
 
 public final class RequestAuthUtils {
 
+    private static final String OPTIONAL_USER_ID_ATTRIBUTE = RequestAuthUtils.class.getName() + ".optionalUserId";
+
     private RequestAuthUtils() {
+    }
+
+    public static UUID resolveOptionalUserId(HttpServletRequest request) {
+        Object cached = request.getAttribute(OPTIONAL_USER_ID_ATTRIBUTE);
+        if (cached instanceof UUID cachedUserId) {
+            return cachedUserId;
+        }
+        if (Boolean.TRUE.equals(cached)) {
+            return null;
+        }
+
+        String userIdRaw = trimToNull(request.getHeader(HeaderNames.X_USER_ID));
+        if (userIdRaw == null) {
+            request.setAttribute(OPTIONAL_USER_ID_ATTRIBUTE, Boolean.TRUE);
+            return null;
+        }
+
+        try {
+            UUID userId = UUID.fromString(userIdRaw);
+            request.setAttribute(OPTIONAL_USER_ID_ATTRIBUTE, userId);
+            return userId;
+        } catch (IllegalArgumentException ex) {
+            request.setAttribute(OPTIONAL_USER_ID_ATTRIBUTE, Boolean.TRUE);
+            return null;
+        }
     }
 
     public static UUID requireUserId(HttpServletRequest request) {

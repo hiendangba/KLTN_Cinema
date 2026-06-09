@@ -261,6 +261,37 @@ services:
       - cinema-service
     mem_limit: 352m
 
+  upload-service:
+    image: ${IMAGE_REPO}/upload-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms48m -Xmx192m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      DB_URL: jdbc:postgresql://postgres:5432/upload_db
+      DB_USERNAME: upload_user
+      DB_PASSWORD: upload_pass
+      SERVER_PORT: 8100
+      MULTIPART_MAX_FILE_SIZE: ${MULTIPART_MAX_FILE_SIZE:-25MB}
+      MULTIPART_MAX_REQUEST_SIZE: ${MULTIPART_MAX_REQUEST_SIZE:-100MB}
+      UPLOAD_PUBLIC_ROOT: /data/uploads/public
+      UPLOAD_TEMP_ROOT: /data/uploads/tmp/video-sessions
+      UPLOAD_IMAGE_MAX_FILE_COUNT: ${UPLOAD_IMAGE_MAX_FILE_COUNT:-5}
+      UPLOAD_IMAGE_MAX_SIZE: ${UPLOAD_IMAGE_MAX_SIZE:-10MB}
+      UPLOAD_VIDEO_MAX_SIZE: ${UPLOAD_VIDEO_MAX_SIZE:-10GB}
+      UPLOAD_VIDEO_CHUNK_SIZE: ${UPLOAD_VIDEO_CHUNK_SIZE:-20MB}
+      UPLOAD_VIDEO_SESSION_TTL_MINUTES: ${UPLOAD_VIDEO_SESSION_TTL_MINUTES:-120}
+      UPLOAD_CLEANUP_CRON: ${UPLOAD_CLEANUP_CRON:-0 */15 * * * *}
+    expose:
+      - "8100"
+    depends_on:
+      - postgres
+    volumes:
+      - upload_data:/data/uploads
+    mem_limit: 352m
+
   hall-service:
     image: ${IMAGE_REPO}/hall-service:${IMAGE_TAG:-dev}
     pull_policy: always
@@ -462,3 +493,4 @@ volumes:
   pgdata:
   redis_data:
   rabbitmq_data:
+  upload_data:

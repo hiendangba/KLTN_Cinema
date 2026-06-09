@@ -35,6 +35,25 @@ class RequestAuthUtilsTest {
     }
 
     @Test
+    void resolveOptionalUserId_shouldReturnNullWhenMissing() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+
+        UUID resolvedUserId = RequestAuthUtils.resolveOptionalUserId(request);
+
+        assertThat(resolvedUserId).isNull();
+    }
+
+    @Test
+    void resolveOptionalUserId_shouldReturnNullWhenMalformed() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HeaderNames.X_USER_ID, "not-a-uuid");
+
+        UUID resolvedUserId = RequestAuthUtils.resolveOptionalUserId(request);
+
+        assertThat(resolvedUserId).isNull();
+    }
+
+    @Test
     void requireUserId_shouldRejectMalformedHeader() {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader(HeaderNames.X_USER_ID, "not-a-uuid");

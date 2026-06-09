@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -79,6 +81,36 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(response);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<APIResponse<Void>> handleMaxUploadSizeExceeded(
+            MaxUploadSizeExceededException ex,
+            WebRequest request) {
+        log.warn("Multipart request too large: {}", ex.getMessage());
+        APIResponse<Void> response = APIResponse.<Void>builder()
+                .success(false)
+                .message(ErrorCode.REQUEST_TOO_LARGE.getMessage())
+                .code(ErrorCode.REQUEST_TOO_LARGE.getCode())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .build();
+        return ResponseEntity.status(ErrorCode.REQUEST_TOO_LARGE.getHttpStatus()).body(response);
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<APIResponse<Void>> handleMultipartException(
+            MultipartException ex,
+            WebRequest request) {
+        log.warn("Multipart processing failed: {}", ex.getMessage());
+        APIResponse<Void> response = APIResponse.<Void>builder()
+                .success(false)
+                .message(ErrorCode.UPLOAD_FAILED.getMessage())
+                .code(ErrorCode.UPLOAD_FAILED.getCode())
+                .path(request.getDescription(false).replace("uri=", ""))
+                .timestamp(LocalDateTime.now())
+                .build();
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
