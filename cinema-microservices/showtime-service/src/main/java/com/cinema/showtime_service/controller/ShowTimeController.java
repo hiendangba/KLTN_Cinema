@@ -7,10 +7,13 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.dto.response.ResultResponse;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
+import com.cinema.showtime_service.dto.request.SeatSuggestionRequest;
 import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
 import com.cinema.showtime_service.dto.request.UpdateShowTimeRequest;
 import com.cinema.showtime_service.dto.response.SeatMapResponse;
+import com.cinema.showtime_service.dto.response.SeatSuggestionResponse;
 import com.cinema.showtime_service.dto.response.ShowTimeResponse;
+import com.cinema.showtime_service.services.SeatSuggestionService;
 import com.cinema.showtime_service.services.ShowTimeService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -34,6 +37,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ShowTimeController extends BaseController {
     private final ShowTimeService showTimeService;
+    private final SeatSuggestionService seatSuggestionService;
 
     @PostMapping("/search")
     public ResponseEntity<APIResponse<PageResponse<ShowTimeResponse>>> searchShowtimes(
@@ -78,6 +82,14 @@ public class ShowTimeController extends BaseController {
     public ResponseEntity<APIResponse<SeatMapResponse>> getSeatMap(@PathVariable UUID id) {
         SeatMapResponse response = showTimeService.getSeatMapByShowtimeId(id);
         return ok(response);
+    }
+
+    @PostMapping("/{showtimeId}/seat-suggestions")
+    public ResponseEntity<APIResponse<SeatSuggestionResponse>> getSeatSuggestions(
+            @PathVariable UUID showtimeId,
+            @Valid @RequestBody SeatSuggestionRequest request) {
+        SeatSuggestionResponse response = seatSuggestionService.suggestSeatSuggestions(showtimeId, request);
+        return ok("Seat suggestions fetched successfully", response);
     }
 
     @PostMapping("/films/{filmId}/search")

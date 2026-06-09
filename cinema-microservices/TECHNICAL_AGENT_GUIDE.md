@@ -103,6 +103,29 @@
 - Remaining risk:
   - chưa render PNG bằng LibreOffice vì môi trường vẫn không có `soffice`; kiểm tra visual layout vẫn là điểm cần chú ý nếu mở file trong Word khác renderer.
 
+## Changelog ngắn (2026-06-09)
+
+- Thêm tài liệu FE-facing cho tính năng gợi ý ghế tại `SHOWTIME_SEAT_SUGGESTION_FE_GUIDE.md`.
+- Khóa rõ rule API seat suggestion để FE không hiểu nhầm:
+  - endpoint nằm ở `showtime-service`
+  - request chỉ gồm `seatCount` và `preferCoupleSeat`
+  - `seatCount` chỉ từ `1..5`
+  - `preferCoupleSeat = true` thì `seatCount` phải chẵn
+  - `candidates` là **up to 5**, không bắt buộc đủ 5 phần tử
+  - nếu tổng ghế trống không đủ thì backend trả lỗi, không tự bịa kết quả
+- Mục tiêu của tài liệu là giúp FE render đúng thứ tự backend trả về và hiểu luôn rule fallback: ưu tiên block ghế liền nhau, gần trung tâm, couple nếu được chọn, rồi tie-break theo hàng xa màn hình hơn.
+
+- Thêm API gợi ý ghế thật vào `showtime-service`:
+  - `POST /api/showtimes/{showtimeId}/seat-suggestions`
+  - FE gửi `seatCount` và `preferCoupleSeat`
+  - backend trả `candidates` tối đa 5 phần tử, FE map bằng `seatCodes`
+- Thêm error code chung `INSUFFICIENT_AVAILABLE_SEATS` để báo đúng trường hợp tổng ghế trống không đủ cho yêu cầu gợi ý.
+- Unit test mới đã cover:
+  - ghế couple được ưu tiên khi bật checkbox
+  - fallback sang tổ hợp nhỏ hơn khi không có block đúng size
+  - thiếu ghế trống thì trả lỗi
+  - `seatCount > 5` và `preferCoupleSeat=true` với số ghế lẻ đều bị reject
+
 > [!WARNING]
 > **BUG GỐC CỦA LUỒNG GOOGLE LOGIN**
 > - Bản triển khai ban đầu đã gửi request đổi `code -> token` theo **mẫu sai** (payload kiểu JSON / client library cũ).

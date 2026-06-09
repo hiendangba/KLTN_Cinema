@@ -94,7 +94,8 @@ public enum ErrorCode {
         VIDEO_UPLOAD_SESSION_INVALID_STATE("9208", "Phiên tải video không ở trạng thái hợp lệ", HttpStatus.BAD_REQUEST),
         VIDEO_UPLOAD_CHUNK_OUT_OF_RANGE("9209", "Chunk video vượt ngoài phạm vi cho phép", HttpStatus.BAD_REQUEST),
         VIDEO_UPLOAD_INCOMPLETE("9210", "Video chưa được tải đủ các chunk", HttpStatus.BAD_REQUEST),
-        UPLOAD_FAILED("9211", "Tải tệp thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR);
+        UPLOAD_FAILED("9211", "Tải tệp thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
+        INSUFFICIENT_AVAILABLE_SEATS("9212", "Không đủ ghế trống để gợi ý", HttpStatus.BAD_REQUEST);
 
         private final String code;
         private final String message;
