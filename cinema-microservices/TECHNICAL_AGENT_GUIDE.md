@@ -39,6 +39,8 @@
 - `user-service` adds a dedicated gRPC delete RPC for booking cleanup so the compensation path does not need the admin-actor audit route.
 - Đã dọn sạch 3 REST internal customer endpoint cũ ở `user-service` (`POST /internal/customers`, `GET /internal/customers/{id}`, `DELETE /internal/customers/{id}`), đồng thời bỏ luôn `booking-service` HTTP client lookup cũ; nhánh `customerId != null` giờ validate tồn tại qua `identity-service` gRPC thay vì `user-service` REST.
 - `BookingServiceImplTest` và `UserServiceImplPhoneLookupTest` đã được cập nhật/giảm scope theo luồng mới, build xác nhận pass với `BookingServiceImplTest`: `22 tests, 0 failures, 0 errors` và `UserServiceImplPhoneLookupTest`: `2 tests, 0 failures, 0 errors`.
+- `payment-service` đã chuẩn hóa lại test theo contract `ActionMessageResponse` cho `createSession`, `createPromotion`, `updatePromotion`; build `payment-service` đã pass lại sau khi sửa các assertion kiểu response cũ.
+- `upload-service` cũng đã chuẩn hóa theo cùng pattern `ActionMessageResponse` cho `uploadImages`, `createVideoSession`, `uploadVideoChunk`, `completeVideoUpload`; build `upload-service` pass lại sau khi sửa test mutation.
 - Files chính đã chạm:
   - `common-lib/src/main/proto/identity_internal.proto`
   - `common-lib/src/main/proto/user_internal.proto`

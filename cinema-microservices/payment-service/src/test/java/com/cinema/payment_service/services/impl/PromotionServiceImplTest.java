@@ -3,6 +3,7 @@ package com.cinema.payment_service.services.impl;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.payment_service.dto.request.PromotionUpsertRequest;
 import com.cinema.payment_service.dto.response.PromotionResponse;
 import com.cinema.payment_service.entity.Promotion;
@@ -86,7 +87,7 @@ class PromotionServiceImplTest {
         when(promotionRepository.existsByCodeIgnoreCaseAndIsDeletedFalse("GLOBAL10")).thenReturn(false);
         when(promotionRepository.save(any(Promotion.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        PromotionResponse response = promotionService.createPromotion(request, httpRequest);
+        ActionMessageResponse response = promotionService.createPromotion(request, httpRequest);
 
         ArgumentCaptor<Promotion> captor = ArgumentCaptor.forClass(Promotion.class);
         verify(promotionRepository).save(captor.capture());
@@ -98,7 +99,7 @@ class PromotionServiceImplTest {
         assertEquals("ADMIN", saved.getCreatedByRole());
         assertEquals(userId, saved.getCreatedByUserId());
         assertEquals(PromotionStatus.ACTIVE, saved.getStatus());
-        assertEquals("GLOBAL10", response.getCode());
+        assertEquals(SuccessMessage.PROMOTION_CREATED.getMessage(), response.getMessage());
     }
 
     @Test
@@ -160,13 +161,13 @@ class PromotionServiceImplTest {
                 .status(PromotionStatus.INACTIVE)
                 .build();
 
-        PromotionResponse response = promotionService.updatePromotion(
+        ActionMessageResponse response = promotionService.updatePromotion(
                 promotionId,
                 request,
                 httpRequest);
 
         assertEquals(PromotionStatus.INACTIVE, promotion.getStatus());
-        assertEquals(PromotionStatus.INACTIVE, response.getStatus());
+        assertEquals(SuccessMessage.PROMOTION_UPDATED.getMessage(), response.getMessage());
     }
 
     @Test
@@ -203,7 +204,7 @@ class PromotionServiceImplTest {
                 .filmIds(List.of(filmId, filmId))
                 .build();
 
-        PromotionResponse response = promotionService.updatePromotion(promotionId, request, httpRequest);
+        ActionMessageResponse response = promotionService.updatePromotion(promotionId, request, httpRequest);
 
         @SuppressWarnings("rawtypes")
         ArgumentCaptor<Iterable> cinemaCaptor = ArgumentCaptor.forClass(Iterable.class);
@@ -224,11 +225,6 @@ class PromotionServiceImplTest {
         assertEquals(cinemaId, savedCinemaMappings.get(0).getCinemaId());
         assertEquals(1, savedFilmMappings.size());
         assertEquals(filmId, savedFilmMappings.get(0).getFilmId());
-        assertEquals(1, response.getCinemaIds().size());
-        assertEquals(cinemaId, response.getCinemaIds().get(0));
-        assertEquals(1, response.getFilmIds().size());
-        assertEquals(filmId, response.getFilmIds().get(0));
-        assertEquals(1, response.getCinemaCount());
-        assertEquals(1, response.getFilmCount());
+        assertEquals(SuccessMessage.PROMOTION_UPDATED.getMessage(), response.getMessage());
     }
 }

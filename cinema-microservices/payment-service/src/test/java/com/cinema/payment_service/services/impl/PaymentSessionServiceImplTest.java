@@ -6,6 +6,7 @@ import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
@@ -21,6 +22,7 @@ import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
 import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.http.HeaderNames;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
@@ -138,7 +140,7 @@ class PaymentSessionServiceImplTest {
         CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
         request.setBookingId(bookingId);
 
-        PaymentSessionResponse response = paymentSessionService.createSession(request, userId);
+        ActionMessageResponse response = paymentSessionService.createSession(request, userId);
 
         ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
         verify(paymentTransactionRepository).save(transactionCaptor.capture());
@@ -150,10 +152,8 @@ class PaymentSessionServiceImplTest {
 
         PaymentTransaction saved = transactionCaptor.getValue();
         assertNotNull(response);
-        assertEquals(bookingId, response.getBookingId());
+        assertEquals(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage(), response.getMessage());
         assertEquals(filmId, saved.getFilmId());
-        assertEquals("https://momo.example.com/pay", response.getPayUrl());
-        assertEquals("https://momo.example.com/qr", response.getQrCodeUrl());
         assertEquals("https://momo.example.com/pay", saved.getPayUrl());
         assertEquals("{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}",
                 saved.getResponsePayloadJson());
@@ -223,7 +223,7 @@ class PaymentSessionServiceImplTest {
         request.setBookingId(bookingId);
         request.setPromotionCode("CINEMASTAR10");
 
-        PaymentSessionResponse response = paymentSessionService.createSession(request, userId);
+        ActionMessageResponse response = paymentSessionService.createSession(request, userId);
 
         ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
         verify(paymentTransactionRepository).save(transactionCaptor.capture());
@@ -235,12 +235,10 @@ class PaymentSessionServiceImplTest {
 
         PaymentTransaction saved = transactionCaptor.getValue();
         assertNotNull(response);
-        assertEquals(bookingId, response.getBookingId());
+        assertEquals(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage(), response.getMessage());
         assertEquals("CINEMASTAR10", saved.getPromotionCode());
         assertEquals(BigDecimal.valueOf(18000), saved.getPromotionDiscountAmount());
         assertEquals(BigDecimal.valueOf(162000), saved.getAmount());
-        assertEquals(BigDecimal.valueOf(162000), response.getAmount());
-        assertEquals("https://momo.example.com/qr", response.getQrCodeUrl());
         assertEquals("{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}",
                 saved.getResponsePayloadJson());
         verify(bookingGrpcClient).upsertBookingPromotionSnapshot(

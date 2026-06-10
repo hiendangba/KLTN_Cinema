@@ -1,6 +1,7 @@
 package com.cinema.showtime_service.services.impl;
 
 import com.cinema.Enum.ShowTimeEnum;
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.exception.BusinessException;
@@ -165,9 +166,13 @@ class ShowTimeServiceImplTest {
         var result = showTimeService.createShowTime(createRequest, request);
 
         assertNotNull(result);
-        assertNotNull(result.getSuccessResponse());
-        assertEquals(1, result.getSuccessResponse().size());
-        assertEquals(pricingPolicyId, result.getSuccessResponse().get(0).getData().getPricingPolicyId());
+        assertEquals(SuccessMessage.SHOWTIME_CREATED.getMessage(), result.getMessage());
+
+        ArgumentCaptor<ShowTime> showTimeCaptor = ArgumentCaptor.forClass(ShowTime.class);
+        verify(showTimeRepository).save(showTimeCaptor.capture());
+        assertEquals(pricingPolicyId, showTimeCaptor.getValue().getPricingPolicyId());
+        assertEquals(hallId, showTimeCaptor.getValue().getHallId());
+        assertEquals(filmId, showTimeCaptor.getValue().getFilmId());
     }
 
     @Test
@@ -268,15 +273,16 @@ class ShowTimeServiceImplTest {
         var result = showTimeService.createShowTime(createRequest, request);
 
         assertNotNull(result);
-        assertEquals(2, result.getSuccessResponse().size());
-        assertEquals(LocalDate.now().plusDays(1).atTime(22, 0),
-                result.getSuccessResponse().get(0).getData().getStartDateTime());
-        assertEquals(LocalDate.now().plusDays(2).atTime(0, 0),
-                result.getSuccessResponse().get(0).getData().getEndDateTime());
-        assertEquals(LocalDate.now().plusDays(2).atTime(8, 0),
-                result.getSuccessResponse().get(1).getData().getStartDateTime());
-        assertEquals(LocalDate.now().plusDays(2).atTime(10, 0),
-                result.getSuccessResponse().get(1).getData().getEndDateTime());
+        assertEquals(SuccessMessage.SHOWTIME_CREATED.getMessage(), result.getMessage());
+
+        ArgumentCaptor<ShowTime> showTimeCaptor = ArgumentCaptor.forClass(ShowTime.class);
+        verify(showTimeRepository, times(2)).save(showTimeCaptor.capture());
+        List<ShowTime> createdShowTimes = showTimeCaptor.getAllValues();
+        assertEquals(2, createdShowTimes.size());
+        assertEquals(LocalDate.now().plusDays(1).atTime(22, 0), createdShowTimes.get(0).getStartDateTime());
+        assertEquals(LocalDate.now().plusDays(2).atTime(0, 0), createdShowTimes.get(0).getEndDateTime());
+        assertEquals(LocalDate.now().plusDays(2).atTime(8, 0), createdShowTimes.get(1).getStartDateTime());
+        assertEquals(LocalDate.now().plusDays(2).atTime(10, 0), createdShowTimes.get(1).getEndDateTime());
     }
 
     @Test
@@ -380,7 +386,8 @@ class ShowTimeServiceImplTest {
         var result = showTimeService.createShowTime(createRequest, request);
 
         assertNotNull(result);
-        assertEquals(1, result.getSuccessResponse().size());
+        assertEquals(SuccessMessage.SHOWTIME_CREATED.getMessage(), result.getMessage());
+        verify(showTimeRepository).save(any(ShowTime.class));
         verify(cinemaGrpcClient, times(0)).getCinemaIdsByUserId(any(), any());
     }
 
