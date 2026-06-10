@@ -30,6 +30,28 @@
 - Remaining risk:
   - một số service khác trong reactor (`cinema-service`, `hall-service`) vẫn có dấu hiệu build nhiễu từ gRPC/classpath trong workspace hiện tại, nên nếu cần full reactor pass thì nên chạy lại trên môi trường sạch hoặc sau khi dọn `target/` toàn repo.
 
+### Cinema service: gộp staff vào create/update rạp
+
+- `cinema-service` đã đổi `createCinema`/`updateCinema` để nhận luôn `staffIds` trong request và tự sync `cinema_staff` trong cùng transaction thay vì phụ thuộc hoàn toàn vào endpoint gán staff riêng.
+- `CreateCinemaRequest`/`UpdateCinemaRequest` giờ có thêm `staffIds`; khi tạo mới, `MANAGER` sẽ được gắn `managerId` từ token, còn `ADMIN` vẫn có thể truyền `managerId` rõ ràng.
+- `updateCinema` đã thêm check ownership cho `MANAGER`: chỉ rạp đang gắn với `managerId` của token mới được sửa; `managerId` chỉ `ADMIN` mới được thay đổi, và update không còn chặn bởi `validateNoActiveBookingForCinema(...)`.
+- Files touched: `cinema-service/src/main/java/com/cinema/cinema_service/services/impl/CinemaServiceImpl.java`, `cinema-service/src/main/java/com/cinema/cinema_service/dto/request/CreateCinemaRequest.java`, `cinema-service/src/main/java/com/cinema/cinema_service/dto/request/UpdateCinemaRequest.java`, `cinema-service/src/test/java/com/cinema/cinema_service/services/impl/CinemaServiceImplTest.java`.
+- Verification:
+  - `mvn -pl cinema-service -am -Dtest=CinemaServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  - `CinemaServiceImplTest`: `17 tests, 0 failures, 0 errors`
+- Remaining risk:
+  - sync staff đang dựa vào unique `staff_id`; nếu sau này business đổi sang một staff thuộc nhiều rạp thì cần thiết kế lại bảng `cinema_staff`.
+
+### Cinema service: bỏ endpoint staff assignment cũ
+
+- Đã xóa 3 endpoint staff riêng khỏi `CinemaController`: `POST /api/cinemas/{id}/staffs`, `PUT /api/cinemas/{id}/staffs`, `DELETE /api/cinemas/{id}/staffs/{staffId}`.
+- `CinemaService` và `CinemaServiceImpl` cũng đã bỏ các method `assignStaff`, `updateStaffAssignment`, `unassignStaff`; luồng chính thức giờ chỉ còn sync `staffIds` trong `createCinema` và `updateCinema`.
+- `GET /api/cinemas/{id}/staffs` vẫn giữ lại để xem danh sách staff hiện gắn với rạp.
+- Verification:
+  - compile/test sẽ cần rerun sau khi dọn route cũ; mục tiêu là `CinemaServiceImplTest` vẫn pass và không còn reference nào tới staff assignment endpoint cũ.
+- Remaining risk:
+  - nếu frontend/UAT còn gọi các route staff cũ thì sẽ nhận lỗi 404 sau khi deploy.
+
 ## Changelog ngắn (2026-05-30)
 
 - `ErrorCode 4008 (VERIFY_TOKEN_MISSING)` đổi HTTP status từ `401 Unauthorized` sang `400 Bad Request`.

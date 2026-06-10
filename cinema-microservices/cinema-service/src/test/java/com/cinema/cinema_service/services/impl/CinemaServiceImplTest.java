@@ -20,6 +20,7 @@ import com.cinema.http.HeaderNames;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -76,6 +77,7 @@ class CinemaServiceImplTest {
         when(cinemaRepository.existsByCodeIgnoreCaseAndIsDeletedFalse("CINEMA-2")).thenReturn(false);
         when(cinemaMapper.toEntity(first)).thenReturn(cinemaOne);
         when(cinemaMapper.toEntity(second)).thenReturn(cinemaTwo);
+        when(cinemaStaffRepository.findByCinemaId(any())).thenReturn(List.of());
 
         assertDoesNotThrow(() -> cinemaService.createCinema(first, request));
         assertDoesNotThrow(() -> cinemaService.createCinema(second, request));
@@ -93,10 +95,95 @@ class CinemaServiceImplTest {
         cinema.setId(cinemaId);
 
         when(cinemaRepository.findByIdAndIsDeletedFalse(cinemaId)).thenReturn(Optional.of(cinema));
+        when(cinemaStaffRepository.findByCinemaId(cinemaId)).thenReturn(List.of());
         doAnswer(invocation -> null).when(cinemaMapper).updateEntity(cinema, updateRequest);
 
         assertDoesNotThrow(() -> cinemaService.updateCinema(cinemaId, updateRequest, request));
         verify(cinemaRepository).save(cinema);
+    }
+
+    @Test
+    void createCinema_assignsManagerFromManagerTokenAndSyncsStaffLinks() {
+        UUID actorManagerId = UUID.randomUUID();
+        UUID expectedStaffId = UUID.randomUUID();
+        MockHttpServletRequest request = managerRequest(actorManagerId);
+        CreateCinemaRequest createRequest = createRequest("CINEMA-NEW", UUID.randomUUID(), List.of(expectedStaffId));
+        Cinema cinema = cinema("CINEMA-NEW", UUID.randomUUID());
+
+        when(cinemaRepository.existsByCodeIgnoreCaseAndIsDeletedFalse("CINEMA-NEW")).thenReturn(false);
+        when(cinemaMapper.toEntity(createRequest)).thenReturn(cinema);
+        when(cinemaStaffRepository.findByCinemaId(cinema.getId())).thenReturn(List.of());
+        when(cinemaStaffRepository.findByStaffId(expectedStaffId)).thenReturn(Optional.empty());
+
+        assertDoesNotThrow(() -> cinemaService.createCinema(createRequest, request));
+
+        ArgumentCaptor<Cinema> cinemaCaptor = ArgumentCaptor.forClass(Cinema.class);
+        verify(cinemaRepository).save(cinemaCaptor.capture());
+        assertThat(cinemaCaptor.getValue().getManagerId()).isEqualTo(actorManagerId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List> staffCaptor = ArgumentCaptor.forClass(List.class);
+        verify(cinemaStaffRepository).saveAll(staffCaptor.capture());
+        assertThat(staffCaptor.getValue())
+                .hasSize(1)
+                .allSatisfy(staffLink -> {
+                    CinemaStaff cinemaStaff = (CinemaStaff) staffLink;
+                    assertThat(cinemaStaff.getCinemaId()).isEqualTo(cinema.getId());
+                    assertThat(cinemaStaff.getStaffId()).isEqualTo(expectedStaffId);
+                    assertThat(cinemaStaff.getActive()).isTrue();
+                });
+    }
+
+    @Test
+    void updateCinema_rejectsManagerWhenCinemaIsNotOwned() {
+        UUID ownerManagerId = UUID.randomUUID();
+        UUID currentManagerId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        MockHttpServletRequest request = managerRequest(currentManagerId);
+        UpdateCinemaRequest updateRequest = updateRequest("Updated Cinema", ownerManagerId);
+        Cinema cinema = cinema("OWNED", ownerManagerId);
+        cinema.setId(cinemaId);
+
+        when(cinemaRepository.findByIdAndIsDeletedFalse(cinemaId)).thenReturn(Optional.of(cinema));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> cinemaService.updateCinema(cinemaId, updateRequest, request));
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    void updateCinema_allowsManagerToUpdateOwnedCinemaWithoutChangingManagerId() {
+        UUID managerId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID updatedStaffId = UUID.randomUUID();
+        MockHttpServletRequest request = managerRequest(managerId);
+        UpdateCinemaRequest updateRequest = updateRequest("Updated Cinema", UUID.randomUUID(), List.of(updatedStaffId));
+        Cinema cinema = cinema("OWNED", managerId);
+        cinema.setId(cinemaId);
+
+        when(cinemaRepository.findByIdAndIsDeletedFalse(cinemaId)).thenReturn(Optional.of(cinema));
+        when(cinemaStaffRepository.findByCinemaId(cinemaId)).thenReturn(List.of());
+        when(cinemaStaffRepository.findByStaffId(updatedStaffId)).thenReturn(Optional.empty());
+        doAnswer(invocation -> null).when(cinemaMapper).updateEntity(cinema, updateRequest);
+
+        assertDoesNotThrow(() -> cinemaService.updateCinema(cinemaId, updateRequest, request));
+
+        ArgumentCaptor<Cinema> cinemaCaptor = ArgumentCaptor.forClass(Cinema.class);
+        verify(cinemaRepository).save(cinemaCaptor.capture());
+        assertThat(cinemaCaptor.getValue().getManagerId()).isEqualTo(managerId);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List> staffCaptor = ArgumentCaptor.forClass(List.class);
+        verify(cinemaStaffRepository).saveAll(staffCaptor.capture());
+        assertThat(staffCaptor.getValue())
+                .hasSize(1)
+                .allSatisfy(staffLink -> {
+                    CinemaStaff cinemaStaff = (CinemaStaff) staffLink;
+                    assertThat(cinemaStaff.getCinemaId()).isEqualTo(cinemaId);
+                    assertThat(cinemaStaff.getStaffId()).isEqualTo(updatedStaffId);
+                    assertThat(cinemaStaff.getActive()).isTrue();
+                });
     }
 
     @Test
@@ -120,6 +207,7 @@ class CinemaServiceImplTest {
                     .id(cinema.getId())
                     .code(cinema.getCode())
                     .name(cinema.getName())
+                    .status(cinema.getStatus())
                     .managerId(cinema.getManagerId())
                     .staffIds(staffIds)
                     .build();
@@ -129,8 +217,8 @@ class CinemaServiceImplTest {
         List<CinemaResponse> responses = cinemaService.getMyManagedCinemas(request);
 
         assertThat(responses).hasSize(2);
-        assertThat(responses.get(0).getName()).isEqualTo("CINEMA-2");
-        assertThat(responses.get(1).getName()).isEqualTo("CINEMA-1");
+        assertThat(responses.get(0).getName()).isEqualTo(second.getName());
+        assertThat(responses.get(1).getName()).isEqualTo(first.getName());
         assertThat(responses).allMatch(response -> "Manager One".equals(response.getManagerName()));
     }
 
@@ -154,6 +242,7 @@ class CinemaServiceImplTest {
                     .id(cinema.getId())
                     .code(cinema.getCode())
                     .name(cinema.getName())
+                    .status(cinema.getStatus())
                     .managerId(cinema.getManagerId())
                     .build();
         });
@@ -162,7 +251,7 @@ class CinemaServiceImplTest {
         List<CinemaResponse> responses = cinemaService.getMyManagedCinemas(request);
 
         assertThat(responses).hasSize(1);
-        assertThat(responses.get(0).getName()).isEqualTo("ACTIVE-CINEMA");
+        assertThat(responses.get(0).getName()).isEqualTo(activeCinema.getName());
     }
 
     @Test
@@ -181,6 +270,7 @@ class CinemaServiceImplTest {
         when(cinemaStaffRepository.findByCinemaIdAndActiveTrue(cinemaId)).thenReturn(List.of());
         when(cinemaMapper.toResponse(cinema, List.of())).thenReturn(CinemaResponse.builder()
                 .id(cinemaId)
+                .status(cinema.getStatus())
                 .code(cinema.getCode())
                 .name(cinema.getName())
                 .managerId(managerId)
@@ -207,13 +297,6 @@ class CinemaServiceImplTest {
 
         when(cinemaStaffRepository.findByStaffId(staffId)).thenReturn(Optional.of(staffLink));
         when(cinemaRepository.findByIdAndIsDeletedFalse(cinemaId)).thenReturn(Optional.of(cinema));
-        when(cinemaMapper.toResponse(any(Cinema.class), anyList())).thenReturn(CinemaResponse.builder()
-                .id(cinemaId)
-                .code(cinema.getCode())
-                .name(cinema.getName())
-                .managerId(managerId)
-                .build());
-        when(userGrpcClient.getUserNameById(managerId)).thenReturn("Manager One");
 
         List<CinemaResponse> responses = cinemaService.getMyManagedCinemas(request);
 
@@ -249,6 +332,7 @@ class CinemaServiceImplTest {
                     .id(cinema.getId())
                     .code(cinema.getCode())
                     .name(cinema.getName())
+                    .status(cinema.getStatus())
                     .managerId(cinema.getManagerId())
                     .staffIds(staffIds)
                     .build();
@@ -408,6 +492,7 @@ class CinemaServiceImplTest {
             return CinemaResponse.builder()
                     .id(cinema.getId())
                     .name(cinema.getName())
+                    .status(cinema.getStatus())
                     .managerId(cinema.getManagerId())
                     .build();
         });
@@ -453,6 +538,7 @@ class CinemaServiceImplTest {
             return CinemaResponse.builder()
                     .id(cinema.getId())
                     .name(cinema.getName())
+                    .status(cinema.getStatus())
                     .managerId(cinema.getManagerId())
                     .build();
         });
@@ -538,6 +624,10 @@ class CinemaServiceImplTest {
     }
 
     private CreateCinemaRequest createRequest(String code, UUID managerId) {
+        return createRequest(code, managerId, null);
+    }
+
+    private CreateCinemaRequest createRequest(String code, UUID managerId, List<UUID> staffIds) {
         return CreateCinemaRequest.builder()
                 .code(code)
                 .name(code + " Name")
@@ -548,10 +638,15 @@ class CinemaServiceImplTest {
                 .openTime(LocalTime.of(8, 0))
                 .closeTime(LocalTime.of(22, 0))
                 .managerId(managerId)
+                .staffIds(staffIds)
                 .build();
     }
 
     private UpdateCinemaRequest updateRequest(String name, UUID managerId) {
+        return updateRequest(name, managerId, null);
+    }
+
+    private UpdateCinemaRequest updateRequest(String name, UUID managerId, List<UUID> staffIds) {
         return UpdateCinemaRequest.builder()
                 .name(name)
                 .address("456 Main St")
@@ -561,6 +656,7 @@ class CinemaServiceImplTest {
                 .openTime(LocalTime.of(8, 0))
                 .closeTime(LocalTime.of(22, 0))
                 .managerId(managerId)
+                .staffIds(staffIds)
                 .build();
     }
 

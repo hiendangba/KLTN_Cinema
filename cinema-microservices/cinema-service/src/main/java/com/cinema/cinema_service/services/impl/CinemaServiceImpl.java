@@ -1,7 +1,6 @@
 package com.cinema.cinema_service.services.impl;
 
 import com.cinema.Enum.SuccessMessage;
-import com.cinema.cinema_service.dto.request.AssignCinemaStaffRequest;
 import com.cinema.cinema_service.dto.request.CinemaField;
 import com.cinema.cinema_service.dto.request.CreateCinemaRequest;
 import com.cinema.cinema_service.dto.request.UpdateCinemaRequest;
@@ -42,9 +41,11 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -66,14 +67,19 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     @Transactional
     public ActionMessageResponse createCinema(CreateCinemaRequest request, HttpServletRequest httpRequest) {
-        validateAdminRole(httpRequest);
+        validateWriteRole(httpRequest);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        UUID actorUserId = extractUserId(httpRequest);
         validateCoordinate(request.getLatitude(), request.getLongitude());
         validateOperatingTime(request.getOpenTime(), request.getCloseTime());
         validateCinemaCodeNotExists(request.getCode(), null);
 
+        UUID managerId = resolveManagerIdForCreate(request, role, actorUserId);
         Cinema cinema = cinemaMapper.toEntity(request);
         cinema.setCode(normalizeCode(request.getCode()));
+        cinema.setManagerId(managerId);
         cinemaRepository.save(cinema);
+        syncCinemaStaffAssignments(cinema.getId(), request.getStaffIds());
 
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.CINEMA_CREATED.getMessage())
@@ -108,14 +114,21 @@ public class CinemaServiceImpl implements CinemaService {
     @Transactional
     public ActionMessageResponse updateCinema(UUID cinemaId, UpdateCinemaRequest request,
             HttpServletRequest httpRequest) {
-        validateAdminRole(httpRequest);
+        validateWriteRole(httpRequest);
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        UUID actorUserId = extractUserId(httpRequest);
+        Cinema cinema = getActiveCinemaOrThrow(cinemaId);
+        if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            validateManagerOwnsCinema(cinema, actorUserId);
+        }
         validateCoordinate(request.getLatitude(), request.getLongitude());
         validateOperatingTime(request.getOpenTime(), request.getCloseTime());
+        UUID managerId = resolveManagerIdForUpdate(request, role, cinema.getManagerId());
 
-        Cinema cinema = getActiveCinemaOrThrow(cinemaId);
-        validateNoActiveBookingForCinema(cinemaId);
         cinemaMapper.updateEntity(cinema, request);
+        cinema.setManagerId(managerId);
         cinemaRepository.save(cinema);
+        syncCinemaStaffAssignments(cinemaId, request.getStaffIds());
 
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.CINEMA_UPDATED.getMessage())
@@ -158,69 +171,6 @@ public class CinemaServiceImpl implements CinemaService {
 
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.CINEMA_DELETED.getMessage())
-                .build();
-    }
-
-    // Gan staff vao rap, chi admin duoc thao tac.
-    @Override
-    @Transactional
-    public ActionMessageResponse assignStaff(UUID cinemaId, AssignCinemaStaffRequest request,
-            HttpServletRequest httpRequest) {
-        validateAdminRole(httpRequest);
-        getActiveCinemaOrThrow(cinemaId);
-
-        if (cinemaStaffRepository.existsByStaffId(request.getStaffId())) {
-            throw new BusinessException(ErrorCode.ID_EXISTED);
-        }
-
-        CinemaStaff cinemaStaff = new CinemaStaff();
-        cinemaStaff.setCinemaId(cinemaId);
-        cinemaStaff.setStaffId(request.getStaffId());
-        cinemaStaff.setActive(true);
-        cinemaStaffRepository.save(cinemaStaff);
-
-        return ActionMessageResponse.builder()
-                .message(SuccessMessage.CINEMA_STAFF_ASSIGNED.getMessage())
-                .build();
-    }
-
-    // Cap nhat lien ket staff-rap: neu staff da co record thi mo ra va gan lai.
-    @Override
-    @Transactional
-    public ActionMessageResponse updateStaffAssignment(UUID cinemaId, AssignCinemaStaffRequest request,
-            HttpServletRequest httpRequest) {
-        validateAdminRole(httpRequest);
-        getActiveCinemaOrThrow(cinemaId);
-
-        CinemaStaff cinemaStaff = cinemaStaffRepository.findByStaffId(request.getStaffId())
-                .orElseGet(CinemaStaff::new);
-        cinemaStaff.setCinemaId(cinemaId);
-        cinemaStaff.setStaffId(request.getStaffId());
-        cinemaStaff.setActive(true);
-        cinemaStaffRepository.save(cinemaStaff);
-
-        return ActionMessageResponse.builder()
-                .message(SuccessMessage.CINEMA_STAFF_UPDATED.getMessage())
-                .build();
-    }
-
-    // Go staff khoi rap bang cach tat active thay vi xoa du lieu.
-    @Override
-    @Transactional
-    public ActionMessageResponse unassignStaff(UUID cinemaId, UUID staffId, HttpServletRequest httpRequest) {
-        validateAdminRole(httpRequest);
-        getActiveCinemaOrThrow(cinemaId);
-
-        CinemaStaff cinemaStaff = cinemaStaffRepository.findByCinemaIdAndStaffId(cinemaId, staffId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
-        if (!cinemaStaff.getActive()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
-        cinemaStaff.setActive(false);
-        cinemaStaffRepository.save(cinemaStaff);
-
-        return ActionMessageResponse.builder()
-                .message(SuccessMessage.CINEMA_STAFF_UNASSIGNED.getMessage())
                 .build();
     }
 
@@ -466,6 +416,45 @@ public class CinemaServiceImpl implements CinemaService {
         }
     }
 
+    private void syncCinemaStaffAssignments(UUID cinemaId, List<UUID> staffIds) {
+        List<UUID> normalizedStaffIds = normalizeStaffIds(staffIds);
+        List<CinemaStaff> currentStaffLinks = cinemaStaffRepository.findByCinemaId(cinemaId);
+        Map<UUID, CinemaStaff> currentStaffLinkMap = new HashMap<>();
+        for (CinemaStaff staffLink : currentStaffLinks) {
+            currentStaffLinkMap.put(staffLink.getStaffId(), staffLink);
+        }
+
+        Set<UUID> desiredStaffIds = new LinkedHashSet<>(normalizedStaffIds);
+        List<CinemaStaff> staffLinksToSave = new ArrayList<>();
+
+        for (CinemaStaff staffLink : currentStaffLinks) {
+            if (!desiredStaffIds.contains(staffLink.getStaffId()) && Boolean.TRUE.equals(staffLink.getActive())) {
+                staffLink.setActive(false);
+                staffLinksToSave.add(staffLink);
+            }
+        }
+
+        for (UUID staffId : desiredStaffIds) {
+            CinemaStaff staffLink = currentStaffLinkMap.get(staffId);
+            if (staffLink == null) {
+                staffLink = cinemaStaffRepository.findByStaffId(staffId).orElseGet(CinemaStaff::new);
+            }
+
+            if (!cinemaId.equals(staffLink.getCinemaId())
+                    || !staffId.equals(staffLink.getStaffId())
+                    || !Boolean.TRUE.equals(staffLink.getActive())) {
+                staffLink.setCinemaId(cinemaId);
+                staffLink.setStaffId(staffId);
+                staffLink.setActive(true);
+                staffLinksToSave.add(staffLink);
+            }
+        }
+
+        if (!staffLinksToSave.isEmpty()) {
+            cinemaStaffRepository.saveAll(staffLinksToSave);
+        }
+    }
+
     // Dung chung cho create/update: null = tao moi, khac null = update va loai tru
     // cinema hien tai.
     private void validateCinemaCodeNotExists(String code, UUID cinemaId) {
@@ -503,6 +492,51 @@ public class CinemaServiceImpl implements CinemaService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         return code.trim().toUpperCase();
+    }
+
+    private List<UUID> normalizeStaffIds(List<UUID> staffIds) {
+        if (staffIds == null || staffIds.isEmpty()) {
+            return List.of();
+        }
+
+        Set<UUID> normalizedStaffIds = new LinkedHashSet<>();
+        for (UUID staffId : staffIds) {
+            if (staffId == null) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT);
+            }
+            normalizedStaffIds.add(staffId);
+        }
+        return new ArrayList<>(normalizedStaffIds);
+    }
+
+    private UUID resolveManagerIdForCreate(CreateCinemaRequest request, String role, UUID actorUserId) {
+        if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            return actorUserId;
+        }
+
+        UUID managerId = request.getManagerId();
+        if (managerId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return managerId;
+    }
+
+    private UUID resolveManagerIdForUpdate(UpdateCinemaRequest request, String role, UUID currentManagerId) {
+        if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            return currentManagerId;
+        }
+        return request.getManagerId() == null ? currentManagerId : request.getManagerId();
+    }
+
+    private void validateManagerOwnsCinema(Cinema cinema, UUID managerId) {
+        if (cinema.getManagerId() == null || !cinema.getManagerId().equals(managerId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private void validateWriteRole(HttpServletRequest httpRequest) {
+        RequestAuthUtils.requireAnyRole(httpRequest, log, "cinema_write_action",
+                HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
     }
 
     // Chi admin duoc chay cac thao tac quan tri rap.

@@ -1,7 +1,6 @@
 package com.cinema.cinema_service.controller;
 
 import com.cinema.Enum.SuccessMessage;
-import com.cinema.cinema_service.dto.request.AssignCinemaStaffRequest;
 import com.cinema.cinema_service.dto.request.CinemaField;
 import com.cinema.cinema_service.dto.request.CreateCinemaRequest;
 import com.cinema.cinema_service.dto.request.UpdateCinemaRequest;
@@ -84,33 +83,6 @@ public class CinemaController extends BaseController {
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = cinemaService.deleteCinema(id, httpRequest);
         return ok(SuccessMessage.CINEMA_DELETED, response);
-    }
-
-    @PostMapping("/{id}/staffs")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> assignStaff(
-            @PathVariable UUID id,
-            @Valid @RequestBody AssignCinemaStaffRequest request,
-            HttpServletRequest httpRequest) {
-        ActionMessageResponse response = cinemaService.assignStaff(id, request, httpRequest);
-        return ok(SuccessMessage.CINEMA_STAFF_ASSIGNED, response);
-    }
-
-    @PutMapping("/{id}/staffs")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> updateStaffAssignment(
-            @PathVariable UUID id,
-            @Valid @RequestBody AssignCinemaStaffRequest request,
-            HttpServletRequest httpRequest) {
-        ActionMessageResponse response = cinemaService.updateStaffAssignment(id, request, httpRequest);
-        return ok(SuccessMessage.CINEMA_STAFF_UPDATED, response);
-    }
-
-    @DeleteMapping("/{id}/staffs/{staffId}")
-    public ResponseEntity<APIResponse<ActionMessageResponse>> unassignStaff(
-            @PathVariable UUID id,
-            @PathVariable UUID staffId,
-            HttpServletRequest httpRequest) {
-        ActionMessageResponse response = cinemaService.unassignStaff(id, staffId, httpRequest);
-        return ok(SuccessMessage.CINEMA_STAFF_UNASSIGNED, response);
     }
 
     @GetMapping("/{id}/staffs")

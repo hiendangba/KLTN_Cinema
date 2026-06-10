@@ -1,6 +1,5 @@
 package com.cinema.cinema_service.services;
 
-import com.cinema.cinema_service.dto.request.AssignCinemaStaffRequest;
 import com.cinema.cinema_service.dto.request.CinemaField;
 import com.cinema.cinema_service.dto.request.CreateCinemaRequest;
 import com.cinema.cinema_service.dto.request.UpdateCinemaRequest;
@@ -29,13 +28,6 @@ public interface CinemaService {
                                              HttpServletRequest httpRequest);
 
     ActionMessageResponse deleteCinema(UUID cinemaId, HttpServletRequest httpRequest);
-
-    ActionMessageResponse assignStaff(UUID cinemaId, AssignCinemaStaffRequest request, HttpServletRequest httpRequest);
-
-    ActionMessageResponse updateStaffAssignment(UUID cinemaId, AssignCinemaStaffRequest request,
-                                                HttpServletRequest httpRequest);
-
-    ActionMessageResponse unassignStaff(UUID cinemaId, UUID staffId, HttpServletRequest httpRequest);
 
     List<CinemaStaffResponse> getCinemaStaffs(UUID cinemaId, HttpServletRequest httpRequest);
 
