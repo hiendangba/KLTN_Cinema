@@ -2,10 +2,11 @@ package com.cinema.upload_service.service.impl;
 
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
-import com.cinema.Enum.SuccessMessage;
-import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.upload_service.config.UploadProperties;
 import com.cinema.upload_service.dto.request.CreateVideoUploadSessionRequest;
+import com.cinema.upload_service.dto.response.UploadFilesData;
+import com.cinema.upload_service.dto.response.UploadVideoCompleteData;
+import com.cinema.upload_service.dto.response.VideoChunkUploadData;
 import com.cinema.upload_service.dto.response.VideoUploadSessionData;
 import com.cinema.upload_service.entity.StoredFile;
 import com.cinema.upload_service.entity.VideoUploadChunk;
@@ -88,11 +89,14 @@ class UploadServiceImplTest {
         ArgumentCaptor<List<StoredFile>> captor = ArgumentCaptor.forClass(List.class);
         when(storedFileRepository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActionMessageResponse result = uploadService.uploadImages(
+        UploadFilesData result = uploadService.uploadImages(
                 new MockMultipartFile[]{file},
                 mockRequest("/api/uploads/images"));
 
-        assertEquals(SuccessMessage.UPLOAD_IMAGES_COMPLETED.getMessage(), result.getMessage());
+        assertEquals(1, result.files().size());
+        assertEquals("poster.jpg", result.files().get(0).originalFileName());
+        assertEquals("IMAGE", result.files().get(0).mediaType());
+        assertTrue(result.files().get(0).url().contains("/media/"));
 
         Path publicRoot = tempDir.resolve("public");
         assertTrue(Files.exists(publicRoot));
@@ -125,12 +129,13 @@ class UploadServiceImplTest {
         ArgumentCaptor<VideoUploadSession> captor = ArgumentCaptor.forClass(VideoUploadSession.class);
         when(videoUploadSessionRepository.save(captor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActionMessageResponse response = uploadService.createVideoSession(
+        VideoUploadSessionData response = uploadService.createVideoSession(
                 request,
                 mockRequest("/api/uploads/videos/sessions"));
 
-        assertEquals(SuccessMessage.VIDEO_UPLOAD_SESSION_CREATED.getMessage(), response.getMessage());
-        assertTrue(Files.exists(tempDir.resolve("tmp")));
+        assertNotNull(response.sessionId());
+        assertEquals(uploadProperties.getVideoChunkSize().toBytes(), response.chunkSize());
+        assertTrue(Files.exists(tempDir.resolve("tmp").resolve(response.sessionId())));
         assertEquals(3, captor.getValue().getTotalChunks());
     }
 
@@ -177,9 +182,12 @@ class UploadServiceImplTest {
         request.setContentType("application/octet-stream");
         request.setContent("chunk-data".getBytes());
 
-        ActionMessageResponse response = uploadService.uploadVideoChunk(sessionId, 0, request);
+        VideoChunkUploadData response = uploadService.uploadVideoChunk(sessionId, 0, request);
 
-        assertEquals(SuccessMessage.VIDEO_CHUNK_UPLOADED.getMessage(), response.getMessage());
+        assertEquals(0, response.chunkIndex());
+        assertEquals(1, response.uploadedChunks());
+        assertEquals(2, response.totalChunks());
+        assertTrue(response.progressPercent() > 0);
         assertTrue(Files.exists(Path.of(session.getTempDir()).resolve("0.part")));
     }
 
@@ -214,11 +222,12 @@ class UploadServiceImplTest {
         when(videoUploadSessionRepository.save(any(VideoUploadSession.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(storedFileRepository.save(any(StoredFile.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ActionMessageResponse response = uploadService.completeVideoUpload(
+        UploadVideoCompleteData response = uploadService.completeVideoUpload(
                 sessionId,
                 mockRequest("/api/uploads/videos/sessions/" + sessionId + "/complete"));
 
-        assertEquals(SuccessMessage.VIDEO_UPLOAD_COMPLETED.getMessage(), response.getMessage());
+        assertEquals("VIDEO", response.file().mediaType());
+        assertTrue(response.file().url().contains("/media/"));
         Path publicRoot = tempDir.resolve("public");
         assertTrue(Files.walk(publicRoot).anyMatch(Files::isRegularFile));
         assertTrue(Files.notExists(sessionDir));

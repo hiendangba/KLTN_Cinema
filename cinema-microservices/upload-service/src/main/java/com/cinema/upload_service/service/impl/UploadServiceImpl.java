@@ -1,13 +1,15 @@
 package com.cinema.upload_service.service.impl;
 
-import com.cinema.Enum.SuccessMessage;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
-import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.http.RequestAuthUtils;
 import com.cinema.upload_service.config.UploadProperties;
 import com.cinema.upload_service.dto.request.CreateVideoUploadSessionRequest;
 import com.cinema.upload_service.dto.response.UploadFileResponse;
+import com.cinema.upload_service.dto.response.UploadFilesData;
+import com.cinema.upload_service.dto.response.UploadVideoCompleteData;
+import com.cinema.upload_service.dto.response.VideoChunkUploadData;
+import com.cinema.upload_service.dto.response.VideoUploadSessionData;
 import com.cinema.upload_service.dto.response.VideoUploadSessionStatusData;
 import com.cinema.upload_service.entity.StoredFile;
 import com.cinema.upload_service.entity.VideoUploadChunk;
@@ -62,7 +64,7 @@ public class UploadServiceImpl implements com.cinema.upload_service.service.Uplo
 
     @Override
     @Transactional
-    public ActionMessageResponse uploadImages(MultipartFile[] files, HttpServletRequest request) {
+    public UploadFilesData uploadImages(MultipartFile[] files, HttpServletRequest request) {
         UUID ownerUserId = RequestAuthUtils.resolveOptionalUserId(request);
         validateImageBatch(files);
 
@@ -83,10 +85,10 @@ public class UploadServiceImpl implements com.cinema.upload_service.service.Uplo
                 storedFiles.add(storedFile);
             }
 
-            storedFileRepository.saveAll(storedFiles);
-            return ActionMessageResponse.builder()
-                    .message(SuccessMessage.UPLOAD_IMAGES_COMPLETED.getMessage())
-                    .build();
+            List<StoredFile> savedFiles = storedFileRepository.saveAll(storedFiles);
+            return new UploadFilesData(savedFiles.stream()
+                    .map(this::toUploadFileResponse)
+                    .toList());
         } catch (IOException ex) {
             cleanupFiles(writtenFiles);
             log.error("Failed to upload image batch", ex);
@@ -99,7 +101,7 @@ public class UploadServiceImpl implements com.cinema.upload_service.service.Uplo
 
     @Override
     @Transactional
-    public ActionMessageResponse createVideoSession(
+    public VideoUploadSessionData createVideoSession(
             CreateVideoUploadSessionRequest requestBody,
             HttpServletRequest request) {
         UUID ownerUserId = RequestAuthUtils.resolveOptionalUserId(request);
@@ -128,14 +130,15 @@ public class UploadServiceImpl implements com.cinema.upload_service.service.Uplo
                 .build();
         videoUploadSessionRepository.save(session);
 
-        return ActionMessageResponse.builder()
-                .message(SuccessMessage.VIDEO_UPLOAD_SESSION_CREATED.getMessage())
-                .build();
+        return new VideoUploadSessionData(
+                sessionId.toString(),
+                chunkSize,
+                session.getExpiresAt());
     }
 
     @Override
     @Transactional
-    public ActionMessageResponse uploadVideoChunk(UUID sessionId, int chunkIndex, HttpServletRequest request) {
+    public VideoChunkUploadData uploadVideoChunk(UUID sessionId, int chunkIndex, HttpServletRequest request) {
         VideoUploadSession session = requireVideoSession(sessionId);
         validateVideoSessionActive(session);
         validateChunkIndex(session, chunkIndex);
@@ -174,9 +177,13 @@ public class UploadServiceImpl implements com.cinema.upload_service.service.Uplo
             session.setStatus(VideoUploadSessionStatus.UPLOADING);
             videoUploadSessionRepository.save(session);
 
-            return ActionMessageResponse.builder()
-                    .message(SuccessMessage.VIDEO_CHUNK_UPLOADED.getMessage())
-                    .build();
+            return new VideoChunkUploadData(
+                    sessionId.toString(),
+                    chunkIndex,
+                    copiedBytes,
+                    uploadedChunks,
+                    session.getTotalChunks(),
+                    calculateProgress(uploadedChunks, session.getTotalChunks()));
         } catch (IOException ex) {
             log.error("Failed to upload video chunk sessionId={} chunkIndex={}", sessionId, chunkIndex, ex);
             throw new BusinessException(ErrorCode.UPLOAD_FAILED);
@@ -204,7 +211,7 @@ public class UploadServiceImpl implements com.cinema.upload_service.service.Uplo
 
     @Override
     @Transactional
-    public ActionMessageResponse completeVideoUpload(UUID sessionId, HttpServletRequest request) {
+    public UploadVideoCompleteData completeVideoUpload(UUID sessionId, HttpServletRequest request) {
         VideoUploadSession session = requireVideoSession(sessionId);
         validateVideoSessionActive(session);
 
@@ -264,9 +271,7 @@ public class UploadServiceImpl implements com.cinema.upload_service.service.Uplo
             videoUploadSessionRepository.save(session);
             deleteDirectoryQuietly(Paths.get(session.getTempDir()));
 
-            return ActionMessageResponse.builder()
-                    .message(SuccessMessage.VIDEO_UPLOAD_COMPLETED.getMessage())
-                    .build();
+            return new UploadVideoCompleteData(toUploadFileResponse(storedFile));
         } catch (IOException ex) {
             deleteFileQuietly(finalPath);
             session.setStatus(VideoUploadSessionStatus.FAILED);
