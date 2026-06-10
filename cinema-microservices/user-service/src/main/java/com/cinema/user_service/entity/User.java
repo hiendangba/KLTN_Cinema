@@ -43,7 +43,7 @@ public class User {
     @Column(length = 10)
     UserEnum.Gender gender;
 
-    @Column(length = 15)
+    @Column(length = 15, unique = true)
     String phone;
 
     @Column(name = "bank_code", length = 50)

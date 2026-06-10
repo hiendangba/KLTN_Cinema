@@ -4,8 +4,11 @@ import com.cinema.booking_service.dto.request.BookingRevenueField;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
+import com.cinema.booking_service.dto.request.CreateStaffBookingRequest;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceField;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceReportRequest;
+import com.cinema.Enum.SuccessMessage;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.booking_service.dto.response.BookingResponse;
 import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
 import com.cinema.booking_service.dto.response.ShowtimePerformanceItemResponse;
@@ -17,6 +20,7 @@ import com.cinema.booking_service.enums.BookingStatus;
 import com.cinema.booking_service.enums.PaymentStatus;
 import com.cinema.booking_service.grpc.CinemaGrpcClient;
 import com.cinema.booking_service.grpc.FilmGrpcClient;
+import com.cinema.booking_service.grpc.IdentityGrpcClient;
 import com.cinema.booking_service.grpc.HallGrpcClient;
 import com.cinema.booking_service.grpc.SeatGrpcClient;
 import com.cinema.booking_service.grpc.ShowtimeGrpcClient;
@@ -107,6 +111,9 @@ class BookingServiceImplTest {
 
         @Mock
         private PaymentServiceClient paymentServiceClient;
+
+        @Mock
+        private IdentityGrpcClient identityGrpcClient;
 
         @Mock
         private HttpServletRequest httpRequest;
@@ -1011,28 +1018,195 @@ class BookingServiceImplTest {
                                 BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
                                 .thenReturn(false);
                 when(bookingMapper.toEntity(request)).thenReturn(mappedBooking);
+                when(bookingSeatItemMapper.toEntity(any(CreateBookingRequest.SeatItem.class)))
+                                .thenAnswer(invocation -> {
+                                        CreateBookingRequest.SeatItem seatItemRequest = invocation.getArgument(0);
+                                        BookingSeatItem seatItemEntity = new BookingSeatItem();
+                                        seatItemEntity.setSeatPriceSnapshot(seatItemRequest.getSeatPriceSnapshot());
+                                        return seatItemEntity;
+                                });
                 when(seatLockService.tryLockSeats(eq(showtimeId), eq(List.of("A1")), any(UUID.class), any()))
                                 .thenReturn(true);
                 when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
-                when(bookingMapper.toResponse(any(Booking.class))).thenAnswer(invocation -> {
-                        Booking saved = invocation.getArgument(0);
-                        return BookingResponse.builder()
-                                        .id(saved.getId())
-                                        .showtimeId(saved.getShowtimeId())
-                                        .cinemaId(saved.getCinemaId())
-                                        .bookingStatus(saved.getBookingStatus())
-                                        .paymentStatus(saved.getPaymentStatus())
-                                        .build();
-                });
-                when(cinemaGrpcClient.getCinemaById(cinemaId))
-                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema Star"));
-                when(hallGrpcClient.getHallById(hallId))
-                                .thenReturn(new HallGrpcClient.HallSummary(hallId, cinemaId, "Hall Gold"));
 
-                BookingResponse response = bookingService.createBooking(request, httpRequest);
+                ActionMessageResponse response = bookingService.createBooking(request, httpRequest);
 
-                assertEquals("Hall Gold", response.getHallName());
-                assertEquals("Cinema Star", response.getCinemaName());
+                assertEquals(SuccessMessage.BOOKING_CREATED.getMessage(), response.getMessage());
+        }
+
+        @Test
+        void createStaffBooking_shouldCreateCustomerAndBookingWhenCustomerIdIsNull() {
+                UUID showtimeId = UUID.randomUUID();
+                UUID cinemaId = UUID.randomUUID();
+                UUID hallId = UUID.randomUUID();
+                UUID filmId = UUID.randomUUID();
+                UUID seatId = UUID.randomUUID();
+                UUID operatorId = UUID.randomUUID();
+                UUID customerId = UUID.randomUUID();
+
+                CreateStaffBookingRequest request = new CreateStaffBookingRequest();
+                request.setCustomerId(null);
+                request.setShowtimeId(showtimeId);
+                request.setCinemaId(cinemaId);
+
+                CreateBookingRequest.CustomerInfo customerInfo = new CreateBookingRequest.CustomerInfo();
+                customerInfo.setFullName("Walk-in Customer");
+                customerInfo.setEmail("walkin@example.com");
+                customerInfo.setPhone("0912345678");
+                request.setCustomerInfo(customerInfo);
+
+                CreateBookingRequest.SeatItem seatItem = new CreateBookingRequest.SeatItem();
+                seatItem.setSeatCode("A1");
+                seatItem.setSeatType(com.cinema.Enum.HallEnum.SeatType.STANDARD);
+                seatItem.setSeatPriceSnapshot(BigDecimal.valueOf(70000));
+                request.setSeatItems(List.of(seatItem));
+                request.setProductItems(List.of());
+
+                when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_STAFF);
+                when(identityGrpcClient.createCustomer(any(CreateBookingRequest.CustomerInfo.class))).thenReturn(customerId);
+                when(showtimeGrpcClient.getShowtimeById(showtimeId))
+                                .thenReturn(showtimeSummary(showtimeId, hallId, cinemaId, filmId));
+                when(filmGrpcClient.getFilmById(filmId)).thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                .id(filmId)
+                                .title("Film A")
+                                .build());
+                when(seatGrpcClient.getSeatSnapshotsByCodes(hallId, List.of("A1")))
+                                .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
+                                                com.cinema.Enum.HallEnum.SeatType.STANDARD)));
+                when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                .thenReturn(false);
+                when(bookingMapper.toEntity(any(CreateBookingRequest.class))).thenReturn(new Booking());
+                when(bookingSeatItemMapper.toEntity(any(CreateBookingRequest.SeatItem.class)))
+                                .thenAnswer(invocation -> {
+                                        CreateBookingRequest.SeatItem seatItemRequest = invocation.getArgument(0);
+                                        BookingSeatItem seatItemEntity = new BookingSeatItem();
+                                        seatItemEntity.setSeatPriceSnapshot(seatItemRequest.getSeatPriceSnapshot());
+                                        return seatItemEntity;
+                                });
+                when(seatLockService.tryLockSeats(eq(showtimeId), eq(List.of("A1")), any(UUID.class), any()))
+                                .thenReturn(true);
+                when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+                ActionMessageResponse response = bookingService.createStaffBooking(request, httpRequest);
+
+                assertEquals(SuccessMessage.BOOKING_CREATED.getMessage(), response.getMessage());
+                org.mockito.Mockito.verify(identityGrpcClient).createCustomer(any(CreateBookingRequest.CustomerInfo.class));
+        }
+
+        @Test
+        void createStaffBooking_shouldValidateExistingCustomerWhenCustomerIdIsProvided() {
+                UUID showtimeId = UUID.randomUUID();
+                UUID cinemaId = UUID.randomUUID();
+                UUID hallId = UUID.randomUUID();
+                UUID filmId = UUID.randomUUID();
+                UUID seatId = UUID.randomUUID();
+                UUID customerId = UUID.randomUUID();
+
+                CreateStaffBookingRequest request = new CreateStaffBookingRequest();
+                request.setCustomerId(customerId);
+                request.setShowtimeId(showtimeId);
+                request.setCinemaId(cinemaId);
+
+                CreateBookingRequest.CustomerInfo customerInfo = new CreateBookingRequest.CustomerInfo();
+                customerInfo.setFullName("Existing Customer");
+                customerInfo.setEmail("existing@example.com");
+                customerInfo.setPhone("0912345678");
+                request.setCustomerInfo(customerInfo);
+
+                CreateBookingRequest.SeatItem seatItem = new CreateBookingRequest.SeatItem();
+                seatItem.setSeatCode("A1");
+                seatItem.setSeatType(com.cinema.Enum.HallEnum.SeatType.STANDARD);
+                seatItem.setSeatPriceSnapshot(BigDecimal.valueOf(70000));
+                request.setSeatItems(List.of(seatItem));
+                request.setProductItems(List.of());
+
+                when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_STAFF);
+                when(showtimeGrpcClient.getShowtimeById(showtimeId))
+                                .thenReturn(showtimeSummary(showtimeId, hallId, cinemaId, filmId));
+                when(filmGrpcClient.getFilmById(filmId)).thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                .id(filmId)
+                                .title("Film A")
+                                .build());
+                when(seatGrpcClient.getSeatSnapshotsByCodes(hallId, List.of("A1")))
+                                .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
+                                                com.cinema.Enum.HallEnum.SeatType.STANDARD)));
+                when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                .thenReturn(false);
+                when(bookingMapper.toEntity(any(CreateBookingRequest.class))).thenReturn(new Booking());
+                when(bookingSeatItemMapper.toEntity(any(CreateBookingRequest.SeatItem.class)))
+                                .thenAnswer(invocation -> {
+                                        CreateBookingRequest.SeatItem seatItemRequest = invocation.getArgument(0);
+                                        BookingSeatItem seatItemEntity = new BookingSeatItem();
+                                        seatItemEntity.setSeatPriceSnapshot(seatItemRequest.getSeatPriceSnapshot());
+                                        return seatItemEntity;
+                                });
+                when(seatLockService.tryLockSeats(eq(showtimeId), eq(List.of("A1")), any(UUID.class), any()))
+                                .thenReturn(true);
+                when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+                ActionMessageResponse response = bookingService.createStaffBooking(request, httpRequest);
+
+                assertEquals(SuccessMessage.BOOKING_CREATED.getMessage(), response.getMessage());
+                org.mockito.Mockito.verify(identityGrpcClient).requireCustomerExists(customerId);
+        }
+
+        @Test
+        void createStaffBooking_shouldDeleteCreatedCustomerWhenBookingFails() {
+                UUID showtimeId = UUID.randomUUID();
+                UUID cinemaId = UUID.randomUUID();
+                UUID hallId = UUID.randomUUID();
+                UUID filmId = UUID.randomUUID();
+                UUID seatId = UUID.randomUUID();
+                UUID operatorId = UUID.randomUUID();
+                CreateStaffBookingRequest request = new CreateStaffBookingRequest();
+                request.setCustomerId(null);
+                request.setShowtimeId(showtimeId);
+                request.setCinemaId(cinemaId);
+
+                CreateBookingRequest.CustomerInfo customerInfo = new CreateBookingRequest.CustomerInfo();
+                customerInfo.setFullName("Walk-in Customer");
+                customerInfo.setEmail("walkin@example.com");
+                customerInfo.setPhone("0912345678");
+                request.setCustomerInfo(customerInfo);
+
+                CreateBookingRequest.SeatItem seatItem = new CreateBookingRequest.SeatItem();
+                seatItem.setSeatCode("A1");
+                seatItem.setSeatType(com.cinema.Enum.HallEnum.SeatType.STANDARD);
+                seatItem.setSeatPriceSnapshot(BigDecimal.valueOf(70000));
+                request.setSeatItems(List.of(seatItem));
+                request.setProductItems(List.of());
+
+                when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_STAFF);
+                when(identityGrpcClient.createCustomer(any(CreateBookingRequest.CustomerInfo.class)))
+                                .thenReturn(UUID.randomUUID());
+                when(showtimeGrpcClient.getShowtimeById(showtimeId))
+                                .thenReturn(showtimeSummary(showtimeId, hallId, cinemaId, filmId));
+                when(filmGrpcClient.getFilmById(filmId)).thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                .id(filmId)
+                                .title("Film A")
+                                .build());
+                when(seatGrpcClient.getSeatSnapshotsByCodes(hallId, List.of("A1")))
+                                .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
+                                                com.cinema.Enum.HallEnum.SeatType.STANDARD)));
+                when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                .thenReturn(false);
+                when(bookingMapper.toEntity(any(CreateBookingRequest.class))).thenReturn(new Booking());
+                when(bookingSeatItemMapper.toEntity(any(CreateBookingRequest.SeatItem.class)))
+                                .thenAnswer(invocation -> {
+                                        CreateBookingRequest.SeatItem seatItemRequest = invocation.getArgument(0);
+                                        BookingSeatItem seatItemEntity = new BookingSeatItem();
+                                        seatItemEntity.setSeatPriceSnapshot(seatItemRequest.getSeatPriceSnapshot());
+                                        return seatItemEntity;
+                                });
+                when(seatLockService.tryLockSeats(eq(showtimeId), eq(List.of("A1")), any(UUID.class), any()))
+                                .thenReturn(true);
+                when(bookingRepository.save(any(Booking.class))).thenThrow(new RuntimeException("db error"));
+
+                assertThrows(RuntimeException.class, () -> bookingService.createStaffBooking(request, httpRequest));
+                org.mockito.Mockito.verify(identityGrpcClient).deleteCustomer(any(UUID.class));
         }
 
         @Test

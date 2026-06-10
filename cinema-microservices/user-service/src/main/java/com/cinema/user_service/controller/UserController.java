@@ -7,6 +7,7 @@ import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.user_service.dto.request.*;
+import com.cinema.user_service.dto.response.CustomerInfoResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.services.UserService;
@@ -153,6 +154,12 @@ public class UserController extends BaseController {
             HttpServletRequest request) {
         PageResponse<UserResponse> customerList = userService.getAllCustomer(pageRequest, request);
         return ok(SuccessMessage.USERS_SEARCHED, customerList);
+    }
+
+    @GetMapping("/customers/lookup")
+    public ResponseEntity<APIResponse<CustomerInfoResponse>> getCustomerByPhone(@RequestParam String phone) {
+        CustomerInfoResponse customerInfo = userService.getCustomerByPhone(phone);
+        return ok(SuccessMessage.USER_FETCHED, customerInfo);
     }
 
     @PostMapping("/managers/search")

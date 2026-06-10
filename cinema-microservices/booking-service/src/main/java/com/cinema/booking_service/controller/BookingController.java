@@ -2,6 +2,7 @@ package com.cinema.booking_service.controller;
 
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
+import com.cinema.booking_service.dto.request.CreateStaffBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceReportRequest;
@@ -43,6 +44,14 @@ public class BookingController extends BaseController {
             @Valid @RequestBody CreateBookingRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = bookingService.createBooking(request, httpRequest);
+        return created(SuccessMessage.BOOKING_CREATED, response);
+    }
+
+    @PostMapping("/staff-sell")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createStaffBooking(
+            @Valid @RequestBody CreateStaffBookingRequest request,
+            HttpServletRequest httpRequest) {
+        ActionMessageResponse response = bookingService.createStaffBooking(request, httpRequest);
         return created(SuccessMessage.BOOKING_CREATED, response);
     }
 

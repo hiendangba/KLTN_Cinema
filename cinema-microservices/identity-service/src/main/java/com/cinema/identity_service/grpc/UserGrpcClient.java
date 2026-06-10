@@ -8,6 +8,7 @@ import com.cinema.grpc.user.CreateCustomerProfileRequest;
 import com.cinema.grpc.user.CreateManagerProfileRequest;
 import com.cinema.grpc.user.CreateStaffProfileRequest;
 import com.cinema.grpc.user.DeleteProfileRequest;
+import com.cinema.grpc.user.DeleteCustomerProfileForBookingRequest;
 import com.cinema.grpc.user.UserInternalServiceGrpc;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterManagerRequest;
@@ -94,6 +95,18 @@ public class UserGrpcClient {
 
     public void deleteStaffProfile(UUID userId, UUID actorId, String actorRole) {
         deleteProfile(userId, actorId, actorRole, DeleteAction.STAFF);
+    }
+
+    public void deleteCustomerProfileForBooking(UUID userId) {
+        try {
+            OperationReply reply = userBlockingStub.deleteCustomerProfileForBooking(
+                    DeleteCustomerProfileForBookingRequest.newBuilder()
+                            .setUserId(userId.toString())
+                            .build());
+            ensureSuccess(reply, ErrorCode.NOT_CREATED);
+        } catch (StatusRuntimeException ex) {
+            throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
+        }
     }
 
     private void ensureSuccess(OperationReply reply, ErrorCode fallback) {

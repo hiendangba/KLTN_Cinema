@@ -5,6 +5,7 @@ import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
+import com.cinema.identity_service.dto.request.CreateCustomerRequest;
 import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
@@ -108,5 +109,15 @@ public class UserController extends BaseController {
             @Valid @RequestBody RegisterStaffRequest registerStaffRequest, HttpServletRequest request) {
         ActionMessageResponse registerCustomerResponse = userService.createStaff(registerStaffRequest, request);
         return created(SuccessMessage.PROFILE_CREATED, registerCustomerResponse);
+    }
+
+    @PostMapping("/customer")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createCustomer(
+            @Valid @RequestBody CreateCustomerRequest createCustomerRequest) {
+        userService.createCustomer(createCustomerRequest);
+        ActionMessageResponse response = ActionMessageResponse.builder()
+                .message(SuccessMessage.PROFILE_CREATED.getMessage())
+                .build();
+        return created(SuccessMessage.PROFILE_CREATED, response);
     }
 }

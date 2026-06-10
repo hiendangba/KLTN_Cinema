@@ -15,6 +15,8 @@ service IdentityInternalService {
   rpc UpdateUserAccountByUserId(UpdateUserAccountByUserIdRequest) returns (cinema.common.v1.OperationReply);
   rpc ChangePasswordByUserId(ChangePasswordByUserIdRequest) returns (cinema.common.v1.OperationReply);
   rpc ResetPasswordByUserId(ResetPasswordByUserIdRequest) returns (cinema.common.v1.OperationReply);
+  rpc CreateCustomerProfile(CreateCustomerProfileRequest) returns (CreateCustomerProfileReply);
+  rpc DeleteCustomerProfile(DeleteCustomerProfileRequest) returns (cinema.common.v1.OperationReply);
 }
 
 message LockUserAccountRequest {
@@ -43,6 +45,25 @@ message ChangePasswordByUserIdRequest {
 message ResetPasswordByUserIdRequest {
   string user_id = 1;
   string new_password = 2;
+}
+
+message CreateCustomerProfileRequest {
+  string name = 1;
+  string email = 2;
+  string phone = 3;
+  string dob = 4;
+  string gender = 5;
+}
+
+message CreateCustomerProfileReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  string user_id = 4;
+}
+
+message DeleteCustomerProfileRequest {
+  string user_id = 1;
 }
 
 message IdentityAccountPayload {

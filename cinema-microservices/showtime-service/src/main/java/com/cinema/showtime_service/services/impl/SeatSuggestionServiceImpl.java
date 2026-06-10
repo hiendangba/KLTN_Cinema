@@ -62,23 +62,27 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
 
         SeatGrpcClient.LayoutBundle layout = seatGrpcClient.getLayoutByHallId(showTime.getHallId());
         List<SeatNode> availableSeats = loadAvailableSeats(showtimeId, layout, pricingPolicy);
+        boolean preferCoupleSeat = Boolean.TRUE.equals(request.getPreferCoupleSeat());
+        boolean oddPreferCoupleSeat = preferCoupleSeat && request.getSeatCount() % 2 != 0;
 
         if (availableSeats.size() < request.getSeatCount()) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_AVAILABLE_SEATS);
         }
 
-        List<SeatSuggestionCandidateResponse> candidates = buildExactCandidates(
-                availableSeats,
-                layout,
-                request.getSeatCount(),
-                Boolean.TRUE.equals(request.getPreferCoupleSeat()));
+        List<SeatSuggestionCandidateResponse> candidates = oddPreferCoupleSeat
+                ? List.of()
+                : buildExactCandidates(
+                        availableSeats,
+                        layout,
+                        request.getSeatCount(),
+                        preferCoupleSeat);
 
         if (candidates.isEmpty()) {
             candidates = buildFallbackCandidates(
                     availableSeats,
                     layout,
                     request.getSeatCount(),
-                    Boolean.TRUE.equals(request.getPreferCoupleSeat()));
+                    preferCoupleSeat);
         }
 
         candidates = candidates.stream()
@@ -89,7 +93,7 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
         return SeatSuggestionResponse.builder()
                 .showtimeId(showtimeId)
                 .requestedSeatCount(request.getSeatCount())
-                .preferCoupleSeat(Boolean.TRUE.equals(request.getPreferCoupleSeat()))
+                .preferCoupleSeat(preferCoupleSeat)
                 .candidates(candidates)
                 .build();
     }
@@ -99,9 +103,6 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
         if (request.getSeatCount() < 1 || request.getSeatCount() > 5) {
-            throw new BusinessException(ErrorCode.INVALID_INPUT);
-        }
-        if (Boolean.TRUE.equals(request.getPreferCoupleSeat()) && request.getSeatCount() % 2 != 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
     }

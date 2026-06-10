@@ -7,6 +7,7 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
 import com.cinema.identity_service.dto.request.GoogleLoginRequest;
+import com.cinema.identity_service.dto.request.CreateCustomerRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.dto.request.RegisterStaffRequest;
@@ -24,6 +25,7 @@ import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -461,7 +463,8 @@ class UserServiceImplTokenFlowTest {
                         && "new.user@example.com".equals(profile.getEmail())
                         && LocalDate.of(1970, 1, 1).equals(profile.getDob())
                         && UserEnum.Gender.OTHER.equals(profile.getGender())
-                        && "0999999999".equals(profile.getPhone())
+                        && profile.getPhone() != null
+                        && profile.getPhone().matches("^0\\d{9}$")
                         && UserEnum.UserRole.CUSTOMER.equals(profile.getRole())
         ));
 
@@ -599,6 +602,53 @@ class UserServiceImplTokenFlowTest {
     }
 
     @Test
+    void createCustomer_shouldCreateIdentityAndUserProfile() {
+        CreateCustomerRequest request = CreateCustomerRequest.builder()
+                .name("Walk-in Customer")
+                .email("walkin@example.com")
+                .phone("0912345678")
+                .dob(LocalDate.of(1990, 1, 1))
+                .gender(UserEnum.Gender.FEMALE)
+                .build();
+
+        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(userMapper.toUser(any(CreateCustomerRequest.class))).thenReturn(User.builder().build());
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        UUID customerId = service.createCustomer(request);
+
+        assertThat(customerId).isNotNull();
+        verify(userGrpcClient).createCustomerProfile(argThat(profile ->
+                customerId.equals(profile.getId())
+                        && request.getEmail().equals(profile.getEmail())
+                        && request.getPhone().equals(profile.getPhone())
+                        && request.getName().equals(profile.getName())
+                        && request.getDob().equals(profile.getDob())
+                        && request.getGender().equals(profile.getGender())
+        ));
+    }
+
+    @Test
+    void createCustomer_shouldCleanupUserProfileWhenIdentitySaveFails() {
+        CreateCustomerRequest request = CreateCustomerRequest.builder()
+                .name("Walk-in Customer")
+                .email("walkin-fail@example.com")
+                .phone("0912345679")
+                .build();
+
+        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
+        when(userMapper.toUser(any(CreateCustomerRequest.class))).thenReturn(User.builder().build());
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+        when(userRepository.save(any(User.class))).thenThrow(new RuntimeException("db error"));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.createCustomer(request));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.NOT_CREATED);
+        verify(userGrpcClient).deleteCustomerProfileForBooking(any(UUID.class));
+    }
+
+    @Test
     void googleAuthorize_shouldStoreStateAndRedirectToGoogle() {
         when(googleOAuthService.buildAuthorizationUrl(anyString())).thenReturn("https://accounts.google.com/o/oauth2/v2/auth?mock=1");
 
@@ -694,7 +744,8 @@ class UserServiceImplTokenFlowTest {
                         && "new.user@example.com".equals(profile.getEmail())
                         && LocalDate.of(1970, 1, 1).equals(profile.getDob())
                         && UserEnum.Gender.OTHER.equals(profile.getGender())
-                        && "0999999999".equals(profile.getPhone())
+                        && profile.getPhone() != null
+                        && profile.getPhone().matches("^0\\d{9}$")
                         && UserEnum.UserRole.CUSTOMER.equals(profile.getRole())
         ));
     }
@@ -817,6 +868,45 @@ class UserServiceImplTokenFlowTest {
         service.googleCallback("auth-code", state, null, response);
 
         assertThat(response.getRedirectedUrl()).isEqualTo(googleFailureRedirect("profile_creation_failed"));
+    }
+
+    @Test
+    void googleCallback_shouldRetryWhenGooglePhoneCollides() {
+        String state = "state-phone-retry";
+        String stateKey = "identity:oauth:google:state:" + state;
+        GoogleUserInfo googleUser = new GoogleUserInfo("google-sub-5", "retry.user@example.com", "Retry User");
+        User savedUser = User.builder()
+                .id(UUID.randomUUID())
+                .email("retry.user@example.com")
+                .provider("GOOGLE")
+                .providerId("google-sub-5")
+                .password("encoded-random")
+                .role(UserEnum.UserRole.CUSTOMER)
+                .status(UserEnum.UserStatus.ACTIVE)
+                .build();
+
+        when(valueOperations.get(stateKey)).thenReturn(state);
+        when(googleOAuthService.exchangeCode("auth-code")).thenReturn(googleUser);
+        when(userRepository.findByEmail("retry.user@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode(anyString())).thenReturn("encoded-random");
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        org.mockito.Mockito.doThrow(new BusinessException(ErrorCode.PHONE_EXISTED))
+                .doNothing()
+                .when(userGrpcClient).createCustomerProfile(any(RegisterCustomerRequest.class));
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        service.googleCallback("auth-code", state, null, response);
+
+        assertThat(response.getRedirectedUrl()).isEqualTo(googleSuccessRedirect());
+
+        ArgumentCaptor<RegisterCustomerRequest> requestCaptor = ArgumentCaptor.forClass(RegisterCustomerRequest.class);
+        verify(userGrpcClient, org.mockito.Mockito.times(2)).createCustomerProfile(requestCaptor.capture());
+        assertThat(requestCaptor.getAllValues()).hasSize(2);
+        assertThat(requestCaptor.getAllValues().get(0).getPhone()).matches("^0\\d{9}$");
+        assertThat(requestCaptor.getAllValues().get(1).getPhone()).matches("^0\\d{9}$");
+        assertThat(requestCaptor.getAllValues().get(0).getPhone())
+                .isNotEqualTo(requestCaptor.getAllValues().get(1).getPhone());
     }
 
     private User buildActiveUser() {

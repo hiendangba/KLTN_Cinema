@@ -2,6 +2,7 @@ package com.cinema.identity_service.services;
 
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
+import com.cinema.identity_service.dto.request.CreateCustomerRequest;
 import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
@@ -11,12 +12,18 @@ import com.cinema.identity_service.dto.request.VerifyRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import java.util.UUID;
+
 public interface UserService {
     ActionMessageResponse registerCustomer(RegisterCustomerRequest registerCustomerRequest, HttpServletResponse response);
+
+    UUID createCustomer(CreateCustomerRequest request);
 
     ActionMessageResponse createManager(RegisterManagerRequest registerManagerRequest, HttpServletRequest request);
 
     ActionMessageResponse createStaff(RegisterStaffRequest registerStaffRequest, HttpServletRequest request);
+
+    ActionMessageResponse deleteCustomerProfileForBooking(UUID userId);
 
     ActionMessageResponse verifyOTP(VerifyRequest verifyRequest, HttpServletRequest request, HttpServletResponse response);
 

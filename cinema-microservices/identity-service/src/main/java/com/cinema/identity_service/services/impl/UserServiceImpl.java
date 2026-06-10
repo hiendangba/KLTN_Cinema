@@ -10,6 +10,7 @@ import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 
 import com.cinema.identity_service.dto.request.ForgotPasswordRequest;
+import com.cinema.identity_service.dto.request.CreateCustomerRequest;
 import com.cinema.identity_service.dto.request.GoogleLoginRequest;
 import com.cinema.identity_service.dto.request.LoginRequest;
 import com.cinema.identity_service.dto.request.RegisterCustomerRequest;
@@ -60,6 +61,8 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+import com.github.f4b6a3.uuid.UuidCreator;
+
 import static com.cinema.exception.ErrorCode.*;
 
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -102,9 +105,9 @@ public class UserServiceImpl implements UserService {
     private static final String GOOGLE_STATE_PREFIX = "identity:oauth:google:state:";
     private static final long TOKEN_EXPIRY_BUFFER = 60_000L;
     private static final String GOOGLE_PROVIDER = "GOOGLE";
+    private static final int GOOGLE_PHONE_MAX_RETRIES = 5;
     private static final LocalDate DEFAULT_GOOGLE_DOB = LocalDate.of(1970, 1, 1);
     private static final UserEnum.Gender DEFAULT_GOOGLE_GENDER = UserEnum.Gender.OTHER;
-    private static final String DEFAULT_GOOGLE_PHONE = "0999999999";
     private static final String GOOGLE_OAUTH_PARAM = "oauth";
     private static final String GOOGLE_OAUTH_PARAM_VALUE = "google";
     private static final String GOOGLE_STATUS_PARAM = "status";
@@ -116,6 +119,8 @@ public class UserServiceImpl implements UserService {
     private static final String GOOGLE_ERROR_REASON_LOGIN_FAILED = "login_failed";
     private static final String GOOGLE_ERROR_REASON_PROFILE_CREATION_FAILED = "profile_creation_failed";
     private static final String GOOGLE_ERROR_REASON_OAUTH_DENIED = "oauth_denied";
+    private static final LocalDate DEFAULT_CUSTOMER_DOB = LocalDate.of(1900, 1, 1);
+    private static final UserEnum.Gender DEFAULT_CUSTOMER_GENDER = UserEnum.Gender.OTHER;
 
     static Pattern STRONG_PASSWORD_PATTERN = Pattern
             .compile("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,32}$");
@@ -171,6 +176,53 @@ public class UserServiceImpl implements UserService {
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.REGISTERED.getMessage())
                 .build();
+    }
+
+    @Override
+    public UUID createCustomer(CreateCustomerRequest request) {
+        String email = normalizeEmail(request.getEmail());
+        String phone = normalizePhone(request.getPhone());
+
+        if (userRepository.existsByEmail(email)) {
+            throw new BusinessException(EMAIL_EXISTED);
+        }
+
+        UUID customerId = UuidCreator.getTimeOrderedEpoch();
+        LocalDate dob = request.getDob() == null ? DEFAULT_CUSTOMER_DOB : request.getDob();
+        UserEnum.Gender gender = request.getGender() == null ? DEFAULT_CUSTOMER_GENDER : request.getGender();
+
+        RegisterCustomerRequest userServiceRequest = RegisterCustomerRequest.builder()
+                .id(customerId)
+                .name(normalizeText(request.getName()))
+                .email(email)
+                .dob(dob)
+                .gender(gender)
+                .phone(phone)
+                .role(UserEnum.UserRole.CUSTOMER)
+                .build();
+
+        userGrpcClient.createCustomerProfile(userServiceRequest);
+
+        try {
+            User customer = userMapper.toUser(request);
+            customer.setId(customerId);
+            customer.setEmail(email);
+            customer.setPassword(passwordEncoder.encode(UUID.randomUUID().toString()));
+            userRepository.save(customer);
+            log.info("Customer created in identity-service and user-service: customerId={}, email={}",
+                    customerId, email);
+            return customerId;
+        } catch (RuntimeException ex) {
+            log.error("Failed to persist customer in identity-service after user-service profile creation: customerId={}, email={}",
+                    customerId, email, ex);
+            try {
+                userGrpcClient.deleteCustomerProfileForBooking(customerId);
+            } catch (Exception cleanupEx) {
+                log.warn("Failed to clean up user-service customer profile after identity persistence error: customerId={}, email={}",
+                        customerId, email, cleanupEx);
+            }
+            throw new BusinessException(ErrorCode.NOT_CREATED);
+        }
     }
 
     // Create manager account in identity-service, then provision manager profile in
@@ -232,6 +284,33 @@ public class UserServiceImpl implements UserService {
         log.info("Welcome email dispatch queued for manager: email={}", registerManagerRequest.getEmail());
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.PROFILE_CREATED.getMessage())
+                .build();
+    }
+
+    @Override
+    public ActionMessageResponse deleteCustomerProfileForBooking(UUID userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        User customer = userRepository.findById(userId)
+                .filter(user -> !Boolean.TRUE.equals(user.getIsDeleted()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        customer.setIsDeleted(true);
+        userRepository.save(customer);
+
+        try {
+            userGrpcClient.deleteCustomerProfileForBooking(userId);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.error("Failed to delete customer profile in user-service during booking cleanup: customerId={}",
+                    userId, ex);
+            throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
+        }
+
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PROFILE_DELETED.getMessage())
                 .build();
     }
 
@@ -746,31 +825,40 @@ public class UserServiceImpl implements UserService {
         log.info("Google user persisted in identity-service: userId={} email={}",
                 savedUser.getId(), maskEmail(savedUser.getEmail()));
 
-        try {
-            RegisterCustomerRequest userServiceRequest = RegisterCustomerRequest.builder()
-                    .id(savedUser.getId())
-                    .name(resolveGoogleDisplayName(googleUserInfo))
-                    .email(savedUser.getEmail())
-                    .dob(DEFAULT_GOOGLE_DOB)
-                    .gender(DEFAULT_GOOGLE_GENDER)
-                    .phone(DEFAULT_GOOGLE_PHONE)
-                    .role(savedUser.getRole())
-                    .build();
+        for (int attempt = 0; attempt < GOOGLE_PHONE_MAX_RETRIES; attempt++) {
+            String candidatePhone = buildGooglePlaceholderPhone(savedUser.getId(), attempt);
+            try {
+                RegisterCustomerRequest userServiceRequest = RegisterCustomerRequest.builder()
+                        .id(savedUser.getId())
+                        .name(resolveGoogleDisplayName(googleUserInfo))
+                        .email(savedUser.getEmail())
+                        .dob(DEFAULT_GOOGLE_DOB)
+                        .gender(DEFAULT_GOOGLE_GENDER)
+                        .phone(candidatePhone)
+                        .role(savedUser.getRole())
+                        .build();
 
-            userGrpcClient.createCustomerProfile(userServiceRequest);
-            log.info("Google user profile created in user-service: userId={} email={}",
-                    savedUser.getId(), maskEmail(savedUser.getEmail()));
-        } catch (BusinessException e) {
-            log.error("Failed to create Google user profile in user-service: userId={} email={} errorCode={}",
-                    savedUser.getId(), maskEmail(savedUser.getEmail()), e.getErrorCode(), e);
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to create Google user profile in user-service: userId={} email={}",
-                    savedUser.getId(), maskEmail(savedUser.getEmail()), e);
-            throw new BusinessException(ErrorCode.NOT_CREATED);
+                userGrpcClient.createCustomerProfile(userServiceRequest);
+                log.info("Google user profile created in user-service: userId={} email={} phoneAttempt={}",
+                        savedUser.getId(), maskEmail(savedUser.getEmail()), attempt + 1);
+                return savedUser;
+            } catch (BusinessException e) {
+                if (e.getErrorCode() == ErrorCode.PHONE_EXISTED && attempt < GOOGLE_PHONE_MAX_RETRIES - 1) {
+                    log.warn("Google user phone collision in user-service: userId={} email={} attempt={} phone={}",
+                            savedUser.getId(), maskEmail(savedUser.getEmail()), attempt + 1, candidatePhone);
+                    continue;
+                }
+                log.error("Failed to create Google user profile in user-service: userId={} email={} errorCode={}",
+                        savedUser.getId(), maskEmail(savedUser.getEmail()), e.getErrorCode(), e);
+                throw e;
+            } catch (Exception e) {
+                log.error("Failed to create Google user profile in user-service: userId={} email={}",
+                        savedUser.getId(), maskEmail(savedUser.getEmail()), e);
+                throw new BusinessException(ErrorCode.NOT_CREATED);
+            }
         }
 
-        return savedUser;
+        throw new BusinessException(ErrorCode.NOT_CREATED);
     }
 
     private String resolveGoogleDisplayName(GoogleUserInfo googleUserInfo) {
@@ -785,6 +873,14 @@ public class UserServiceImpl implements UserService {
             return email.substring(0, atIndex);
         }
         return email;
+    }
+
+    private String buildGooglePlaceholderPhone(UUID userId, int attempt) {
+        long normalized = Math.floorMod(
+                (userId == null ? 0L : (userId.getMostSignificantBits() ^ userId.getLeastSignificantBits()))
+                        ^ ((long) attempt + 1L) * 1_000_003L,
+                1_000_000_000L);
+        return String.format("0%09d", normalized);
     }
 
     private void issueAuthTokens(User user, HttpServletResponse response) {
@@ -862,6 +958,24 @@ public class UserServiceImpl implements UserService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private String normalizeText(String value) {
+        return value == null ? null : value.trim();
+    }
+
+    private String normalizeEmail(String value) {
+        if (!hasText(value)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return value.trim();
+    }
+
+    private String normalizePhone(String value) {
+        if (!hasText(value)) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return value.trim();
     }
 
     private int safeLength(String value) {

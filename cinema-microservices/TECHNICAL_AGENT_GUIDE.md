@@ -30,6 +30,49 @@
 - Remaining risk:
   - một số service khác trong reactor (`cinema-service`, `hall-service`) vẫn có dấu hiệu build nhiễu từ gRPC/classpath trong workspace hiện tại, nên nếu cần full reactor pass thì nên chạy lại trên môi trường sạch hoặc sau khi dọn `target/` toàn repo.
 
+## Changelog ngắn (2026-06-11)
+
+- `identity-service` now owns customer creation for staff-sell through both REST `POST /api/auth/customer` and gRPC `CreateCustomerProfile`.
+- `booking-service` no longer creates/deletes walk-in customers through `user-service` HTTP; when `customerId = null` it calls `identity-service` gRPC, receives the new `userId`, and sets `booking.userId` from that reply.
+- `customerId = null` skips id lookup entirely; the flow only validates duplicate `phone` and `email` when creating the new customer.
+- `identity-service` performs best-effort cleanup if identity persistence fails after user profile creation, and `booking-service` deletes the created customer through `identity-service` if booking save fails.
+- `user-service` adds a dedicated gRPC delete RPC for booking cleanup so the compensation path does not need the admin-actor audit route.
+- Đã dọn sạch 3 REST internal customer endpoint cũ ở `user-service` (`POST /internal/customers`, `GET /internal/customers/{id}`, `DELETE /internal/customers/{id}`), đồng thời bỏ luôn `booking-service` HTTP client lookup cũ; nhánh `customerId != null` giờ validate tồn tại qua `identity-service` gRPC thay vì `user-service` REST.
+- `BookingServiceImplTest` và `UserServiceImplPhoneLookupTest` đã được cập nhật/giảm scope theo luồng mới, build xác nhận pass với `BookingServiceImplTest`: `22 tests, 0 failures, 0 errors` và `UserServiceImplPhoneLookupTest`: `2 tests, 0 failures, 0 errors`.
+- Files chính đã chạm:
+  - `common-lib/src/main/proto/identity_internal.proto`
+  - `common-lib/src/main/proto/user_internal.proto`
+  - `booking-service/src/main/java/com/cinema/booking_service/grpc/IdentityGrpcClient.java`
+  - `booking-service/src/main/java/com/cinema/booking_service/services/impl/BookingServiceImpl.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/controller/UserController.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/grpc/IdentityInternalGrpcService.java`
+  - `identity-service/src/main/java/com/cinema/identity_service/services/impl/UserServiceImpl.java`
+  - `user-service/src/main/java/com/cinema/user_service/grpc/UserInternalGrpcService.java`
+- Verification:
+  - `mvnw.cmd -f ..\\pom.xml -pl booking-service,identity-service,user-service -am -Dtest=BookingServiceImplTest,UserServiceImplTokenFlowTest -Dsurefire.failIfNoSpecifiedTests=false test`
+  - `BookingServiceImplTest`: `21 tests, 0 failures, 0 errors`
+  - `UserServiceImplTokenFlowTest`: `30 tests, 0 failures, 0 errors`
+- Remaining risk:
+  - compensation vẫn là best-effort giữa 2 service; nếu gRPC delete fail sau khi booking/customer đã được tạo, có thể còn lệch tạm thời cho tới khi retry hoặc dọn tay.
+
+### Showtime service: ghế couple odd count fallback
+
+- API gợi ý ghế trong `showtime-service` không còn reject cứng khi `preferCoupleSeat=true` nhưng `seatCount` là số lẻ.
+- Với case này, service sẽ bỏ qua nhánh exact và đi thẳng sang fallback, ưu tiên tổ hợp couple gần nhất theo số chẵn trước, phần ghế dư còn lại xử lý theo logic sắp xếp hiện tại.
+- Files touched: `showtime-service/src/main/java/com/cinema/showtime_service/services/impl/SeatSuggestionServiceImpl.java`, `showtime-service/src/test/java/com/cinema/showtime_service/services/impl/SeatSuggestionServiceImplTest.java`.
+- Verification:
+  - test mục tiêu bị chặn bởi lỗi compile sẵn có ở `showtime-service/src/test/java/com/cinema/showtime_service/services/impl/ShowTimeServiceImplTest.java` (`ActionMessageResponse#getSuccessResponse()` chưa tồn tại)
+
+### User service: lookup customer theo phone
+
+- `user-service` siết `phone` thành unique ở entity và thêm validate tại create/update để tránh trùng dữ liệu customer/manager/staff.
+- Thêm endpoint exact lookup `GET /api/users/customers/lookup?phone=...` để FE bán vé tra nhanh customer theo số điện thoại và chỉ nhận payload tối giản `id`, `name`, `phone`.
+- Luồng Google customer không còn dùng phone hằng số cứng; phone placeholder được sinh theo từng user để không đụng unique constraint khi đồng bộ sang `user-service`.
+- Nếu Google placeholder phone vẫn đụng unique, service sẽ retry tối đa 5 lần với candidate phone khác trước khi fail.
+- Files touched: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `user-service/src/main/java/com/cinema/user_service/entity/User.java`, `user-service/src/main/java/com/cinema/user_service/repository/UserRepository.java`, `user-service/src/main/java/com/cinema/user_service/controller/UserController.java`, `user-service/src/main/java/com/cinema/user_service/services/impl/UserServiceImpl.java`, `user-service/src/main/java/com/cinema/user_service/dto/response/CustomerInfoResponse.java`, `identity-service/src/main/java/com/cinema/identity_service/services/impl/UserServiceImpl.java`.
+- Verification:
+  - `mvn -pl user-service,identity-service -am -Dtest=UserServiceImplPhoneLookupTest,UserServiceImplAuditTest,UserServiceImplTokenFlowTest -Dsurefire.failIfNoSpecifiedTests=false test`
+
 ### Cinema service: gộp staff vào create/update rạp
 
 - `cinema-service` đã đổi `createCinema`/`updateCinema` để nhận luôn `staffIds` trong request và tự sync `cinema_staff` trong cùng transaction thay vì phụ thuộc hoàn toàn vào endpoint gán staff riêng.

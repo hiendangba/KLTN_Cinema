@@ -12,6 +12,7 @@ import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.cinema.user_service.grpc.CinemaGrpcClient;
 import com.cinema.user_service.dto.request.*;
+import com.cinema.user_service.dto.response.CustomerInfoResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.entity.User;
@@ -63,6 +64,9 @@ public class UserServiceImpl implements UserService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.EMAIL_EXISTED);
         }
+        if (userRepository.existsByPhone(request.getPhone())) {
+            throw new BusinessException(ErrorCode.PHONE_EXISTED);
+        }
 
         User user = userMapper.toUser(request);
         userRepository.save(user);
@@ -79,6 +83,9 @@ public class UserServiceImpl implements UserService {
 
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.EMAIL_EXISTED);
+        }
+        if (userRepository.existsByPhone(request.getPhone())) {
+            throw new BusinessException(ErrorCode.PHONE_EXISTED);
         }
 
         User manager = userMapper.toUserManager(request);
@@ -98,12 +105,34 @@ public class UserServiceImpl implements UserService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.EMAIL_EXISTED);
         }
+        if (userRepository.existsByPhone(request.getPhone())) {
+            throw new BusinessException(ErrorCode.PHONE_EXISTED);
+        }
 
         User staff = userMapper.toUserStaff(request);
         userRepository.save(staff);
         log.info("Staff profile created: staffId={}, email={}", request.getId(), request.getEmail());
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.PROFILE_CREATED.getMessage())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CustomerInfoResponse getCustomerByPhone(String phone) {
+        String normalizedPhone = phone == null ? null : phone.trim();
+        if (normalizedPhone == null || normalizedPhone.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        User customer = userRepository.findByPhoneAndRoleAndIsDeletedFalse(
+                        normalizedPhone,
+                        UserEnum.UserRole.CUSTOMER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        return CustomerInfoResponse.builder()
+                .id(customer.getId())
+                .name(customer.getName())
+                .phone(customer.getPhone())
                 .build();
     }
 
@@ -121,6 +150,9 @@ public class UserServiceImpl implements UserService {
         // Check if email is already used by another user
         if (!user.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.EMAIL_EXISTED);
+        }
+        if (!Objects.equals(user.getPhone(), request.getPhone()) && userRepository.existsByPhone(request.getPhone())) {
+            throw new BusinessException(ErrorCode.PHONE_EXISTED);
         }
 
         userMapper.updateUserCustomer(user, request);
@@ -153,6 +185,9 @@ public class UserServiceImpl implements UserService {
         if (!manager.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.EMAIL_EXISTED);
         }
+        if (!Objects.equals(manager.getPhone(), request.getPhone()) && userRepository.existsByPhone(request.getPhone())) {
+            throw new BusinessException(ErrorCode.PHONE_EXISTED);
+        }
 
         userMapper.updateUserManager(manager, request);
         userRepository.save(manager);
@@ -182,6 +217,9 @@ public class UserServiceImpl implements UserService {
         // Check if email is already used by another user
         if (!staff.getEmail().equals(request.getEmail()) && userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.EMAIL_EXISTED);
+        }
+        if (!Objects.equals(staff.getPhone(), request.getPhone()) && userRepository.existsByPhone(request.getPhone())) {
+            throw new BusinessException(ErrorCode.PHONE_EXISTED);
         }
 
         userMapper.updateUserStaff(staff, request);
@@ -214,6 +252,7 @@ public class UserServiceImpl implements UserService {
         AuditIdentity actor = resolveActor(actorId, actorRole);
 
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
+        ensurePhoneAvailableForUpdate(target.getPhone(), request.getPhone());
         userMapper.updateUserCustomer(target, request);
         userRepository.save(target);
         applyPasswordChangeIfRequested(target.getId(), request.getOldPassword(), request.getNewPassword(), false);
@@ -246,6 +285,7 @@ public class UserServiceImpl implements UserService {
         AuditIdentity actor = resolveActor(actorId, actorRole);
 
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
+        ensurePhoneAvailableForUpdate(target.getPhone(), request.getPhone());
         userMapper.updateUserManager(target, request);
         userRepository.save(target);
         applyPasswordChangeIfRequested(target.getId(), request.getOldPassword(), request.getNewPassword(), false);
@@ -282,6 +322,7 @@ public class UserServiceImpl implements UserService {
         AuditIdentity actor = resolveActor(actorId, actorRole);
 
         ensureEmailAvailableForUpdate(target.getEmail(), request.getEmail());
+        ensurePhoneAvailableForUpdate(target.getPhone(), request.getPhone());
         userMapper.updateUserStaff(target, request);
         userRepository.save(target);
         applyPasswordChangeIfRequested(target.getId(), request.getOldPassword(), request.getNewPassword(), false);
@@ -506,6 +547,21 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public ActionMessageResponse deleteCustomerProfileForBooking(UUID userId) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        User target = userRepository.findByIdAndRoleAndIsDeletedFalse(userId, UserEnum.UserRole.CUSTOMER)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        softDelete(target);
+        userRepository.save(target);
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PROFILE_DELETED.getMessage())
+                .build();
+    }
+
+    @Override
     public UserResponse getMyProfile(HttpServletRequest request) {
         UUID userUUID = RequestAuthUtils.requireUserId(request, ErrorCode.UNAUTHORIZED);
 
@@ -635,6 +691,12 @@ public class UserServiceImpl implements UserService {
     private void ensureEmailAvailableForUpdate(String currentEmail, String nextEmail) {
         if (!Objects.equals(currentEmail, nextEmail) && userRepository.existsByEmail(nextEmail)) {
             throw new BusinessException(ErrorCode.EMAIL_EXISTED);
+        }
+    }
+
+    private void ensurePhoneAvailableForUpdate(String currentPhone, String nextPhone) {
+        if (!Objects.equals(currentPhone, nextPhone) && userRepository.existsByPhone(nextPhone)) {
+            throw new BusinessException(ErrorCode.PHONE_EXISTED);
         }
     }
 

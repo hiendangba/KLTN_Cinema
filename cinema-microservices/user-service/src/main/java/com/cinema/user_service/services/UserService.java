@@ -5,6 +5,7 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.Enum.UserEnum;
 import com.cinema.user_service.dto.request.*;
+import com.cinema.user_service.dto.response.CustomerInfoResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,6 +18,8 @@ public interface UserService {
     ActionMessageResponse createManagerProfile(RegisterManagerRequest request);
 
     ActionMessageResponse createStaffProfile(RegisterStaffRequest request);
+
+    CustomerInfoResponse getCustomerByPhone(String phone);
 
     ActionMessageResponse updateCustomerProfile(UpdateCustomerRequest request, HttpServletRequest httpRequest);
 
@@ -53,6 +56,8 @@ public interface UserService {
     ActionMessageResponse restoreStaffProfile(UUID userId, HttpServletRequest httpRequest);
 
     ActionMessageResponse restoreStaffProfile(UUID userId, UUID actorId, UserEnum.UserRole actorRole);
+
+    ActionMessageResponse deleteCustomerProfileForBooking(UUID userId);
 
     UserResponse getMyProfile(HttpServletRequest request);
 

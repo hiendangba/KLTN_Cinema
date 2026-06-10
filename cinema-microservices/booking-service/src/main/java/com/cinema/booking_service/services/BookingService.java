@@ -1,6 +1,7 @@
 package com.cinema.booking_service.services;
 
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
+import com.cinema.booking_service.dto.request.CreateStaffBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
 import com.cinema.booking_service.dto.request.ShowtimePerformanceReportRequest;
@@ -17,6 +18,8 @@ import java.util.UUID;
 
 public interface BookingService {
     ActionMessageResponse createBooking(CreateBookingRequest request, HttpServletRequest httpRequest);
+
+    ActionMessageResponse createStaffBooking(CreateStaffBookingRequest request, HttpServletRequest httpRequest);
 
     BookingResponse getBookingById(UUID id, HttpServletRequest httpRequest);
 

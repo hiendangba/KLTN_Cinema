@@ -2,6 +2,7 @@ package com.cinema.booking_service.services.impl;
 
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
+import com.cinema.booking_service.dto.request.CreateStaffBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
@@ -25,6 +26,7 @@ import com.cinema.booking_service.enums.PaymentStatus;
 import com.cinema.booking_service.enums.ProductStatus;
 import com.cinema.booking_service.grpc.CinemaGrpcClient;
 import com.cinema.booking_service.grpc.FilmGrpcClient;
+import com.cinema.booking_service.grpc.IdentityGrpcClient;
 import com.cinema.booking_service.grpc.HallGrpcClient;
 import com.cinema.booking_service.http.PaymentServiceClient;
 import com.cinema.booking_service.grpc.SeatGrpcClient;
@@ -57,6 +59,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.lang.reflect.Array;
@@ -80,6 +83,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
@@ -95,6 +99,7 @@ public class BookingServiceImpl implements BookingService {
     private final SeatGrpcClient seatGrpcClient;
     private final SeatLockService seatLockService;
     private final PaymentServiceClient paymentServiceClient;
+    private final IdentityGrpcClient identityGrpcClient;
 
     @Value("${booking.seat-lock-minutes:5}")
     private long seatLockMinutes;
@@ -105,6 +110,41 @@ public class BookingServiceImpl implements BookingService {
         validateBookingCreatorRole(httpRequest);
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         UUID userId = HeaderNames.ROLE_CUSTOMER.equals(role) ? resolveUserId(httpRequest) : null;
+
+        return createBookingInternal(request, userId);
+    }
+
+    @Override
+    @Transactional
+    public ActionMessageResponse createStaffBooking(CreateStaffBookingRequest request, HttpServletRequest httpRequest) {
+        validateOperatorRole(httpRequest);
+
+        UUID customerId = request.getCustomerId();
+        boolean createdCustomer = false;
+        UUID bookingUserId = customerId;
+        if (bookingUserId == null) {
+            bookingUserId = identityGrpcClient.createCustomer(request.getCustomerInfo());
+            createdCustomer = true;
+        } else {
+            identityGrpcClient.requireCustomerExists(bookingUserId);
+        }
+
+        try {
+            return createBookingInternal(request, bookingUserId);
+        } catch (RuntimeException ex) {
+            if (createdCustomer) {
+                try {
+                    identityGrpcClient.deleteCustomer(bookingUserId);
+                } catch (RuntimeException cleanupEx) {
+                    log.warn("Failed to clean up identity customer after booking failure: customerId={}",
+                            bookingUserId, cleanupEx);
+                }
+            }
+            throw ex;
+        }
+    }
+
+    private ActionMessageResponse createBookingInternal(CreateBookingRequest request, UUID userId) {
 
         List<CreateBookingRequest.SeatItem> seatItems = request.getSeatItems();
         if (seatItems == null || seatItems.isEmpty() || seatItems.size() > 5) {

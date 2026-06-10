@@ -21,6 +21,7 @@ public enum ErrorCode {
                         HttpStatus.BAD_REQUEST),
         ID_EXISTED("4000", "Lỗi trong lúc tạo mới, vui lòng thử lại vì ID đã trùng!", HttpStatus.CONFLICT),
         EMAIL_EXISTED("4001", "Email đã được đăng ký trước đó", HttpStatus.CONFLICT),
+        PHONE_EXISTED("4014", "Số điện thoại đã được đăng ký trước đó", HttpStatus.CONFLICT),
         USER_NOT_FOUND("4002", "Không tìm thấy người dùng tương ứng", HttpStatus.NOT_FOUND),
         OTP_ALREADY_SENT("4003", "Đã gửi mã OTP rồi. Vui lòng đợi 5 phút sau thử lại!", HttpStatus.CONFLICT),
         OTP_INVALID("4004", "Mã OTP bạn vừa nhập không chính xác hoặc đã hết hạn. Hãy thử lại!",

@@ -48,6 +48,8 @@ spring:
       channels:
         cinema:
           address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
+        identity:
+          address: "${IDENTITY_GRPC_HOST:localhost}:${IDENTITY_GRPC_PORT:9190}"
         film:
           address: "${FILM_GRPC_HOST:localhost}:${FILM_GRPC_PORT:9192}"
         showtime:

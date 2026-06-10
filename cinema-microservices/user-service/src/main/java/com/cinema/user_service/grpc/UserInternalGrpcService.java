@@ -7,6 +7,7 @@ import com.cinema.grpc.common.OperationReply;
 import com.cinema.grpc.user.CheckUserExistsReply;
 import com.cinema.grpc.user.CheckUserExistsRequest;
 import com.cinema.grpc.user.DeleteProfileRequest;
+import com.cinema.grpc.user.DeleteCustomerProfileForBookingRequest;
 import com.cinema.grpc.user.CreateCustomerProfileRequest;
 import com.cinema.grpc.user.CreateManagerProfileRequest;
 import com.cinema.grpc.user.CreateStaffProfileRequest;
@@ -133,6 +134,28 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
     @Override
     public void deleteCustomerProfile(DeleteProfileRequest request, StreamObserver<OperationReply> responseObserver) {
         handleDelete(request, responseObserver, UserEnum.UserRole.CUSTOMER);
+    }
+
+    @Override
+    public void deleteCustomerProfileForBooking(
+            DeleteCustomerProfileForBookingRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            UUID userId = UUID.fromString(request.getUserId());
+            userService.deleteCustomerProfileForBooking(userId);
+            responseObserver.onNext(success("Customer profile deleted successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while deleting booking customer profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
     }
 
     @Override
