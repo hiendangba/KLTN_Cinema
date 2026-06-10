@@ -1,5 +1,6 @@
 package com.cinema.cinema_service.services.impl;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.cinema_service.dto.request.AssignCinemaStaffRequest;
 import com.cinema.cinema_service.dto.request.CinemaField;
 import com.cinema.cinema_service.dto.request.CreateCinemaRequest;
@@ -75,7 +76,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaRepository.save(cinema);
 
         return ActionMessageResponse.builder()
-                .message("Tạo rạp phim thành công")
+                .message(SuccessMessage.CINEMA_CREATED.getMessage())
                 .build();
     }
 
@@ -117,7 +118,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaRepository.save(cinema);
 
         return ActionMessageResponse.builder()
-                .message("Cập nhật rạp thành công")
+                .message(SuccessMessage.CINEMA_UPDATED.getMessage())
                 .build();
     }
 
@@ -135,7 +136,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaRepository.save(cinema);
 
         return ActionMessageResponse.builder()
-                .message("Cập nhật trạng thái rạp thành công")
+                .message(SuccessMessage.CINEMA_STATUS_UPDATED.getMessage())
                 .build();
     }
 
@@ -156,7 +157,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaStaffRepository.saveAll(cinemaStaffs);
 
         return ActionMessageResponse.builder()
-                .message("Xóa rạp thành công")
+                .message(SuccessMessage.CINEMA_DELETED.getMessage())
                 .build();
     }
 
@@ -179,7 +180,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaStaffRepository.save(cinemaStaff);
 
         return ActionMessageResponse.builder()
-                .message("Gán nhân viên vào rạp thành công")
+                .message(SuccessMessage.CINEMA_STAFF_ASSIGNED.getMessage())
                 .build();
     }
 
@@ -199,7 +200,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaStaffRepository.save(cinemaStaff);
 
         return ActionMessageResponse.builder()
-                .message("Cập nhật nhân viên vào rạp thành công")
+                .message(SuccessMessage.CINEMA_STAFF_UPDATED.getMessage())
                 .build();
     }
 
@@ -219,7 +220,7 @@ public class CinemaServiceImpl implements CinemaService {
         cinemaStaffRepository.save(cinemaStaff);
 
         return ActionMessageResponse.builder()
-                .message("Gỡ nhân viên khỏi rạp thành công")
+                .message(SuccessMessage.CINEMA_STAFF_UNASSIGNED.getMessage())
                 .build();
     }
 

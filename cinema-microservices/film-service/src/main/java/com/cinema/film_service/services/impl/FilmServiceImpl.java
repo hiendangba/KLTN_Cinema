@@ -1,6 +1,7 @@
 package com.cinema.film_service.services.impl;
 
 import com.cinema.Enum.FilmEnum;
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
@@ -62,7 +63,7 @@ public class FilmServiceImpl implements FilmService {
         Film savedFilm = filmRepository.save(film);
         log.info("Film created successfully with ID: {}", savedFilm.getId());
         return ActionMessageResponse.builder()
-                .message("Tạo phim thành công")
+                .message(SuccessMessage.FILM_CREATED.getMessage())
                 .build();
     }
 
@@ -88,7 +89,7 @@ public class FilmServiceImpl implements FilmService {
         filmRepository.save(film);
         log.info("Film updated successfully: {}", id);
         return ActionMessageResponse.builder()
-                .message("Cập nhật phim thành công")
+                .message(SuccessMessage.FILM_UPDATED.getMessage())
                 .build();
     }
 
@@ -154,7 +155,7 @@ public class FilmServiceImpl implements FilmService {
         filmRepository.save(film);
         log.info("Film deleted successfully: {}", id);
         return ActionMessageResponse.builder()
-                .message("Xóa phim thành công")
+                .message(SuccessMessage.FILM_DELETED.getMessage())
                 .build();
     }
 

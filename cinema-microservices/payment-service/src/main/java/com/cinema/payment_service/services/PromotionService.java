@@ -11,9 +11,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 
 public interface PromotionService {
-    PromotionResponse createPromotion(PromotionUpsertRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse createPromotion(PromotionUpsertRequest request, HttpServletRequest httpRequest);
 
-    PromotionResponse updatePromotion(UUID id, PromotionUpsertRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse updatePromotion(UUID id, PromotionUpsertRequest request, HttpServletRequest httpRequest);
 
     PromotionResponse getPromotionById(UUID id, HttpServletRequest httpRequest);
 

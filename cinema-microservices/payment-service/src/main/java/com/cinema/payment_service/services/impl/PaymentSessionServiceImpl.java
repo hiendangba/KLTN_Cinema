@@ -1,5 +1,6 @@
 package com.cinema.payment_service.services.impl;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.config.MomoGatewayProperties;
@@ -19,6 +20,7 @@ import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.SortField;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.excel.ExcelExportUtils;
 import com.cinema.payment_service.entity.PaymentTransaction;
@@ -83,7 +85,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     @Override
     @Transactional
-    public PaymentSessionResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId) {
+    public ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId) {
         if (request == null || request.getBookingId() == null || requesterUserId == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
@@ -96,18 +98,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         if ("PAID".equalsIgnoreCase(bookingContext.paymentStatus())
                 || "CONFIRMED".equalsIgnoreCase(bookingContext.bookingStatus())) {
-            return paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByTimeCreatedDesc(
+            paymentTransactionRepository.findFirstByBookingIdAndStatusOrderByTimeCreatedDesc(
                     bookingId,
                     PaymentTransactionStatus.PAID)
-                    .map(transaction -> paymentMapper.toPaymentSessionResponse(
-                            transaction,
-                            readCheckoutFields(transaction.getCheckoutPayloadJson()),
-                            null))
                     .orElseGet(() -> paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId)
-                            .map(transaction -> paymentMapper.toPaymentSessionResponse(
-                                    transaction,
-                                    readCheckoutFields(transaction.getCheckoutPayloadJson()),
-                                    null))
                             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND)));
         }
 
@@ -117,10 +111,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             ensureRequesterOwnsTransaction(latest, requesterUserId);
             if (isReusable(latest, bookingContext) && canReuseLatestTransaction(latest, requestedPromotionCode)) {
                 syncBookingPromotionSnapshot(bookingContext, latest, null);
-                return paymentMapper.toPaymentSessionResponse(
-                        latest,
-                        readCheckoutFields(latest.getCheckoutPayloadJson()),
-                        null);
+                return ActionMessageResponse.builder()
+                        .message(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage())
+                        .build();
             }
         }
 
@@ -195,10 +188,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 savedTransaction.getStatus(),
                 savedTransaction.getExpiresAt());
         savePromotionSnapshots(savedTransaction, appliedPromotions);
-        return paymentMapper.toPaymentSessionResponse(
-                savedTransaction,
-                readCheckoutFields(savedTransaction.getCheckoutPayloadJson()),
-                checkoutResult.qrCodeUrl());
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage())
+                .build();
     }
 
     @Override
@@ -262,7 +254,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     @Override
     @Transactional
-    public PaymentSessionResponse requestRefund(UUID bookingId, UUID requesterUserId, RefundPaymentRequest request) {
+    public ActionMessageResponse requestRefund(UUID bookingId, UUID requesterUserId, RefundPaymentRequest request) {
         if (bookingId == null || requesterUserId == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
@@ -274,10 +266,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         if (transaction.getStatus() == PaymentTransactionStatus.REFUND_PENDING
                 || transaction.getStatus() == PaymentTransactionStatus.REFUNDED) {
-            return paymentMapper.toPaymentSessionResponse(
-                    transaction,
-                    readCheckoutFields(transaction.getCheckoutPayloadJson()),
-                    null);
+            return ActionMessageResponse.builder()
+                    .message(SuccessMessage.PAYMENT_REFUND_REQUESTED.getMessage())
+                    .build();
         }
         if (transaction.getStatus() != PaymentTransactionStatus.PAID) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
@@ -297,10 +288,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 : request.getReason().trim());
         transaction.setFailureReason(null);
         paymentTransactionRepository.save(transaction);
-        return paymentMapper.toPaymentSessionResponse(
-                transaction,
-                readCheckoutFields(transaction.getCheckoutPayloadJson()),
-                null);
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PAYMENT_REFUND_REQUESTED.getMessage())
+                .build();
     }
 
     @Override

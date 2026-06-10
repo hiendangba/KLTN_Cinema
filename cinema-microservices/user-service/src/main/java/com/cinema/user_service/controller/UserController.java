@@ -1,5 +1,6 @@
 package com.cinema.user_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
@@ -29,7 +30,7 @@ public class UserController extends BaseController {
             HttpServletRequest request) {
         ActionMessageResponse updateCustomerResponse = userService.updateCustomerProfile(updateCustomerRequest,
                 request);
-        return ok(updateCustomerResponse);
+        return ok(SuccessMessage.PROFILE_UPDATED, updateCustomerResponse);
     }
 
     @PutMapping("/customers/{id}")
@@ -38,7 +39,7 @@ public class UserController extends BaseController {
             @Valid @RequestBody UpdateCustomerRequest updateCustomerRequest,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.updateCustomerProfile(id, updateCustomerRequest, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_UPDATED, response);
     }
 
     @PutMapping("/managers")
@@ -47,7 +48,7 @@ public class UserController extends BaseController {
             HttpServletRequest request) {
         ActionMessageResponse updateManagerResponse = userService.updateManagerProfile(updateManagerRequest,
                 request);
-        return ok(updateManagerResponse);
+        return ok(SuccessMessage.PROFILE_UPDATED, updateManagerResponse);
     }
 
     @PutMapping("/managers/{id}")
@@ -56,7 +57,7 @@ public class UserController extends BaseController {
             @Valid @RequestBody UpdateManagerRequest updateManagerRequest,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.updateManagerProfile(id, updateManagerRequest, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_UPDATED, response);
     }
 
     @PutMapping("/staffs")
@@ -64,7 +65,7 @@ public class UserController extends BaseController {
             @Valid @RequestBody UpdateStaffRequest updateStaffRequest,
             HttpServletRequest request) {
         ActionMessageResponse updateStaffResponse = userService.updateStaffProfile(updateStaffRequest, request);
-        return ok(updateStaffResponse);
+        return ok(SuccessMessage.PROFILE_UPDATED, updateStaffResponse);
     }
 
     @PutMapping("/staffs/{id}")
@@ -73,7 +74,7 @@ public class UserController extends BaseController {
             @Valid @RequestBody UpdateStaffRequest updateStaffRequest,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.updateStaffProfile(id, updateStaffRequest, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_UPDATED, response);
     }
 
     @DeleteMapping("/customers/{id}")
@@ -81,7 +82,7 @@ public class UserController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.deleteCustomerProfile(id, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_DELETED, response);
     }
 
     @DeleteMapping("/managers/{id}")
@@ -89,7 +90,7 @@ public class UserController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.deleteManagerProfile(id, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_DELETED, response);
     }
 
     @DeleteMapping("/staffs/{id}")
@@ -97,7 +98,7 @@ public class UserController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.deleteStaffProfile(id, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_DELETED, response);
     }
 
     @PatchMapping("/customers/{id}/restore")
@@ -105,7 +106,7 @@ public class UserController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.restoreCustomerProfile(id, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_RESTORED, response);
     }
 
     @PatchMapping("/managers/{id}/restore")
@@ -113,7 +114,7 @@ public class UserController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.restoreManagerProfile(id, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_RESTORED, response);
     }
 
     @PatchMapping("/staffs/{id}/restore")
@@ -121,13 +122,13 @@ public class UserController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest request) {
         ActionMessageResponse response = userService.restoreStaffProfile(id, request);
-        return ok(response);
+        return ok(SuccessMessage.PROFILE_RESTORED, response);
     }
 
     @GetMapping("/me")
     public ResponseEntity<APIResponse<UserResponse>> getMyProfile(HttpServletRequest request) {
         UserResponse userResponse = userService.getMyProfile(request);
-        return ok(userResponse);
+        return ok(SuccessMessage.USER_FETCHED, userResponse);
     }
 
     @GetMapping("/{id}")
@@ -135,7 +136,7 @@ public class UserController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest request) {
         UserResponse userResponse = userService.getUserById(id, request);
-        return ok(userResponse);
+        return ok(SuccessMessage.USER_FETCHED, userResponse);
     }
 
     @PostMapping("/staffs/search")
@@ -143,7 +144,7 @@ public class UserController extends BaseController {
             @Valid @RequestBody PageRequest<?> pageRequest,
             HttpServletRequest request) {
         PageResponse<UserResponse> staffList = userService.getAllStaff(pageRequest, request);
-        return ok(staffList);
+        return ok(SuccessMessage.USERS_SEARCHED, staffList);
     }
 
     @PostMapping("/customers/search")
@@ -151,7 +152,7 @@ public class UserController extends BaseController {
             @Valid @RequestBody PageRequest<?> pageRequest,
             HttpServletRequest request) {
         PageResponse<UserResponse> customerList = userService.getAllCustomer(pageRequest, request);
-        return ok(customerList);
+        return ok(SuccessMessage.USERS_SEARCHED, customerList);
     }
 
     @PostMapping("/managers/search")
@@ -159,12 +160,12 @@ public class UserController extends BaseController {
             @Valid @RequestBody PageRequest<?> pageRequest,
             HttpServletRequest request) {
         PageResponse<UserResponse> managerList = userService.getAllManager(pageRequest, request);
-        return ok(managerList);
+        return ok(SuccessMessage.USERS_SEARCHED, managerList);
     }
 
     @GetMapping("/exists/{userId}")
     public ResponseEntity<APIResponse<UserExistenceResponse>> checkUserExists(@PathVariable UUID userId) {
         UserExistenceResponse response = userService.checkUserExists(userId);
-        return ok(response);
+        return ok(SuccessMessage.USER_EXISTENCE_CHECKED, response);
     }
 }

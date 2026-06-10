@@ -14,6 +14,22 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-06-10)
+
+- Chuẩn hóa success message và mutation response theo một enum chung trong `common-lib`, đồng thời bỏ helper string tự do ở `BaseController`.
+- `BaseController` giờ chỉ nhận `SuccessMessage`, nên mọi `APIResponse.message` và `ActionMessageResponse.message` đều lấy từ nguồn sự thật tiếng Việt thay vì hardcode rải rác.
+- Các mutation đã được chuyển sang action-only ở những luồng đã trả payload cũ: `booking-service` (`createBooking`, `cancelBooking`), `payment-service` (`createPromotion`, `updatePromotion`, `createSession`, `requestRefund`), `showtime-service` (`createShowTime`, `updateShowTime`, `deleteShowTime`), `upload-service` (`uploadImages`, `createVideoSession`, `uploadVideoChunk`, `completeVideoUpload`).
+- Các read/list/detail endpoint vẫn giữ DTO cũ nhưng đổi message envelope sang enum theo nghiệp vụ, ví dụ `PRODUCT_FETCHED`, `PRICING_POLICY_FETCHED`, `PRODUCTS_SEARCHED`, `PROMOTIONS_SEARCHED`.
+- Files chính đã chạm: `common-lib/src/main/java/com/cinema/Enum/SuccessMessage.java`, `common-lib/src/main/java/com/cinema/controller/BaseController.java`, các controller/service tương ứng ở `booking-service`, `payment-service`, `showtime-service`, `upload-service`, `cinema-service`, `hall-service`, `film-service`, `identity-service`, `user-service`.
+- Verification:
+  - `booking-service` compile pass
+  - `payment-service` compile pass
+  - `showtime-service` compile pass
+  - `upload-service` compile pass
+  - `common-lib`, `identity-service`, `user-service` compile pass
+- Remaining risk:
+  - một số service khác trong reactor (`cinema-service`, `hall-service`) vẫn có dấu hiệu build nhiễu từ gRPC/classpath trong workspace hiện tại, nên nếu cần full reactor pass thì nên chạy lại trên môi trường sạch hoặc sau khi dọn `target/` toàn repo.
+
 ## Changelog ngắn (2026-05-30)
 
 - `ErrorCode 4008 (VERIFY_TOKEN_MISSING)` đổi HTTP status từ `401 Unauthorized` sang `400 Bad Request`.

@@ -1,5 +1,6 @@
 package com.cinema.showtime_service.services.impl;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
@@ -68,7 +69,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         pricingPolicy.setCinemaId(request.getCinemaId());
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("Táº¡o chÃ­nh sÃ¡ch giÃ¡ thÃ nh cÃ´ng")
+                .message(SuccessMessage.PRICING_POLICY_CREATED.getMessage())
                 .build();
     }
 
@@ -92,7 +93,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         pricingPolicy.setCouplePrice(request.getCouplePrice());
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("Cáº­p nháº­t chÃ­nh sÃ¡ch giÃ¡ thÃ nh cÃ´ng")
+                .message(SuccessMessage.PRICING_POLICY_UPDATED.getMessage())
                 .build();
     }
 
@@ -109,7 +110,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
         pricingPolicy.setIsDeleted(true);
         pricingPolicyRepository.save(pricingPolicy);
         return ActionMessageResponse.builder()
-                .message("XÃ³a chÃ­nh sÃ¡ch giÃ¡ thÃ nh cÃ´ng")
+                .message(SuccessMessage.PRICING_POLICY_DELETED.getMessage())
                 .build();
     }
 

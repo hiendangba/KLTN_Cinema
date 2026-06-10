@@ -1,5 +1,6 @@
 package com.cinema.identity_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
@@ -29,35 +30,35 @@ public class UserController extends BaseController {
             @Valid @RequestBody RegisterCustomerRequest registerCustomerRequest,
             HttpServletResponse response) {
         ActionMessageResponse registerCustomerResponse = userService.registerCustomer(registerCustomerRequest, response);
-        return created(registerCustomerResponse);
+        return created(SuccessMessage.REGISTERED, registerCustomerResponse);
     }
 
     @PostMapping("/verify-otp")
     public ResponseEntity<APIResponse<ActionMessageResponse>> verifyOTP(@Valid @RequestBody VerifyRequest verifyRequest,
-                                                                        HttpServletRequest request,
-                                                                        HttpServletResponse response) {
+        HttpServletRequest request,
+        HttpServletResponse response) {
         ActionMessageResponse verifyResponse = userService.verifyOTP(verifyRequest, request, response);
-        return ok(verifyResponse);
+        return ok(SuccessMessage.OTP_VERIFIED, verifyResponse);
     }
 
     @PostMapping("/forgot-password")
     public ResponseEntity<APIResponse<ActionMessageResponse>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest, HttpServletResponse response) {
         ActionMessageResponse forgotPasswordResponse = userService.forgotPassword(forgotPasswordRequest, response);
-        return ok(forgotPasswordResponse);
+        return ok(SuccessMessage.AUTH_PASSWORD_RESET, forgotPasswordResponse);
     }
 
     @PostMapping("/resend-otp")
     public ResponseEntity<APIResponse<ActionMessageResponse>> resendOTP(HttpServletRequest request) {
         ActionMessageResponse response = userService.resendOTP(request);
-        return ok(response);
+        return ok(SuccessMessage.OTP_RESENT, response);
     }
 
     @PostMapping("/login")
     public ResponseEntity<APIResponse<ActionMessageResponse>> login(@Valid @RequestBody LoginRequest loginRequest,
                                                                     HttpServletResponse response) {
         ActionMessageResponse actionMessageResponse = userService.login(loginRequest, response);
-        return ok(actionMessageResponse);
+        return ok(SuccessMessage.LOGGED_IN, actionMessageResponse);
     }
 
     @PostMapping("/google/login")
@@ -65,7 +66,7 @@ public class UserController extends BaseController {
             @Valid @RequestBody GoogleLoginRequest googleLoginRequest,
             HttpServletResponse response) {
         ActionMessageResponse actionMessageResponse = userService.googleLogin(googleLoginRequest, response);
-        return ok(actionMessageResponse);
+        return ok(SuccessMessage.AUTH_GOOGLE_LOGIN, actionMessageResponse);
     }
 
     @GetMapping("/google/authorize")
@@ -85,27 +86,27 @@ public class UserController extends BaseController {
     public ResponseEntity<APIResponse<ActionMessageResponse>> logout(HttpServletRequest request,
                                                                      HttpServletResponse httpServletResponse) {
         ActionMessageResponse response = userService.logout(request, httpServletResponse);
-        return ok(response);
+        return ok(SuccessMessage.LOGGED_OUT, response);
     }
 
     @PostMapping("/refresh_token")
     public ResponseEntity<APIResponse<ActionMessageResponse>> refreshToken(HttpServletRequest request,
                                                                            HttpServletResponse response) {
         ActionMessageResponse actionMessageResponse = userService.refreshToken(request, response);
-        return ok(actionMessageResponse);
+        return ok(SuccessMessage.TOKEN_REFRESHED, actionMessageResponse);
     }
 
     @PostMapping("/manager")
     public ResponseEntity<APIResponse<ActionMessageResponse>> createManager(
             @Valid @RequestBody RegisterManagerRequest registerManagerRequest, HttpServletRequest request) {
         ActionMessageResponse registerCustomerResponse = userService.createManager(registerManagerRequest, request);
-        return created(registerCustomerResponse);
+        return created(SuccessMessage.PROFILE_CREATED, registerCustomerResponse);
     }
 
     @PostMapping("/staff")
     public ResponseEntity<APIResponse<ActionMessageResponse>> createStaff(
             @Valid @RequestBody RegisterStaffRequest registerStaffRequest, HttpServletRequest request) {
         ActionMessageResponse registerCustomerResponse = userService.createStaff(registerStaffRequest, request);
-        return created(registerCustomerResponse);
+        return created(SuccessMessage.PROFILE_CREATED, registerCustomerResponse);
     }
 }

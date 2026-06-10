@@ -1,5 +1,6 @@
 package com.cinema.cinema_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.cinema_service.dto.request.AssignCinemaStaffRequest;
 import com.cinema.cinema_service.dto.request.CinemaField;
 import com.cinema.cinema_service.dto.request.CreateCinemaRequest;
@@ -43,20 +44,20 @@ public class CinemaController extends BaseController {
             @Valid @RequestBody CreateCinemaRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = cinemaService.createCinema(request, httpRequest);
-        return created(response);
+        return created(SuccessMessage.CINEMA_CREATED, response);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<CinemaResponse>> getCinemaById(@PathVariable UUID id) {
         CinemaResponse response = cinemaService.getCinemaById(id);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_FETCHED, response);
     }
 
     @PostMapping("/search")
     public ResponseEntity<APIResponse<PageResponse<CinemaResponse>>> searchCinemas(
             @Valid @RequestBody PageRequest<CinemaField> request) {
         PageResponse<CinemaResponse> response = cinemaService.searchCinemas(request);
-        return ok(response);
+        return ok(SuccessMessage.CINEMAS_SEARCHED, response);
     }
 
     @PutMapping("/{id}")
@@ -65,7 +66,7 @@ public class CinemaController extends BaseController {
             @Valid @RequestBody UpdateCinemaRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = cinemaService.updateCinema(id, request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_UPDATED, response);
     }
 
     @PatchMapping("/{id}")
@@ -74,7 +75,7 @@ public class CinemaController extends BaseController {
             @Valid @RequestBody UpdateCinemaStatusRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = cinemaService.updateCinemaStatus(id, request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_STATUS_UPDATED, response);
     }
 
     @DeleteMapping("/{id}")
@@ -82,7 +83,7 @@ public class CinemaController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = cinemaService.deleteCinema(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_DELETED, response);
     }
 
     @PostMapping("/{id}/staffs")
@@ -91,7 +92,7 @@ public class CinemaController extends BaseController {
             @Valid @RequestBody AssignCinemaStaffRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = cinemaService.assignStaff(id, request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_STAFF_ASSIGNED, response);
     }
 
     @PutMapping("/{id}/staffs")
@@ -100,7 +101,7 @@ public class CinemaController extends BaseController {
             @Valid @RequestBody AssignCinemaStaffRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = cinemaService.updateStaffAssignment(id, request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_STAFF_UPDATED, response);
     }
 
     @DeleteMapping("/{id}/staffs/{staffId}")
@@ -109,7 +110,7 @@ public class CinemaController extends BaseController {
             @PathVariable UUID staffId,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = cinemaService.unassignStaff(id, staffId, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_STAFF_UNASSIGNED, response);
     }
 
     @GetMapping("/{id}/staffs")
@@ -117,7 +118,7 @@ public class CinemaController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         List<CinemaStaffResponse> response = cinemaService.getCinemaStaffs(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_STAFFS_FETCHED, response);
     }
 
     @PostMapping("/me/search")
@@ -125,6 +126,6 @@ public class CinemaController extends BaseController {
             @Valid @RequestBody PageRequest<CinemaField> request,
             HttpServletRequest httpRequest) {
         PageResponse<CinemaResponse> response = cinemaService.searchMyManagedCinemas(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMAS_SEARCHED, response);
     }
 }

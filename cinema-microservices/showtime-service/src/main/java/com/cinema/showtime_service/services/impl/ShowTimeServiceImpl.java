@@ -1,13 +1,12 @@
 package com.cinema.showtime_service.services.impl;
 
 import com.cinema.Enum.ShowTimeEnum;
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
-import com.cinema.dto.response.ResultResponse;
-import com.cinema.dto.response.SuccessResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.http.HeaderNames;
@@ -432,7 +431,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
     @Override
     @Transactional
-    public ResultResponse<ShowTimeResponse> createShowTime(
+    public ActionMessageResponse createShowTime(
             ShowTimeCreateRequest showTimeCreateRequest,
             HttpServletRequest httpRequest) {
         validateAdminOrManagerRole(httpRequest);
@@ -452,8 +451,6 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             throw new BusinessException(ErrorCode.INVALID_END_TIME);
         }
 
-        ResultResponse<ShowTimeResponse> resultResponse = new ResultResponse<>();
-        List<SuccessResponse<ShowTimeResponse>> showTimeResponses = new ArrayList<>();
         List<ShowTime> createdShowTimes = new ArrayList<>();
 
         LocalDateTime cursor = startTime;
@@ -490,14 +487,9 @@ public class ShowTimeServiceImpl implements ShowTimeService {
             throw new BusinessException(ErrorCode.ALL_TIME_SLOT_OCCUPIED);
         }
 
-        Map<UUID, PricingPolicyResponse> pricingPolicyMap = getPricingPolicyResponseMap(createdShowTimes);
-        for (ShowTime showTime : createdShowTimes) {
-            showTimeResponses.add(new SuccessResponse<>(
-                    toShowTimeResponse(showTime, pricingPolicyMap.get(showTime.getPricingPolicyId()))));
-        }
-
-        resultResponse.setSuccessResponse(showTimeResponses);
-        return resultResponse;
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.SHOWTIME_CREATED.getMessage())
+                .build();
     }
 
     @Override
@@ -548,7 +540,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         showTime.setStatus(updateShowTimeRequest.getStatus());
         showTimeRepository.save(showTime);
         return ActionMessageResponse.builder()
-                .message("Cáº­p nháº­t suáº¥t chiáº¿u thÃ nh cÃ´ng")
+                .message(SuccessMessage.SHOWTIME_UPDATED.getMessage())
                 .build();
     }
     @Override
@@ -572,7 +564,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         showTime.setIsDeleted(true);
         showTimeRepository.save(showTime);
         return ActionMessageResponse.builder()
-                .message("XÃ³a suáº¥t chiáº¿u thÃ nh cÃ´ng")
+                .message(SuccessMessage.SHOWTIME_DELETED.getMessage())
                 .build();
     }
 

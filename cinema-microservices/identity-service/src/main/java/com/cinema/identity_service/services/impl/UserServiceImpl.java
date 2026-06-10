@@ -1,5 +1,6 @@
 package com.cinema.identity_service.services.impl;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.Enum.UserEnum;
 import com.cinema.dto.request.SendEmailRequest;
 import com.cinema.dto.response.ActionMessageResponse;
@@ -168,7 +169,7 @@ public class UserServiceImpl implements UserService {
                 "Mã OTP của bạn là: " + otp + "</p>"));
         log.info("OTP email dispatch queued for registration: email={}", registerCustomerRequest.getEmail());
         return ActionMessageResponse.builder()
-                .message("Mã OTP đã được gửi đến email của bạn")
+                .message(SuccessMessage.REGISTERED.getMessage())
                 .build();
     }
 
@@ -230,7 +231,7 @@ public class UserServiceImpl implements UserService {
                 "Chúc mừng bạn đã trở thành Manager tại CinemaStar!"));
         log.info("Welcome email dispatch queued for manager: email={}", registerManagerRequest.getEmail());
         return ActionMessageResponse.builder()
-                .message("Tạo manager thành công")
+                .message(SuccessMessage.PROFILE_CREATED.getMessage())
                 .build();
     }
 
@@ -296,7 +297,7 @@ public class UserServiceImpl implements UserService {
         log.info("Welcome email dispatch queued for staff: email={}", registerStaffRequest.getEmail());
 
         return ActionMessageResponse.builder()
-                .message("Tạo staff thành công")
+                .message(SuccessMessage.PROFILE_CREATED.getMessage())
                 .build();
     }
 
@@ -367,7 +368,7 @@ public class UserServiceImpl implements UserService {
                 "Mã OTP của bạn là: " + newOtp + "</p>"));
         log.info("OTP email redispatch queued: email={}", otpData.getSubject());
         return ActionMessageResponse.builder()
-                .message("Gửi lại mã OTP thành công")
+                .message(SuccessMessage.OTP_RESENT.getMessage())
                 .build();
     }
 
@@ -410,7 +411,7 @@ public class UserServiceImpl implements UserService {
         log.info("OTP email dispatch queued for forgot password: email={}", forgotPasswordRequest.getEmail());
 
         return ActionMessageResponse.builder()
-                .message("Mã OTP đã được gửi đến email của bạn")
+                .message(SuccessMessage.AUTH_PASSWORD_RESET.getMessage())
                 .build();
     }
 
@@ -542,7 +543,7 @@ public class UserServiceImpl implements UserService {
         clearTokenCookie(response, VerifyToken);
 
         return ActionMessageResponse.builder()
-                .message("Xác thực OTP thành công")
+                .message(SuccessMessage.OTP_VERIFIED.getMessage())
                 .build();
     }
 
@@ -586,7 +587,7 @@ public class UserServiceImpl implements UserService {
         setTokenCookie(response, RefreshToken, refreshToken, jwtServiceImpl.getRefreshTokenExpiration());
 
         return ActionMessageResponse.builder()
-                .message("Đăng nhập thành công")
+                .message(SuccessMessage.LOGGED_IN.getMessage())
                 .build();
     }
 
@@ -613,7 +614,7 @@ public class UserServiceImpl implements UserService {
 
         issueAuthTokens(user, response);
         return ActionMessageResponse.builder()
-                .message("Đăng nhập bằng Google thành công")
+                .message(SuccessMessage.AUTH_GOOGLE_LOGIN.getMessage())
                 .build();
     }
 
@@ -916,7 +917,7 @@ public class UserServiceImpl implements UserService {
             clearAuthCookies(response);
         }
         return ActionMessageResponse.builder()
-                .message("Đăng xuất thành công")
+                .message(SuccessMessage.LOGGED_OUT.getMessage())
                 .build();
     }
 
@@ -991,7 +992,7 @@ public class UserServiceImpl implements UserService {
             setTokenCookie(response, AccessToken, accessToken, jwtServiceImpl.getAccessTokenExpiration());
             setTokenCookie(response, RefreshToken, refreshToken, ttlMillis);
             return ActionMessageResponse.builder()
-                    .message("Làm mới phiên đăng nhập thành công")
+                    .message(SuccessMessage.TOKEN_REFRESHED.getMessage())
                     .build();
         } catch (BusinessException e) {
             clearAuthCookies(response);

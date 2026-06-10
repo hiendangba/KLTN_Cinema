@@ -16,7 +16,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 
 public interface BookingService {
-    BookingResponse createBooking(CreateBookingRequest request, HttpServletRequest httpRequest);
+    ActionMessageResponse createBooking(CreateBookingRequest request, HttpServletRequest httpRequest);
 
     BookingResponse getBookingById(UUID id, HttpServletRequest httpRequest);
 

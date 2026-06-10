@@ -1,5 +1,6 @@
 package com.cinema.booking_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.booking_service.dto.request.CreateProductRequest;
 import com.cinema.booking_service.dto.request.ProductField;
 import com.cinema.booking_service.dto.request.UpdateProductRequest;
@@ -37,7 +38,7 @@ public class ProductController extends BaseController {
             @Valid @RequestBody CreateProductRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = productService.createProduct(request, httpRequest);
-        return created(response);
+        return created(SuccessMessage.PRODUCT_CREATED, response);
     }
 
     @PutMapping("/{id}")
@@ -46,7 +47,7 @@ public class ProductController extends BaseController {
             @Valid @RequestBody UpdateProductRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = productService.updateProduct(id, request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.PRODUCT_UPDATED, response);
     }
 
     @DeleteMapping("/{id}")
@@ -54,7 +55,7 @@ public class ProductController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = productService.deleteProduct(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.PRODUCT_DELETED, response);
     }
 
     @GetMapping("/{id}")
@@ -62,7 +63,7 @@ public class ProductController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         ProductResponse response = productService.getProductById(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.PRODUCT_FETCHED, response);
     }
 
     @PostMapping("/me/search")
@@ -70,7 +71,7 @@ public class ProductController extends BaseController {
             @Valid @RequestBody PageRequest<ProductField> request,
             HttpServletRequest httpRequest) {
         PageResponse<ProductResponse> response = productService.getProductsByOperatorCinema(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.PRODUCTS_SEARCHED, response);
     }
 
     @PostMapping("/cinemas/{cinemaId}/search")
@@ -78,6 +79,6 @@ public class ProductController extends BaseController {
             @PathVariable UUID cinemaId,
             @Valid @RequestBody PageRequest<ProductField> request) {
         PageResponse<ProductResponse> response = productService.getProductsByCinemaId(cinemaId, request);
-        return ok(response);
+        return ok(SuccessMessage.PRODUCTS_SEARCHED, response);
     }
 }

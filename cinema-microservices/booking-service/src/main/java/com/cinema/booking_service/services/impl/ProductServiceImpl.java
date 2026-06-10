@@ -10,6 +10,7 @@ import com.cinema.booking_service.grpc.CinemaGrpcClient;
 import com.cinema.booking_service.mapper.ProductMapper;
 import com.cinema.booking_service.repository.ProductRepository;
 import com.cinema.booking_service.services.ProductService;
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
@@ -57,7 +58,7 @@ public class ProductServiceImpl implements ProductService {
 
         productRepository.save(product);
         return ActionMessageResponse.builder()
-                .message("Product created successfully")
+                .message(SuccessMessage.PRODUCT_CREATED.getMessage())
                 .build();
     }
 
@@ -81,7 +82,7 @@ public class ProductServiceImpl implements ProductService {
         productRepository.save(product);
 
         return ActionMessageResponse.builder()
-                .message("Product updated successfully")
+                .message(SuccessMessage.PRODUCT_UPDATED.getMessage())
                 .build();
     }
 
@@ -95,7 +96,7 @@ public class ProductServiceImpl implements ProductService {
         productRepository.save(product);
 
         return ActionMessageResponse.builder()
-                .message("Product deleted successfully")
+                .message(SuccessMessage.PRODUCT_DELETED.getMessage())
                 .build();
     }
 

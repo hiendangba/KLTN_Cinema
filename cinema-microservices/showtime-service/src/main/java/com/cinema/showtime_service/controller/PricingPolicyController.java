@@ -1,5 +1,6 @@
 package com.cinema.showtime_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
@@ -35,7 +36,8 @@ public class PricingPolicyController extends BaseController {
     public ResponseEntity<APIResponse<ActionMessageResponse>> createPricingPolicy(
             @Valid @RequestBody PricingPolicyCreateRequest request,
             HttpServletRequest httpRequest) {
-        return created(pricingPolicyService.createPricingPolicy(request, httpRequest));
+        return created(SuccessMessage.PRICING_POLICY_CREATED,
+                pricingPolicyService.createPricingPolicy(request, httpRequest));
     }
 
     @PutMapping("/{id}")
@@ -43,20 +45,22 @@ public class PricingPolicyController extends BaseController {
             @PathVariable UUID id,
             @Valid @RequestBody PricingPolicyUpdateRequest request,
             HttpServletRequest httpRequest) {
-        return ok(pricingPolicyService.updatePricingPolicy(id, request, httpRequest));
+        return ok(SuccessMessage.PRICING_POLICY_UPDATED,
+                pricingPolicyService.updatePricingPolicy(id, request, httpRequest));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<APIResponse<ActionMessageResponse>> deletePricingPolicy(@PathVariable UUID id,
                                                                                    HttpServletRequest httpRequest) {
-        return ok(pricingPolicyService.deletePricingPolicy(id, httpRequest));
+        return ok(SuccessMessage.PRICING_POLICY_DELETED,
+                pricingPolicyService.deletePricingPolicy(id, httpRequest));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<PricingPolicyResponse>> getPricingPolicyById(
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
-        return ok(pricingPolicyService.getPricingPolicyById(id, httpRequest));
+        return ok(SuccessMessage.PRICING_POLICY_FETCHED, pricingPolicyService.getPricingPolicyById(id, httpRequest));
     }
 
     @PostMapping("/search")
@@ -64,6 +68,6 @@ public class PricingPolicyController extends BaseController {
             @Valid @RequestBody PageRequest<PricingPolicyField> request,
             HttpServletRequest httpRequest) {
         PageResponse<PricingPolicyResponse> response = pricingPolicyService.searchPricingPolicies(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.PRICING_POLICIES_SEARCHED, response);
     }
 }

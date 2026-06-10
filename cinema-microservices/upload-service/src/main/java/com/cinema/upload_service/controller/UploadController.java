@@ -1,12 +1,10 @@
 package com.cinema.upload_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.upload_service.dto.request.CreateVideoUploadSessionRequest;
-import com.cinema.upload_service.dto.response.UploadFilesData;
-import com.cinema.upload_service.dto.response.UploadVideoCompleteData;
-import com.cinema.upload_service.dto.response.VideoChunkUploadData;
-import com.cinema.upload_service.dto.response.VideoUploadSessionData;
 import com.cinema.upload_service.dto.response.VideoUploadSessionStatusData;
 import com.cinema.upload_service.service.UploadService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,28 +32,28 @@ public class UploadController extends BaseController {
     private final UploadService uploadService;
 
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<APIResponse<UploadFilesData>> uploadImages(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> uploadImages(
             @RequestParam("files") MultipartFile[] files,
             HttpServletRequest request) {
-        UploadFilesData data = uploadService.uploadImages(files, request);
-        return ok("Upload files successfully", data);
+        ActionMessageResponse data = uploadService.uploadImages(files, request);
+        return created(SuccessMessage.UPLOAD_IMAGES_COMPLETED, data);
     }
 
     @PostMapping("/videos/sessions")
-    public ResponseEntity<APIResponse<VideoUploadSessionData>> createVideoSession(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createVideoSession(
             @Valid @RequestBody CreateVideoUploadSessionRequest requestBody,
             HttpServletRequest request) {
-        VideoUploadSessionData data = uploadService.createVideoSession(requestBody, request);
-        return ok("Video upload session created", data);
+        ActionMessageResponse data = uploadService.createVideoSession(requestBody, request);
+        return created(SuccessMessage.VIDEO_UPLOAD_SESSION_CREATED, data);
     }
 
     @PutMapping(value = "/videos/sessions/{sessionId}/chunks/{index}", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<APIResponse<VideoChunkUploadData>> uploadVideoChunk(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> uploadVideoChunk(
             @PathVariable UUID sessionId,
             @PathVariable int index,
             HttpServletRequest request) {
-        VideoChunkUploadData data = uploadService.uploadVideoChunk(sessionId, index, request);
-        return ok("Video chunk uploaded successfully", data);
+        ActionMessageResponse data = uploadService.uploadVideoChunk(sessionId, index, request);
+        return ok(SuccessMessage.VIDEO_CHUNK_UPLOADED, data);
     }
 
     @GetMapping("/videos/sessions/{sessionId}")
@@ -63,14 +61,14 @@ public class UploadController extends BaseController {
             @PathVariable UUID sessionId,
             HttpServletRequest request) {
         VideoUploadSessionStatusData data = uploadService.getVideoSessionStatus(sessionId, request);
-        return ok("Video upload session status fetched successfully", data);
+        return ok(SuccessMessage.VIDEO_UPLOAD_STATUS_FETCHED, data);
     }
 
     @PostMapping("/videos/sessions/{sessionId}/complete")
-    public ResponseEntity<APIResponse<UploadVideoCompleteData>> completeVideoUpload(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> completeVideoUpload(
             @PathVariable UUID sessionId,
             HttpServletRequest request) {
-        UploadVideoCompleteData data = uploadService.completeVideoUpload(sessionId, request);
-        return ok("Video uploaded successfully", data);
+        ActionMessageResponse data = uploadService.completeVideoUpload(sessionId, request);
+        return ok(SuccessMessage.VIDEO_UPLOAD_COMPLETED, data);
     }
 }

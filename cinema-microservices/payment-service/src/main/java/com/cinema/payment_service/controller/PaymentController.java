@@ -1,5 +1,6 @@
 package com.cinema.payment_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
@@ -15,6 +16,7 @@ import com.cinema.payment_service.services.VietQrService;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.excel.ExcelExportUtils;
 import com.cinema.http.HeaderNames;
@@ -47,15 +49,16 @@ public class PaymentController extends BaseController {
 
     @GetMapping("/vietqr/banks")
     public ResponseEntity<APIResponse<java.util.List<VietQrBankResponse>>> getVietQrBanks() {
-        return ok(vietQrService.getBanks());
+        return ok(SuccessMessage.VIETQR_BANKS_FETCHED, vietQrService.getBanks());
     }
 
     @PostMapping("/sessions")
-    public ResponseEntity<APIResponse<PaymentSessionResponse>> createSession(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createSession(
             HttpServletRequest servletRequest,
             @RequestBody CreatePaymentSessionRequest request) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
-        return ok(paymentSessionService.createSession(request, requesterUserId));
+        return created(SuccessMessage.PAYMENT_SESSION_CREATED,
+                paymentSessionService.createSession(request, requesterUserId));
     }
 
     @GetMapping("/sessions/{bookingId}")
@@ -63,7 +66,7 @@ public class PaymentController extends BaseController {
             HttpServletRequest servletRequest,
             @PathVariable UUID bookingId) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
-        return ok(paymentSessionService.getSession(bookingId, requesterUserId));
+        return ok(SuccessMessage.PAYMENT_SESSION_FETCHED, paymentSessionService.getSession(bookingId, requesterUserId));
     }
 
     @PostMapping("/me/sessions/search")
@@ -71,16 +74,18 @@ public class PaymentController extends BaseController {
             HttpServletRequest servletRequest,
             @Valid @RequestBody PageRequest<PaymentSessionField> request) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
-        return ok(paymentSessionService.searchMySessions(request, requesterUserId));
+        return ok(SuccessMessage.PAYMENT_SESSIONS_SEARCHED,
+                paymentSessionService.searchMySessions(request, requesterUserId));
     }
 
     @PostMapping("/sessions/{bookingId}/refund")
-    public ResponseEntity<APIResponse<PaymentSessionResponse>> requestRefund(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> requestRefund(
             HttpServletRequest servletRequest,
             @PathVariable UUID bookingId,
             @RequestBody(required = false) RefundPaymentRequest request) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
-        return ok(paymentSessionService.requestRefund(bookingId, requesterUserId, request));
+        return ok(SuccessMessage.PAYMENT_REFUND_REQUESTED,
+                paymentSessionService.requestRefund(bookingId, requesterUserId, request));
     }
 
     @PostMapping("/revenues/cinemas/search")
@@ -88,7 +93,7 @@ public class PaymentController extends BaseController {
             HttpServletRequest servletRequest,
             @Valid @RequestBody CinemaRevenueReportRequest request) {
         RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_ADMIN);
-        return ok(paymentSessionService.getAllCinemaRevenueReport(request));
+        return ok(SuccessMessage.CINEMA_REVENUE_REPORT_FETCHED, paymentSessionService.getAllCinemaRevenueReport(request));
     }
 
     @PostMapping("/revenues/cinemas/me/search")
@@ -97,7 +102,8 @@ public class PaymentController extends BaseController {
             @Valid @RequestBody CinemaRevenueReportRequest request) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
         RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_MANAGER);
-        return ok(paymentSessionService.getMyCinemaRevenueReport(request, requesterUserId));
+        return ok(SuccessMessage.CINEMA_REVENUE_REPORT_FETCHED,
+                paymentSessionService.getMyCinemaRevenueReport(request, requesterUserId));
     }
 
     @PostMapping("/revenues/cinemas/export")
@@ -114,7 +120,8 @@ public class PaymentController extends BaseController {
             HttpServletRequest servletRequest,
             @RequestBody PromotionPreviewRequest request) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
-        return ok(paymentSessionService.previewPromotion(request, requesterUserId));
+        return ok(SuccessMessage.PROMOTION_PREVIEW_FETCHED,
+                paymentSessionService.previewPromotion(request, requesterUserId));
     }
 
     @PostMapping("/webhooks/momo")

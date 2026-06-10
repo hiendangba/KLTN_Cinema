@@ -1,6 +1,7 @@
 package com.cinema.hall_service.services.impl;
 
 import com.cinema.Enum.HallEnum;
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
@@ -90,7 +91,7 @@ public class HallServiceImpl implements HallService {
         seatGrpcClient.createLayoutDefinition(hall.getId(), request.getLayoutDefinition());
 
         return ActionMessageResponse.builder()
-                .message("Hall created successfully")
+                .message(SuccessMessage.HALL_CREATED.getMessage())
                 .build();
     }
 
@@ -192,7 +193,7 @@ public class HallServiceImpl implements HallService {
         }
         reconcileHallImages(hall, request.getImagePaths());
         return ActionMessageResponse.builder()
-                .message("Hall updated successfully")
+                .message(SuccessMessage.HALL_UPDATED.getMessage())
                 .build();
     }
 
@@ -217,7 +218,7 @@ public class HallServiceImpl implements HallService {
         hall.setIsDeleted(true);
         hallRepository.save(hall);
         return ActionMessageResponse.builder()
-                .message("Hall deleted successfully")
+                .message(SuccessMessage.HALL_DELETED.getMessage())
                 .build();
     }
 

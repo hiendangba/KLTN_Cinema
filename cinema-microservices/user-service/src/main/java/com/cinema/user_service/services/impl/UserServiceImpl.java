@@ -1,5 +1,6 @@
 package com.cinema.user_service.services.impl;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.Enum.UserEnum;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
@@ -66,7 +67,7 @@ public class UserServiceImpl implements UserService {
         User user = userMapper.toUser(request);
         userRepository.save(user);
         return ActionMessageResponse.builder()
-                .message("Tạo profile cho Customer thành công")
+                .message(SuccessMessage.PROFILE_CREATED.getMessage())
                 .build();
     }
 
@@ -84,7 +85,7 @@ public class UserServiceImpl implements UserService {
         userRepository.save(manager);
         log.info("Manager profile created: managerId={}, email={}", request.getId(), request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Tạo profile cho Manager thành công")
+                .message(SuccessMessage.PROFILE_CREATED.getMessage())
                 .build();
     }
 
@@ -102,7 +103,7 @@ public class UserServiceImpl implements UserService {
         userRepository.save(staff);
         log.info("Staff profile created: staffId={}, email={}", request.getId(), request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Tạo profile cho Staff thành công")
+                .message(SuccessMessage.PROFILE_CREATED.getMessage())
                 .build();
     }
 
@@ -134,7 +135,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("Customer profile updated: customerId={}, email={}", userUUID, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cập nhật profile cho Customer thành công")
+                .message(SuccessMessage.PROFILE_UPDATED.getMessage())
                 .build();
     }
 
@@ -164,7 +165,7 @@ public class UserServiceImpl implements UserService {
                 buildManagerUpdateDiffs(original, request)));
         log.info("Manager profile updated: managerId={}, email={}", userUUID, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cập nhật profile cho Manager thành công")
+                .message(SuccessMessage.PROFILE_UPDATED.getMessage())
                 .build();
     }
 
@@ -194,7 +195,7 @@ public class UserServiceImpl implements UserService {
                 buildStaffUpdateDiffs(original, request)));
         log.info("Staff profile updated: staffId={}, email={}", userUUID, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cập nhật profile cho Staff thành công")
+                .message(SuccessMessage.PROFILE_UPDATED.getMessage())
                 .build();
     }
 
@@ -226,7 +227,7 @@ public class UserServiceImpl implements UserService {
         log.info("Customer profile updated by id: targetCustomerId={}, actorId={}, actorRole={}, email={}",
                 userId, actorId, actorRole, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cập nhật profile cho Customer thành công")
+                .message(SuccessMessage.PROFILE_UPDATED.getMessage())
                 .build();
     }
 
@@ -258,7 +259,7 @@ public class UserServiceImpl implements UserService {
         log.info("Manager profile updated by id: targetManagerId={}, actorId={}, actorRole={}, email={}",
                 userId, actorId, actorRole, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cập nhật profile cho Manager thành công")
+                .message(SuccessMessage.PROFILE_UPDATED.getMessage())
                 .build();
     }
 
@@ -294,7 +295,7 @@ public class UserServiceImpl implements UserService {
         log.info("Staff profile updated by id: targetStaffId={}, actorId={}, actorRole={}, email={}",
                 userId, actorId, actorRole, request.getEmail());
         return ActionMessageResponse.builder()
-                .message("Cập nhật profile cho Staff thành công")
+                .message(SuccessMessage.PROFILE_UPDATED.getMessage())
                 .build();
     }
 
@@ -327,7 +328,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("Customer profile soft deleted: customerId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
         return ActionMessageResponse.builder()
-                .message("Xóa mềm profile cho Customer thành công")
+                .message(SuccessMessage.PROFILE_DELETED.getMessage())
                 .build();
     }
 
@@ -360,7 +361,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("Manager profile soft deleted: managerId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
         return ActionMessageResponse.builder()
-                .message("Xóa mềm profile cho Manager thành công")
+                .message(SuccessMessage.PROFILE_DELETED.getMessage())
                 .build();
     }
 
@@ -397,7 +398,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("Staff profile soft deleted: staffId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
         return ActionMessageResponse.builder()
-                .message("Xóa mềm profile cho Staff thành công")
+                .message(SuccessMessage.PROFILE_DELETED.getMessage())
                 .build();
     }
 
@@ -430,7 +431,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("Customer profile restored: customerId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
         return ActionMessageResponse.builder()
-                .message("Khôi phục profile cho Customer thành công")
+                .message(SuccessMessage.PROFILE_RESTORED.getMessage())
                 .build();
     }
 
@@ -463,7 +464,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("Manager profile restored: managerId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
         return ActionMessageResponse.builder()
-                .message("Khôi phục profile cho Manager thành công")
+                .message(SuccessMessage.PROFILE_RESTORED.getMessage())
                 .build();
     }
 
@@ -500,7 +501,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("Staff profile restored: staffId={}, actorId={}, actorRole={}", userId, actorId, actorRole);
         return ActionMessageResponse.builder()
-                .message("Khôi phục profile cho Staff thành công")
+                .message(SuccessMessage.PROFILE_RESTORED.getMessage())
                 .build();
     }
 
@@ -553,7 +554,7 @@ public class UserServiceImpl implements UserService {
         boolean exists = userRepository.existsByIdAndIsDeletedFalse(userId);
         return UserExistenceResponse.builder()
                 .exists(exists)
-                .message(exists ? "User tồn tại trong hệ thống" : "User không tồn tại trong hệ thống")
+                .message(SuccessMessage.USER_EXISTENCE_CHECKED.getMessage())
                 .build();
     }
 

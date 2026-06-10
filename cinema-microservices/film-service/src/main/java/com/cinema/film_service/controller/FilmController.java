@@ -1,5 +1,6 @@
 package com.cinema.film_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.film_service.dto.request.BatchFilmRequest;
@@ -32,28 +33,28 @@ public class FilmController extends BaseController {
     public ResponseEntity<APIResponse<CursorPageResponse<FilmResponse>>> searchFilms(
             @Valid @RequestBody FilmCursorPageRequest request) {
         CursorPageResponse<FilmResponse> response = filmService.searchFilms(request);
-        return ok(response);
+        return ok(SuccessMessage.FILMS_SEARCHED, response);
     }
 
     @PostMapping("/customer/search")
     public ResponseEntity<APIResponse<CursorPageResponse<FilmResponse>>> searchCustomerFilms(
-            @Valid @RequestBody FilmCursorPageRequest request,
-            HttpServletRequest httpRequest) {
+        @Valid @RequestBody FilmCursorPageRequest request,
+        HttpServletRequest httpRequest) {
         CursorPageResponse<FilmResponse> response = filmService.searchCustomerFilms(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.FILMS_SEARCHED, response);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<FilmResponse>> getFilm(@PathVariable UUID id) {
         FilmResponse response = filmService.getFilmById(id);
-        return ok(response);
+        return ok(SuccessMessage.FILM_FETCHED, response);
     }
 
     @PostMapping("/batch")
     public ResponseEntity<APIResponse<BatchFilmResponse>> getFilmsInBatch(
             @Valid @RequestBody BatchFilmRequest batchFilmRequest) {
         BatchFilmResponse response = filmService.getFilmsInBatch(batchFilmRequest);
-        return ok(response);
+        return ok(SuccessMessage.FILMS_BATCH_FETCHED, response);
     }
 
     @PostMapping
@@ -62,25 +63,25 @@ public class FilmController extends BaseController {
             HttpServletRequest httpRequest) {
         log.info("Request tạo phim: {}", request.getTitle());
         ActionMessageResponse response = filmService.createFilm(request, httpRequest);
-        return created(response);
+        return created(SuccessMessage.FILM_CREATED, response);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<APIResponse<ActionMessageResponse>> updateFilm(
             @PathVariable UUID id,
-            @Valid @RequestBody UpdateFilmRequest request,
-            HttpServletRequest httpRequest) {
+        @Valid @RequestBody UpdateFilmRequest request,
+        HttpServletRequest httpRequest) {
         log.info("Request cập nhật phim với ID: {}", id);
         ActionMessageResponse response = filmService.updateFilm(id, request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.FILM_UPDATED, response);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<APIResponse<ActionMessageResponse>> deleteFilm(
-            @PathVariable UUID id,
-            HttpServletRequest httpRequest) {
+        @PathVariable UUID id,
+        HttpServletRequest httpRequest) {
         log.info("Request xóa phim với ID: {}", id);
         ActionMessageResponse response = filmService.deleteFilm(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.FILM_DELETED, response);
     }
 }

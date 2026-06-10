@@ -10,6 +10,7 @@ import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -19,7 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public interface PaymentSessionService {
-    PaymentSessionResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId);
+    ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId);
 
     PaymentSessionResponse getSession(UUID bookingId, UUID requesterUserId);
 
@@ -27,7 +28,7 @@ public interface PaymentSessionService {
             PageRequest<PaymentSessionField> request,
             UUID requesterUserId);
 
-    PaymentSessionResponse requestRefund(UUID bookingId, UUID requesterUserId, RefundPaymentRequest request);
+    ActionMessageResponse requestRefund(UUID bookingId, UUID requesterUserId, RefundPaymentRequest request);
 
     CinemaRevenueReportResponse getAllCinemaRevenueReport(CinemaRevenueReportRequest request);
 

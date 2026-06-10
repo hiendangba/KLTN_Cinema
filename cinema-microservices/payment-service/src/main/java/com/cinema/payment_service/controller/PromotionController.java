@@ -1,5 +1,6 @@
 package com.cinema.payment_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
@@ -34,20 +35,20 @@ public class PromotionController extends BaseController {
     private final PromotionService promotionService;
 
     @PostMapping
-    public ResponseEntity<APIResponse<PromotionResponse>> createPromotion(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createPromotion(
             @Valid @RequestBody PromotionUpsertRequest request,
             HttpServletRequest httpRequest) {
         RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
-        return created(promotionService.createPromotion(request, httpRequest));
+        return created(SuccessMessage.PROMOTION_CREATED, promotionService.createPromotion(request, httpRequest));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<APIResponse<PromotionResponse>> updatePromotion(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> updatePromotion(
             @PathVariable UUID id,
             @Valid @RequestBody PromotionUpsertRequest request,
             HttpServletRequest httpRequest) {
         RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
-        return ok(promotionService.updatePromotion(id, request, httpRequest));
+        return ok(SuccessMessage.PROMOTION_UPDATED, promotionService.updatePromotion(id, request, httpRequest));
     }
 
     @GetMapping("/{id}")
@@ -56,7 +57,7 @@ public class PromotionController extends BaseController {
             HttpServletRequest httpRequest) {
         RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER,
                 HeaderNames.ROLE_STAFF);
-        return ok(promotionService.getPromotionById(id, httpRequest));
+        return ok(SuccessMessage.PROMOTION_FETCHED, promotionService.getPromotionById(id, httpRequest));
     }
 
     @PostMapping("/search")
@@ -65,14 +66,14 @@ public class PromotionController extends BaseController {
             HttpServletRequest httpRequest) {
         RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER,
                 HeaderNames.ROLE_STAFF);
-        return ok(promotionService.searchPromotions(request, httpRequest));
+        return ok(SuccessMessage.PROMOTIONS_SEARCHED, promotionService.searchPromotions(request, httpRequest));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<APIResponse<ActionMessageResponse>> deletePromotion(
-            @PathVariable UUID id,
-            HttpServletRequest httpRequest) {
+        @PathVariable UUID id,
+        HttpServletRequest httpRequest) {
         RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
-        return ok(promotionService.deletePromotion(id, httpRequest));
+        return ok(SuccessMessage.PROMOTION_DELETED, promotionService.deletePromotion(id, httpRequest));
     }
 }

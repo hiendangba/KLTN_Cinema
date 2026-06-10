@@ -1,11 +1,11 @@
 package com.cinema.showtime_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
-import com.cinema.dto.response.ResultResponse;
 import com.cinema.showtime_service.dto.request.ShowTimeCreateRequest;
 import com.cinema.showtime_service.dto.request.SeatSuggestionRequest;
 import com.cinema.showtime_service.dto.request.SearchShowtimesByFilmRequest;
@@ -44,24 +44,24 @@ public class ShowTimeController extends BaseController {
             @Valid @RequestBody PageRequest<com.cinema.showtime_service.dto.request.ShowTimeField> request,
             HttpServletRequest httpRequest) {
         PageResponse<ShowTimeResponse> response = showTimeService.searchShowtimes(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.SHOWTIMES_SEARCHED, response);
     }
 
     @PostMapping
-    public ResponseEntity<APIResponse<ResultResponse<ShowTimeResponse>>> createShowTime(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createShowTime(
             @Valid @RequestBody ShowTimeCreateRequest showTimeCreateRequest, HttpServletRequest httpRequest) {
         log.info("Request tao showtime cho phim: {}", showTimeCreateRequest);
-        ResultResponse<ShowTimeResponse> response = showTimeService.createShowTime(showTimeCreateRequest, httpRequest);
-        return created(response);
+        ActionMessageResponse response = showTimeService.createShowTime(showTimeCreateRequest, httpRequest);
+        return created(SuccessMessage.SHOWTIME_CREATED, response);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<APIResponse<ActionMessageResponse>> updateShowTime(
-            @Valid @PathVariable UUID id,
-            @Valid @RequestBody UpdateShowTimeRequest updateShowTimeRequest,
-            HttpServletRequest httpRequest) {
+        @Valid @PathVariable UUID id,
+        @Valid @RequestBody UpdateShowTimeRequest updateShowTimeRequest,
+        HttpServletRequest httpRequest) {
         ActionMessageResponse response = showTimeService.updateShowTime(id, updateShowTimeRequest, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.SHOWTIME_UPDATED, response);
     }
 
     @DeleteMapping("/{id}")
@@ -69,19 +69,19 @@ public class ShowTimeController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = showTimeService.deleteShowTime(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.SHOWTIME_DELETED, response);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<ShowTimeResponse>> getShowTimeById(@PathVariable UUID id) {
         ShowTimeResponse response = showTimeService.getShowTimeById(id);
-        return ok(response);
+        return ok(SuccessMessage.SHOWTIME_FETCHED, response);
     }
 
     @GetMapping("/{id}/seat-map")
     public ResponseEntity<APIResponse<SeatMapResponse>> getSeatMap(@PathVariable UUID id) {
         SeatMapResponse response = showTimeService.getSeatMapByShowtimeId(id);
-        return ok(response);
+        return ok(SuccessMessage.SHOWTIME_FETCHED, response);
     }
 
     @PostMapping("/{showtimeId}/seat-suggestions")
@@ -89,7 +89,7 @@ public class ShowTimeController extends BaseController {
             @PathVariable UUID showtimeId,
             @Valid @RequestBody SeatSuggestionRequest request) {
         SeatSuggestionResponse response = seatSuggestionService.suggestSeatSuggestions(showtimeId, request);
-        return ok("Seat suggestions fetched successfully", response);
+        return ok(SuccessMessage.SEAT_SUGGESTIONS_FETCHED, response);
     }
 
     @PostMapping("/films/{filmId}/search")
@@ -97,6 +97,6 @@ public class ShowTimeController extends BaseController {
             @PathVariable UUID filmId,
             @Valid @RequestBody SearchShowtimesByFilmRequest request) {
         PageResponse<ShowTimeResponse> response = showTimeService.searchShowtimesByFilmId(filmId, request);
-        return ok(response);
+        return ok(SuccessMessage.SHOWTIMES_SEARCHED, response);
     }
 }

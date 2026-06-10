@@ -1,5 +1,6 @@
 package com.cinema.hall_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
@@ -38,20 +39,20 @@ public class HallController extends BaseController {
             @Valid @RequestBody CreateHallRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = hallService.createHall(request, httpRequest);
-        return created(response);
+        return created(SuccessMessage.HALL_CREATED, response);
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<APIResponse<HallResponse>> getHallById(@PathVariable UUID id) {
         HallResponse response = hallService.getHallById(id);
-        return ok(response);
+        return ok(SuccessMessage.HALL_FETCHED, response);
     }
 
     @PostMapping("/search")
     public ResponseEntity<APIResponse<PageResponse<HallResponse>>> searchHalls(
             @Valid @RequestBody PageRequest<HallField> request) {
         PageResponse<HallResponse> response = hallService.searchHalls(request);
-        return ok(response);
+        return ok(SuccessMessage.HALLS_SEARCHED, response);
     }
 
     @PutMapping("/{id}")
@@ -60,14 +61,14 @@ public class HallController extends BaseController {
             @Valid @RequestBody UpdateHallRequest request,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = hallService.updateHall(id, request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.HALL_UPDATED, response);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<APIResponse<ActionMessageResponse>> deleteHall(@PathVariable UUID id,
                                                                          HttpServletRequest httpRequest) {
         ActionMessageResponse response = hallService.deleteHall(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.HALL_DELETED, response);
     }
 
 }

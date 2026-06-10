@@ -1,5 +1,6 @@
 package com.cinema.booking_service.services.impl;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueField;
@@ -100,7 +101,7 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional
-    public BookingResponse createBooking(CreateBookingRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse createBooking(CreateBookingRequest request, HttpServletRequest httpRequest) {
         validateBookingCreatorRole(httpRequest);
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         UUID userId = HeaderNames.ROLE_CUSTOMER.equals(role) ? resolveUserId(httpRequest) : null;
@@ -171,8 +172,10 @@ public class BookingServiceImpl implements BookingService {
         }
 
         try {
-            Booking saved = bookingRepository.save(booking);
-            return toBookingResponse(saved);
+            bookingRepository.save(booking);
+            return ActionMessageResponse.builder()
+                    .message(SuccessMessage.BOOKING_CREATED.getMessage())
+                    .build();
         } catch (RuntimeException ex) {
             seatLockService.releaseSeats(request.getShowtimeId(), normalizedSeatCodes);
             throw ex;
@@ -402,7 +405,7 @@ public class BookingServiceImpl implements BookingService {
         seatLockService.releaseSeats(booking.getShowtimeId(), extractSeatCodes(booking.getSeatItems()));
 
         return ActionMessageResponse.builder()
-                .message("Booking cancelled successfully")
+                .message(SuccessMessage.BOOKING_CANCELLED.getMessage())
                 .build();
     }
 

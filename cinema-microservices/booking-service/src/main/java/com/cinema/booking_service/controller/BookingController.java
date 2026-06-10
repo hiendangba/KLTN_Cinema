@@ -1,5 +1,6 @@
 package com.cinema.booking_service.controller;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.booking_service.dto.request.CreateBookingRequest;
 import com.cinema.booking_service.dto.request.BookingField;
 import com.cinema.booking_service.dto.request.BookingRevenueReportRequest;
@@ -38,11 +39,11 @@ public class BookingController extends BaseController {
     private final BookingService bookingService;
 
     @PostMapping
-    public ResponseEntity<APIResponse<BookingResponse>> createBooking(
+    public ResponseEntity<APIResponse<ActionMessageResponse>> createBooking(
             @Valid @RequestBody CreateBookingRequest request,
             HttpServletRequest httpRequest) {
-        BookingResponse response = bookingService.createBooking(request, httpRequest);
-        return created(response);
+        ActionMessageResponse response = bookingService.createBooking(request, httpRequest);
+        return created(SuccessMessage.BOOKING_CREATED, response);
     }
 
     @GetMapping("/{id}")
@@ -50,7 +51,7 @@ public class BookingController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         BookingResponse response = bookingService.getBookingById(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.BOOKING_FETCHED, response);
     }
 
     @PostMapping("/me/active/search")
@@ -58,7 +59,7 @@ public class BookingController extends BaseController {
             @Valid @RequestBody PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
         PageResponse<BookingResponse> response = bookingService.searchMyActiveBookings(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.BOOKINGS_SEARCHED, response);
     }
 
     @PostMapping("/me/history/search")
@@ -66,7 +67,7 @@ public class BookingController extends BaseController {
             @Valid @RequestBody PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
         PageResponse<BookingResponse> response = bookingService.searchMyBookingHistory(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.BOOKINGS_SEARCHED, response);
     }
 
     @PostMapping("/cinemas/me/search")
@@ -74,7 +75,7 @@ public class BookingController extends BaseController {
             @Valid @RequestBody PageRequest<BookingField> request,
             HttpServletRequest httpRequest) {
         PageResponse<BookingResponse> response = bookingService.searchBookingsByOperatorCinema(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.BOOKINGS_SEARCHED, response);
     }
 
     @PostMapping("/cinemas/me/purchased/search")
@@ -83,7 +84,7 @@ public class BookingController extends BaseController {
             HttpServletRequest httpRequest) {
         PageResponse<BookingResponse> response =
                 bookingService.searchPurchasedBookingsByOperatorCinema(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.BOOKINGS_SEARCHED, response);
     }
 
     @PostMapping("/cinemas/me/unpaid/search")
@@ -92,7 +93,7 @@ public class BookingController extends BaseController {
             HttpServletRequest httpRequest) {
         PageResponse<BookingResponse> response =
                 bookingService.searchUnpaidBookingsByOperatorCinema(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.BOOKINGS_SEARCHED, response);
     }
 
     @PostMapping("/revenues/cinemas/search")
@@ -101,7 +102,7 @@ public class BookingController extends BaseController {
             @Valid @RequestBody BookingRevenueReportRequest request) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN);
         BookingRevenueReportResponse response = bookingService.getAllCinemaRevenueReport(request);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_REVENUE_REPORT_FETCHED, response);
     }
 
     @PostMapping("/revenues/cinemas/me/search")
@@ -110,7 +111,7 @@ public class BookingController extends BaseController {
             @Valid @RequestBody BookingRevenueReportRequest request) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
         BookingRevenueReportResponse response = bookingService.getMyCinemaRevenueReport(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.CINEMA_REVENUE_REPORT_FETCHED, response);
     }
 
     @PostMapping("/revenues/cinemas/export")
@@ -128,7 +129,7 @@ public class BookingController extends BaseController {
             @Valid @RequestBody ShowtimePerformanceReportRequest request) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN);
         ShowtimePerformanceReportResponse response = bookingService.getAllShowtimePerformanceReport(request);
-        return ok(response);
+        return ok(SuccessMessage.SHOWTIME_PERFORMANCE_REPORT_FETCHED, response);
     }
 
     @PostMapping("/reports/showtimes/me/search")
@@ -137,7 +138,7 @@ public class BookingController extends BaseController {
             @Valid @RequestBody ShowtimePerformanceReportRequest request) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
         ShowtimePerformanceReportResponse response = bookingService.getMyShowtimePerformanceReport(request, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.SHOWTIME_PERFORMANCE_REPORT_FETCHED, response);
     }
 
     @GetMapping("/{id}/checkout-context")
@@ -145,7 +146,7 @@ public class BookingController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         CheckoutContextResponse response = bookingService.getCheckoutContext(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.BOOKING_CHECKOUT_CONTEXT_FETCHED, response);
     }
 
     @PostMapping("/{id}/cancel")
@@ -153,6 +154,6 @@ public class BookingController extends BaseController {
             @PathVariable UUID id,
             HttpServletRequest httpRequest) {
         ActionMessageResponse response = bookingService.cancelBooking(id, httpRequest);
-        return ok(response);
+        return ok(SuccessMessage.BOOKING_CANCELLED, response);
     }
 }

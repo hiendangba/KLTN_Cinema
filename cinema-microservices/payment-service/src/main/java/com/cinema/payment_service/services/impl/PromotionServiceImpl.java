@@ -1,5 +1,6 @@
 package com.cinema.payment_service.services.impl;
 
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.FilterField;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
@@ -57,7 +58,7 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     @Transactional
-    public PromotionResponse createPromotion(PromotionUpsertRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse createPromotion(PromotionUpsertRequest request, HttpServletRequest httpRequest) {
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
         validateUpsertRequest(request);
@@ -78,12 +79,14 @@ public class PromotionServiceImpl implements PromotionService {
 
         promotion = promotionRepository.save(promotion);
         replaceMappings(promotion.getId(), cinemaIds, filmIds);
-        return paymentMapper.toPromotionResponse(promotion, cinemaIds, filmIds);
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PROMOTION_CREATED.getMessage())
+                .build();
     }
 
     @Override
     @Transactional
-    public PromotionResponse updatePromotion(UUID id, PromotionUpsertRequest request, HttpServletRequest httpRequest) {
+    public ActionMessageResponse updatePromotion(UUID id, PromotionUpsertRequest request, HttpServletRequest httpRequest) {
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
         validateUpsertRequest(request);
@@ -106,7 +109,9 @@ public class PromotionServiceImpl implements PromotionService {
 
         promotion = promotionRepository.save(promotion);
         replaceMappings(promotion.getId(), cinemaIds, filmIds);
-        return paymentMapper.toPromotionResponse(promotion, cinemaIds, filmIds);
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PROMOTION_UPDATED.getMessage())
+                .build();
     }
 
     @Override
@@ -168,7 +173,9 @@ public class PromotionServiceImpl implements PromotionService {
         promotionCinemaRepository.deleteByPromotionId(id);
         promotionFilmRepository.deleteByPromotionId(id);
 
-        return new ActionMessageResponse("Promotion deleted successfully");
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PROMOTION_DELETED.getMessage())
+                .build();
     }
 
     private void validateUpsertRequest(PromotionUpsertRequest request) {
