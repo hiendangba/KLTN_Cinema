@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
+import com.cinema.Enum.SuccessMessage;
 import java.util.UUID;
 
 @RestController
@@ -38,7 +38,7 @@ public class UploadController extends BaseController {
             @RequestParam("files") MultipartFile[] files,
             HttpServletRequest request) {
         UploadFilesData data = uploadService.uploadImages(files, request);
-        return ok("Upload files successfully", data);
+        return ok(SuccessMessage.UPLOAD_IMAGES_COMPLETED, data);
     }
 
     @PostMapping("/videos/sessions")
@@ -46,7 +46,7 @@ public class UploadController extends BaseController {
             @Valid @RequestBody CreateVideoUploadSessionRequest requestBody,
             HttpServletRequest request) {
         VideoUploadSessionData data = uploadService.createVideoSession(requestBody, request);
-        return ok("Video upload session created", data);
+        return ok(SuccessMessage.VIDEO_UPLOAD_SESSION_CREATED, data);
     }
 
     @PutMapping(value = "/videos/sessions/{sessionId}/chunks/{index}", consumes = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -55,7 +55,7 @@ public class UploadController extends BaseController {
             @PathVariable int index,
             HttpServletRequest request) {
         VideoChunkUploadData data = uploadService.uploadVideoChunk(sessionId, index, request);
-        return ok("Video chunk uploaded successfully", data);
+        return ok(SuccessMessage.VIDEO_CHUNK_UPLOADED, data);
     }
 
     @GetMapping("/videos/sessions/{sessionId}")
@@ -63,7 +63,7 @@ public class UploadController extends BaseController {
             @PathVariable UUID sessionId,
             HttpServletRequest request) {
         VideoUploadSessionStatusData data = uploadService.getVideoSessionStatus(sessionId, request);
-        return ok("Video upload session status fetched successfully", data);
+        return ok(SuccessMessage.VIDEO_UPLOAD_STATUS_FETCHED, data);
     }
 
     @PostMapping("/videos/sessions/{sessionId}/complete")
@@ -71,6 +71,6 @@ public class UploadController extends BaseController {
             @PathVariable UUID sessionId,
             HttpServletRequest request) {
         UploadVideoCompleteData data = uploadService.completeVideoUpload(sessionId, request);
-        return ok("Video uploaded successfully", data);
+        return ok(SuccessMessage.VIDEO_UPLOAD_COMPLETED, data);
     }
 }
