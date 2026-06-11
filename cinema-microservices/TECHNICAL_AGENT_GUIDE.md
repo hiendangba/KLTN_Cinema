@@ -1777,5 +1777,13 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - `showtime-service` test/compile pass trong reactor chạy cùng module
 - Những builder còn lại trong các service hiện tại chủ yếu là pagination/report/aggregation, không phải kiểu DTO mapping thuần nên được giữ nguyên để không làm lẫn business logic với mapping.
 
+## Changelog ngắn (2026-06-11)
+
+- Tối ưu `hall-service` để `searchHalls` và `getHallById` cùng tái sử dụng cache hall response theo `hallId` thay vì luôn enrich lại từ seat/cinema/image mỗi lần:
+  - `HallServiceImpl` giờ resolve cache `CACHE_HALLS` trước khi build response mới
+  - `searchHalls` dùng lại cùng cache path với `getHallById`, nên request lặp lại cùng hall sẽ giảm đáng kể latency
+  - `updateHall` và `deleteHall` vẫn evict `CACHE_HALLS` để tránh trả dữ liệu cũ
+- Mục tiêu của thay đổi này là giữ nguyên contract FE, nhưng giảm thời gian phản hồi cho các lần search lặp lại khi dữ liệu hall không đổi.
+
 
 

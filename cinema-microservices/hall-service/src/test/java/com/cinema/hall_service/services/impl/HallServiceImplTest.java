@@ -1,6 +1,7 @@
 package com.cinema.hall_service.services.impl;
 
 import com.cinema.Enum.HallEnum;
+import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.dto.response.ActionMessageResponse;
@@ -47,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -102,7 +104,7 @@ class HallServiceImplTest {
 
         ActionMessageResponse response = hallService.createHall(createRequest, request);
 
-        assertThat(response.getMessage()).isEqualTo("Hall created successfully");
+        assertThat(response.getMessage()).isEqualTo(SuccessMessage.HALL_CREATED.getMessage());
         assertThat(hall.getCinemaId()).isEqualTo(cinemaId);
         verify(hallRepository).save(hall);
     }
@@ -114,7 +116,7 @@ class HallServiceImplTest {
         MockHttpServletRequest request = managerRequest(managerId);
         CreateHallRequest createRequest = createRequest(cinemaId, "Hall A");
 
-        when(cinemaGrpcClient.getCinemaIdsByUserId(managerId, HeaderNames.ROLE_MANAGER))
+        when(cinemaGrpcClient.getCinemaIdsByUserId(managerId))
                 .thenReturn(List.of(UUID.randomUUID()));
 
         BusinessException exception = assertThrows(BusinessException.class,
@@ -170,7 +172,7 @@ class HallServiceImplTest {
 
         ActionMessageResponse response = hallService.updateHall(hallId, updateRequest, request);
 
-        assertThat(response.getMessage()).isEqualTo("Hall updated successfully");
+        assertThat(response.getMessage()).isEqualTo(SuccessMessage.HALL_UPDATED.getMessage());
         assertThat(hall.getCinemaId()).isEqualTo(cinemaId);
         assertThat(hall.getName()).isEqualTo("Hall B");
         verify(hallRepository).save(hall);
@@ -195,7 +197,7 @@ class HallServiceImplTest {
 
         ActionMessageResponse response = hallService.deleteHall(hallId, request);
 
-        assertThat(response.getMessage()).isEqualTo("Hall deleted successfully");
+        assertThat(response.getMessage()).isEqualTo(SuccessMessage.HALL_DELETED.getMessage());
         assertThat(hall.getIsDeleted()).isTrue();
         verify(hallRepository).save(hall);
     }
@@ -214,7 +216,8 @@ class HallServiceImplTest {
         hall.setIsDeleted(false);
 
         when(hallRepository.findByIdAndIsDeletedFalse(hallId)).thenReturn(Optional.of(hall));
-        when(cinemaGrpcClient.getCinemaIdsByUserId(managerId)).thenReturn(List.of(UUID.randomUUID()));
+        when(cinemaGrpcClient.getCinemaIdsByUserId(managerId))
+                .thenReturn(List.of(UUID.randomUUID()));
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> hallService.deleteHall(hallId, request));
@@ -254,7 +257,8 @@ class HallServiceImplTest {
         Hall hall = hall(hallId, cinemaId, "Hall A");
 
         when(hallRepository.findByIdAndIsDeletedFalse(hallId)).thenReturn(Optional.of(hall));
-        when(cinemaGrpcClient.getCinemaIdsByUserId(managerId)).thenReturn(List.of(UUID.randomUUID()));
+        when(cinemaGrpcClient.getCinemaIdsByUserId(managerId, HeaderNames.ROLE_MANAGER))
+                .thenReturn(List.of(UUID.randomUUID()));
 
         BusinessException exception = assertThrows(BusinessException.class,
                 () -> withRequestContext(managerRequest(managerId), () -> {
@@ -379,6 +383,44 @@ class HallServiceImplTest {
 
         assertThat(response.getData()).hasSize(1);
         assertThat(response.getData().get(0).getCinemaId()).isEqualTo(assignedCinemaId);
+    }
+
+    @Test
+    void searchHalls_usesCachedHallResponseWhenAvailable() {
+        UUID managerId = UUID.randomUUID();
+        UUID ownedCinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        Hall hall = hall(hallId, ownedCinemaId, "Cached Hall");
+        HallResponse cachedResponse = HallResponse.builder()
+                .id(hallId)
+                .cinemaId(ownedCinemaId)
+                .name("Cached Hall")
+                .build();
+        MockHttpServletRequest request = managerRequest(managerId);
+
+        when(cinemaGrpcClient.getCinemaIdsByUserId(managerId, HeaderNames.ROLE_MANAGER))
+                .thenReturn(List.of(ownedCinemaId));
+        when(hallRepositoryImpl.countWithFilter(any(), any())).thenReturn(1L);
+        when(hallRepositoryImpl.searchWithPageAndSortAndFilter(any(), anyInt(), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(hall));
+        when(cacheManager.getCache(RedisConfig.CACHE_HALLS)).thenReturn(cache);
+        when(cache.get(hallId, HallResponse.class)).thenReturn(cachedResponse);
+
+        PageRequest<com.cinema.hall_service.dto.request.HallField> pageRequest =
+                PageRequest.<com.cinema.hall_service.dto.request.HallField>builder()
+                        .page(1)
+                        .size(20)
+                        .keyword("hall")
+                        .build();
+
+        PageResponse<HallResponse> response = withRequestContext(request, () -> hallService.searchHalls(pageRequest));
+
+        assertThat(response.getData()).hasSize(1);
+        assertThat(response.getData().get(0)).isSameAs(cachedResponse);
+        assertThat(response.getData().get(0).getCinemaId()).isEqualTo(ownedCinemaId);
+        verify(seatGrpcClient, never()).getHallSeats(any());
+        verify(hallImageRepository, never()).findAllByHall_IdAndIsDeletedFalseOrderByTimeCreatedDesc(any());
+        verify(cinemaGrpcClient, never()).getCinemaNameById(any());
     }
 
     private MockHttpServletRequest managerRequest(UUID managerId) {

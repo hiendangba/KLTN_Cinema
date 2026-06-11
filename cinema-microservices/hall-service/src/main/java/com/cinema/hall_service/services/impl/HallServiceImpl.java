@@ -100,20 +100,7 @@ public class HallServiceImpl implements HallService {
     public HallResponse getHallById(UUID id) {
         Hall hall = getActiveHallOrThrow(id);
         authorizeHallReadAccess(hall);
-
-        Cache cache = cacheManager.getCache(RedisConfig.CACHE_HALLS);
-        if (cache == null) {
-            return toHallResponse(hall, new HashMap<>());
-        }
-
-        HallResponse cached = cache.get(id, HallResponse.class);
-        if (cached != null) {
-            return cached;
-        }
-
-        HallResponse response = toHallResponse(hall, new HashMap<>());
-        cache.put(id, response);
-        return response;
+        return resolveHallResponse(hall, new HashMap<>());
     }
 
     @Override
@@ -149,7 +136,7 @@ public class HallServiceImpl implements HallService {
 
         Map<UUID, CinemaResponse> cinemaResponseCache = new HashMap<>();
         List<HallResponse> data = halls.stream()
-                .map(hall -> toHallResponse(hall, cinemaResponseCache))
+                .map(hall -> resolveHallResponse(hall, cinemaResponseCache))
                 .toList();
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
 
@@ -236,6 +223,22 @@ public class HallServiceImpl implements HallService {
                 .toList());
         response.setCinemaResponse(
                 cinemaResponseCache.computeIfAbsent(hall.getCinemaId(), this::resolveCinemaResponse));
+        return response;
+    }
+
+    private HallResponse resolveHallResponse(Hall hall, Map<UUID, CinemaResponse> cinemaResponseCache) {
+        Cache cache = cacheManager.getCache(RedisConfig.CACHE_HALLS);
+        if (cache != null) {
+            HallResponse cached = cache.get(hall.getId(), HallResponse.class);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
+        HallResponse response = toHallResponse(hall, cinemaResponseCache);
+        if (cache != null) {
+            cache.put(hall.getId(), response);
+        }
         return response;
     }
 
