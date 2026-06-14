@@ -57,8 +57,9 @@ public class PaymentController extends BaseController {
             HttpServletRequest servletRequest,
             @RequestBody CreatePaymentSessionRequest request) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
+        String requesterRole = RequestAuthUtils.requireRoleHeader(servletRequest);
         return created(SuccessMessage.PAYMENT_SESSION_CREATED,
-                paymentSessionService.createSession(request, requesterUserId));
+                paymentSessionService.createSession(request, requesterUserId, requesterRole));
     }
 
     @GetMapping("/sessions/{bookingId}")

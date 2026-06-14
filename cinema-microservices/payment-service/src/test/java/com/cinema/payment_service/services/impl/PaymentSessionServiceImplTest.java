@@ -7,6 +7,8 @@ import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.Enum.SuccessMessage;
+import com.cinema.exception.BusinessException;
+import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
@@ -53,6 +55,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -125,22 +128,12 @@ class PaymentSessionServiceImplTest {
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
                 .thenReturn(Optional.empty());
-        when(momoGatewayProperties.getRedirectUrl()).thenReturn("https://cinema-api.duckdns.org/payment/result");
-        when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(momoPaymentGatewayClient.createCheckout(any(PaymentTransaction.class), any()))
-                .thenReturn(new MomoPaymentGatewayClient.MomoCheckoutResult(
-                        "https://momo.example.com/pay",
-                        "https://momo.example.com/qr",
-                        "{}",
-                        "{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}"));
+        stubSuccessfulCheckout();
 
         CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
         request.setBookingId(bookingId);
 
-        ActionMessageResponse response = paymentSessionService.createSession(request, userId);
+        ActionMessageResponse response = paymentSessionService.createSession(request, userId, HeaderNames.ROLE_CUSTOMER);
 
         ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
         verify(paymentTransactionRepository).save(transactionCaptor.capture());
@@ -195,17 +188,7 @@ class PaymentSessionServiceImplTest {
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
                 .thenReturn(Optional.empty());
-        when(momoGatewayProperties.getRedirectUrl()).thenReturn("https://cinema-api.duckdns.org/payment/result");
-        when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-        when(momoPaymentGatewayClient.createCheckout(any(PaymentTransaction.class), any()))
-                .thenReturn(new MomoPaymentGatewayClient.MomoCheckoutResult(
-                        "https://momo.example.com/pay",
-                        "https://momo.example.com/qr",
-                        "{}",
-                        "{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}"));
+        stubSuccessfulCheckout();
         UUID promotionId = UUID.randomUUID();
         when(promotionEngine.resolvePromotionForCheckout(
                 "CINEMASTAR10",
@@ -223,7 +206,7 @@ class PaymentSessionServiceImplTest {
         request.setBookingId(bookingId);
         request.setPromotionCode("CINEMASTAR10");
 
-        ActionMessageResponse response = paymentSessionService.createSession(request, userId);
+        ActionMessageResponse response = paymentSessionService.createSession(request, userId, HeaderNames.ROLE_CUSTOMER);
 
         ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
         verify(paymentTransactionRepository).save(transactionCaptor.capture());
@@ -248,6 +231,143 @@ class PaymentSessionServiceImplTest {
                 "CinemaStar 10%",
                 BigDecimal.valueOf(18000).setScale(0),
                 BigDecimal.valueOf(162000).setScale(0));
+    }
+
+    @Test
+    void createSession_shouldRejectCustomerForAnotherUserBooking() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = buildBookingContext(
+                bookingId,
+                cinemaId,
+                ownerId,
+                "PENDING",
+                "UNPAID");
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> paymentSessionService.createSession(request, requesterId, HeaderNames.ROLE_CUSTOMER));
+        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
+    }
+
+    @Test
+    void createSession_shouldAllowStaffWithinAssignedCinema() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = buildBookingContext(
+                bookingId,
+                cinemaId,
+                ownerId,
+                "PENDING",
+                "UNPAID");
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(buildReusableTransaction(bookingId, UUID.randomUUID())));
+        when(cinemaGrpcClient.getCinemasByUserId(requesterId, HeaderNames.ROLE_STAFF))
+                .thenReturn(List.of(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema 1")));
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+
+        ActionMessageResponse response = paymentSessionService.createSession(request, requesterId, HeaderNames.ROLE_STAFF);
+
+        assertEquals(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage(), response.getMessage());
+        verify(paymentTransactionRepository).findFirstByBookingIdOrderByTimeCreatedDesc(bookingId);
+        verify(paymentTransactionRepository, times(0)).saveAndFlush(any(PaymentTransaction.class));
+        verifyNoInteractions(momoPaymentGatewayClient);
+    }
+
+    @Test
+    void createSession_shouldRejectStaffOutsideAssignedCinema() {
+        UUID bookingId = UUID.randomUUID();
+        UUID bookingCinemaId = UUID.randomUUID();
+        UUID assignedCinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = buildBookingContext(
+                bookingId,
+                bookingCinemaId,
+                ownerId,
+                "PENDING",
+                "UNPAID");
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(cinemaGrpcClient.getCinemasByUserId(requesterId, HeaderNames.ROLE_STAFF))
+                .thenReturn(List.of(new CinemaGrpcClient.CinemaSummary(assignedCinemaId, "Cinema 2")));
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> paymentSessionService.createSession(request, requesterId, HeaderNames.ROLE_STAFF));
+        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
+    }
+
+    @Test
+    void createSession_shouldAllowManagerWithinManagedCinema() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = buildBookingContext(
+                bookingId,
+                cinemaId,
+                ownerId,
+                "PENDING",
+                "UNPAID");
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(buildReusableTransaction(bookingId, UUID.randomUUID())));
+        when(cinemaGrpcClient.getCinemasByUserId(requesterId, HeaderNames.ROLE_MANAGER))
+                .thenReturn(List.of(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema 1")));
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+
+        ActionMessageResponse response = paymentSessionService.createSession(request, requesterId, HeaderNames.ROLE_MANAGER);
+
+        assertEquals(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage(), response.getMessage());
+        verify(paymentTransactionRepository).findFirstByBookingIdOrderByTimeCreatedDesc(bookingId);
+        verify(paymentTransactionRepository, times(0)).saveAndFlush(any(PaymentTransaction.class));
+        verifyNoInteractions(momoPaymentGatewayClient);
+    }
+
+    @Test
+    void createSession_shouldAllowAdminAcrossCinemaScope() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = buildBookingContext(
+                bookingId,
+                cinemaId,
+                ownerId,
+                "PENDING",
+                "UNPAID");
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(buildReusableTransaction(bookingId, UUID.randomUUID())));
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+
+        ActionMessageResponse response = paymentSessionService.createSession(request, requesterId, HeaderNames.ROLE_ADMIN);
+
+        assertEquals(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage(), response.getMessage());
+        verify(paymentTransactionRepository).findFirstByBookingIdOrderByTimeCreatedDesc(bookingId);
+        verify(paymentTransactionRepository, times(0)).saveAndFlush(any(PaymentTransaction.class));
+        verifyNoInteractions(cinemaGrpcClient, momoPaymentGatewayClient);
     }
 
     @Test
@@ -590,6 +710,65 @@ class PaymentSessionServiceImplTest {
         transaction.setPromotionCode(promotionCode);
         transaction.setPromotionName(promotionName);
         transaction.setPromotionDiscountAmount(promotionDiscountAmount);
+        return transaction;
+    }
+
+    private void stubSuccessfulCheckout() {
+        when(momoGatewayProperties.getRedirectUrl()).thenReturn("https://cinema-api.duckdns.org/payment/result");
+        when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(momoPaymentGatewayClient.createCheckout(any(PaymentTransaction.class), any()))
+                .thenReturn(new MomoPaymentGatewayClient.MomoCheckoutResult(
+                        "https://momo.example.com/pay",
+                        "https://momo.example.com/qr",
+                        "{}",
+                        "{\"resultCode\":0,\"payUrl\":\"https://momo.example.com/pay\"}"));
+    }
+
+    private BookingGrpcClient.BookingPaymentContext buildBookingContext(
+            UUID bookingId,
+            UUID cinemaId,
+            UUID userId,
+            String bookingStatus,
+            String paymentStatus) {
+        return new BookingGrpcClient.BookingPaymentContext(
+                bookingId,
+                UUID.randomUUID(),
+                cinemaId,
+                UUID.randomUUID(),
+                userId,
+                BigDecimal.valueOf(180000),
+                LocalDateTime.now().plusMinutes(30),
+                bookingStatus,
+                paymentStatus,
+                BigDecimal.valueOf(150000),
+                BigDecimal.valueOf(30000),
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(180000));
+    }
+
+    private PaymentTransaction buildReusableTransaction(UUID bookingId, UUID userId) {
+        PaymentTransaction transaction = new PaymentTransaction();
+        transaction.setId(UUID.randomUUID());
+        transaction.setBookingId(bookingId);
+        transaction.setShowtimeId(UUID.randomUUID());
+        transaction.setCinemaId(UUID.randomUUID());
+        transaction.setFilmId(UUID.randomUUID());
+        transaction.setUserId(userId);
+        transaction.setAmount(BigDecimal.valueOf(180000).setScale(0));
+        transaction.setTicketSubtotalSnapshot(BigDecimal.valueOf(150000).setScale(0));
+        transaction.setProductSubtotalSnapshot(BigDecimal.valueOf(30000).setScale(0));
+        transaction.setCurrency("VND");
+        transaction.setPaymentMethod("MOMO_QR");
+        transaction.setOrderInvoiceNumber("INV-" + UUID.randomUUID());
+        transaction.setStatus(PaymentTransactionStatus.PAID);
+        transaction.setExpiresAt(LocalDateTime.now().plusMinutes(15));
+        transaction.setCheckoutPayloadJson("{}");
         return transaction;
     }
 }

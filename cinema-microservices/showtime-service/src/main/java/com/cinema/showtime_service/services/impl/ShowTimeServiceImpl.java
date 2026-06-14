@@ -194,13 +194,13 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         }
 
         List<ShowTime> allShowTimes = showTimeRepositoryImpl.searchAllWithSortAndFilter(sortFields, filterFields);
-        List<ShowTimeResponse> showtimeResponses = enrichShowtimeResponses(buildShowtimeResponses(allShowTimes));
+        List<ShowTimeResponse> showtimeResponses = enrichShowtimeMetadata(buildShowtimeResponses(allShowTimes));
         List<ShowTimeResponse> matchedShowtimes = showtimeResponses.stream()
                 .filter(showtime -> matchesShowtimeKeyword(showtime, keyword))
                 .collect(Collectors.toList());
         int totalElements = matchedShowtimes.size();
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
-        List<ShowTimeResponse> pageData = slicePage(matchedShowtimes, page, size);
+        List<ShowTimeResponse> pageData = enrichShowtimeSeatAvailability(slicePage(matchedShowtimes, page, size));
 
         return PageResponse.<ShowTimeResponse>builder()
                 .data(pageData)
@@ -307,6 +307,10 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     }
 
     private List<ShowTimeResponse> enrichShowtimeResponses(List<ShowTimeResponse> showtimes) {
+        return enrichShowtimeSeatAvailability(enrichShowtimeMetadata(showtimes));
+    }
+
+    private List<ShowTimeResponse> enrichShowtimeMetadata(List<ShowTimeResponse> showtimes) {
         if (showtimes.isEmpty()) {
             return showtimes;
         }
@@ -322,11 +326,22 @@ public class ShowTimeServiceImpl implements ShowTimeService {
 
         Map<UUID, HallResponse> hallMap = getHallResponseMap(showtimes);
         enrichHallCinemaNames(hallMap);
-        Map<UUID, SeatGrpcClient.LayoutBundle> hallLayoutMap = getHallLayoutMap(showtimes);
 
         showtimes.forEach(showtime -> {
             showtime.setFilm(filmMap.get(showtime.getFilmId()));
             showtime.setHall(hallMap.get(showtime.getHallId()));
+        });
+
+        return showtimes;
+    }
+
+    private List<ShowTimeResponse> enrichShowtimeSeatAvailability(List<ShowTimeResponse> showtimes) {
+        if (showtimes.isEmpty()) {
+            return showtimes;
+        }
+
+        Map<UUID, SeatGrpcClient.LayoutBundle> hallLayoutMap = getHallLayoutMap(showtimes);
+        showtimes.forEach(showtime -> {
             SeatAvailabilityStats stats = resolveSeatAvailability(
                     showtime.getId(),
                     hallLayoutMap.get(showtime.getHallId()));

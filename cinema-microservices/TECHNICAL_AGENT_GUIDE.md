@@ -622,7 +622,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
 | `GET` | `/api/payments/vietqr/banks` | ❌ Public | Lấy danh mục ngân hàng từ local catalog đã sync từ VietQR. |
-| `POST` | `/api/payments/sessions` | ✅ Authenticated | Tạo phiên thanh toán cho booking hiện tại (có ownership check theo `X-User-ID`). |
+| `POST` | `/api/payments/sessions` | ✅ Authenticated | Tạo phiên thanh toán cho booking hiện tại (`CUSTOMER` theo ownership, `STAFF`/`MANAGER` theo cinema scope, `ADMIN` bypass). |
 | `GET` | `/api/payments/sessions/{bookingId}` | ✅ Authenticated | Lấy phiên thanh toán mới nhất theo booking (scope theo user). |
 | `POST` | `/api/payments/sessions/{bookingId}/refund` | ✅ Authenticated | Tạo yêu cầu hoàn tiền nội bộ (trạng thái `REFUND_PENDING`). |
 | `POST` | `/api/payments/revenues/cinemas/search` | ✅ ADMIN/MGMT | Báo cáo doanh thu payment theo rạp, cho phép lọc `cinemaIds`, `filmIds`. |
@@ -631,6 +631,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | `POST` | `/api/payments/webhooks/momo` | ❌ Public | Nhận webhook từ MoMo, verify chữ ký IPN, idempotent theo event key. |
 
 - `POST /api/payments/sessions` trả `payUrl` và `qrCodeUrl` trong `PaymentSessionResponse` để FE render QR thanh toán trực tiếp trên trang người dùng.
+- Scope hiện tại của `createSession` chỉ mở theo nghiệp vụ bán vé: customer chỉ tạo cho booking của mình, staff/manager tạo trong cinema được gán, admin có thể thao tác toàn quyền; các luồng `GET /sessions/{bookingId}` và `me/sessions/search` vẫn giữ scope cũ.
 
 ### 6. Hall Service (`/api/halls`)
 
@@ -1797,6 +1798,16 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - Sửa tài liệu vận hành trong `TECHNICAL_AGENT_GUIDE.md` để ghi rõ đường `http://localhost:80` chỉ còn là compat, còn đường kiểm tra `h2` là `https://cinema-api.duckdns.org:443`.
 - Đã đối chiếu cấu hình Envoy hiện tại: không đổi giao tiếp nội bộ giữa các service, chỉ thay đổi negotiation phía client → gateway.
 - Remaining risk: muốn browser thật sự đi qua `h2` ở local thì máy dev phải resolve `cinema-api.duckdns.org` về host đang chạy Envoy và trình duyệt phải vào đúng `https://` URL đó.
+
+### Showtime search: tách enrich ghế khỏi metadata
+
+- `showtime-service/src/main/java/com/cinema/showtime_service/services/impl/ShowTimeServiceImpl.java` đã tách luồng enrich thành 2 bước riêng: metadata (`film`, `hall`, `cinemaName`) và seat availability (`totalSeatCapacity`, `occupiedSeats`, `availableSeats`).
+- Nhánh keyword search của `POST /api/showtimes/search` giờ enrich metadata cho toàn bộ candidate để giữ đúng match theo tên phim/phòng/rạp, nhưng chỉ tính seat availability cho page kết quả cuối cùng sau khi filter + slice.
+- Lý do: trước đây keyword search vừa enrich toàn bộ result set vừa tính ghế trước khi cắt trang, nên mỗi lần người dùng search nhiều showtime sẽ kéo thêm booking/seat gRPC không cần thiết.
+- Verification:
+  - `.\showtime-service\mvnw.cmd --% -f pom.xml -pl showtime-service -am -DskipTests compile`
+- Remaining risk:
+  - keyword search vẫn là in-memory filter sau enrich metadata, nên nếu số suất chiếu tăng rất lớn thì phần gRPC lấy film/hall/cinema name vẫn có chi phí; muốn tối ưu tiếp phải đẩy search index xuống DB hoặc denormalize dữ liệu tìm kiếm.
 
 
 

@@ -85,7 +85,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     @Override
     @Transactional
-    public ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId) {
+    public ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId,
+            String requesterRole) {
         if (request == null || request.getBookingId() == null || requesterUserId == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
@@ -93,7 +94,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         UUID bookingId = request.getBookingId();
         String requestedPromotionCode = normalizePromotionCode(request.getPromotionCode());
         BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
-        ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
+        ensureRequesterCanCreateSessionForBooking(requesterUserId, requesterRole, bookingContext);
         ensureBookable(bookingContext);
 
         if ("PAID".equalsIgnoreCase(bookingContext.paymentStatus())
@@ -108,7 +109,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         PaymentTransaction latest = paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId)
                 .orElse(null);
         if (latest != null) {
-            ensureRequesterOwnsTransaction(latest, requesterUserId);
+            if (requiresTransactionOwnershipCheck(requesterRole)) {
+                ensureRequesterOwnsTransaction(latest, requesterUserId);
+            }
             if (isReusable(latest, bookingContext) && canReuseLatestTransaction(latest, requestedPromotionCode)) {
                 syncBookingPromotionSnapshot(bookingContext, latest, null);
                 return ActionMessageResponse.builder()
@@ -675,6 +678,45 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
     }
 
+    private void ensureRequesterCanCreateSessionForBooking(UUID requesterUserId,
+                                                           String requesterRole,
+                                                           BookingGrpcClient.BookingPaymentContext bookingContext) {
+        if (requesterUserId == null || bookingContext == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        String normalizedRole = normalizeRole(requesterRole);
+        if (HeaderNames.ROLE_ADMIN.equals(normalizedRole)) {
+            return;
+        }
+
+        if (HeaderNames.ROLE_CUSTOMER.equals(normalizedRole)) {
+            ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
+            return;
+        }
+
+        if (HeaderNames.ROLE_STAFF.equals(normalizedRole) || HeaderNames.ROLE_MANAGER.equals(normalizedRole)) {
+            if (bookingContext.cinemaId() == null) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            List<UUID> accessibleCinemaIds = cinemaGrpcClient.getCinemasByUserId(requesterUserId, normalizedRole)
+                    .stream()
+                    .filter(cinema -> cinema != null && cinema.id() != null)
+                    .map(CinemaGrpcClient.CinemaSummary::id)
+                    .toList();
+            if (!accessibleCinemaIds.contains(bookingContext.cinemaId())) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            return;
+        }
+
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private boolean requiresTransactionOwnershipCheck(String requesterRole) {
+        return HeaderNames.ROLE_CUSTOMER.equals(normalizeRole(requesterRole));
+    }
+
     private void ensureRequesterOwnsBooking(UUID requesterUserId, UUID bookingUserId) {
         if (requesterUserId == null || bookingUserId == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
@@ -697,6 +739,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     .getBookingPaymentContext(transaction.getBookingId());
             ensureRequesterOwnsBooking(requesterUserId, context.userId());
         }
+    }
+
+    private String normalizeRole(String role) {
+        return StringUtils.hasText(role) ? role.trim().toUpperCase(Locale.ROOT) : "";
     }
 
     private boolean isReusable(PaymentTransaction latest, BookingGrpcClient.BookingPaymentContext bookingContext) {

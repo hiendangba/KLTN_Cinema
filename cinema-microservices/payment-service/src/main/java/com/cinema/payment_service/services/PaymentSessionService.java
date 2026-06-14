@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public interface PaymentSessionService {
-    ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId);
+    ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId, String requesterRole);
 
     PaymentSessionResponse getSession(UUID bookingId, UUID requesterUserId);
 
