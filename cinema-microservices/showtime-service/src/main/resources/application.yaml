@@ -68,6 +68,8 @@ rabbitmq:
   password: ${SPRING_RABBITMQ_PASSWORD:admin}
 server:
   port: ${SERVER_PORT:8094}
+  http2:
+    enabled: true
 
 showtime:
   status-scheduler:

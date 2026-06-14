@@ -737,16 +737,18 @@ docker compose -f compose.prod.yaml logs -f identity-service
 ```bash
 docker compose -f compose.prod.yaml up -d
 ```
+- Edge HTTPS của gateway dùng listener `443` và có thể negotiate `h2` qua ALPN khi client truy cập `https://cinema-api.duckdns.org`.
 - **Dev (service chạy local VS Code):** Envoy route về `host.docker.internal`.
 ```bash
 docker compose -f compose.prod.yaml -f compose.local.yaml up -d
 ```
+- Local overlay cũng mở `443`, nên nếu muốn test giống prod thì trỏ domain DuckDNS về máy dev và vào gateway bằng HTTPS.
 
 ### Tương quan Port Mạng Trở Về:
 
 | Dịch vụ / Hệ Tầng | Liên kết thực thi trên máy cá nhân |
 |---|---|
-| Envoy (Trung Tâm Gateway) | http://localhost:80 |
+| Envoy (Trung Tâm Gateway) | http://localhost:80 (compat) / https://cinema-api.duckdns.org:443 (h2 test) |
 | Identity Service Web API | http://localhost:8090 (service local default) |
 | User Profile Web API | http://localhost:8091 (service local default) |
 | PostgreSQL Relational | `localhost:5433` (User: postgres / 123456) |
@@ -1784,6 +1786,17 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - `searchHalls` dùng lại cùng cache path với `getHallById`, nên request lặp lại cùng hall sẽ giảm đáng kể latency
   - `updateHall` và `deleteHall` vẫn evict `CACHE_HALLS` để tránh trả dữ liệu cũ
 - Mục tiêu của thay đổi này là giữ nguyên contract FE, nhưng giảm thời gian phản hồi cho các lần search lặp lại khi dữ liệu hall không đổi.
+
+## Changelog ngắn (2026-06-14)
+
+- Bật edge HTTP/2 cho Envoy gateway bằng ALPN `h2,http/1.1` ở listener HTTPS `443` trong cả `envoy.prod.yaml` và `envoy.local.yaml`.
+- Cập nhật `compose.local.yaml` để mount `envoy/certs` và expose `443:443`, giúp local overlay có thể test HTTPS giống prod khi trỏ DuckDNS domain về máy dev.
+- Bật upstream HTTP/2 từ Envoy sang các REST service qua `http2_protocol_options` ở cluster và `server.http2.enabled: true` ở các service Spring Boot để Envoy nói h2c với backend.
+- Phạm vi đổi chỉ áp dụng cho đường REST qua gateway; các channel gRPC nội bộ của `identity-service`, `user-service`, `booking-service`, `showtime-service`, `cinema-service`, `hall-service`, `seat-service`, `payment-service`, `film-service`, `email-service`, `upload-service` không đổi.
+- Kỳ vọng thực tế: giảm overhead kết nối và giúp đường request nội bộ ổn định hơn, nhưng mức cải thiện tổng thời gian response vẫn phụ thuộc nhiều vào DB và business logic.
+- Sửa tài liệu vận hành trong `TECHNICAL_AGENT_GUIDE.md` để ghi rõ đường `http://localhost:80` chỉ còn là compat, còn đường kiểm tra `h2` là `https://cinema-api.duckdns.org:443`.
+- Đã đối chiếu cấu hình Envoy hiện tại: không đổi giao tiếp nội bộ giữa các service, chỉ thay đổi negotiation phía client → gateway.
+- Remaining risk: muốn browser thật sự đi qua `h2` ở local thì máy dev phải resolve `cinema-api.duckdns.org` về host đang chạy Envoy và trình duyệt phải vào đúng `https://` URL đó.
 
 
 

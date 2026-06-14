@@ -2,6 +2,8 @@ services:
   envoy:
     volumes:
       - ./envoy/envoy.local.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy/certs:/etc/envoy/certs:ro
     ports:
       - "80:80"
+      - "443:443"
       - "9901:9901"

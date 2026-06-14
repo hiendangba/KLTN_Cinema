@@ -17,6 +17,8 @@ spring:
 
 server:
   port: ${SERVER_PORT:8100}
+  http2:
+    enabled: true
   tomcat:
     max-swallow-size: -1
 

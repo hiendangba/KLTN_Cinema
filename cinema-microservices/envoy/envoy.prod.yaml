@@ -44,6 +44,9 @@
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
               common_tls_context:
+                alpn_protocols:
+                  - h2
+                  - http/1.1
                 tls_certificates:
                   - certificate_chain:
                       filename: /etc/envoy/certs/fullchain.pem
@@ -325,6 +328,7 @@
     - name: identity-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: identity-service
@@ -338,6 +342,7 @@
     - name: user-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: user-service
@@ -351,6 +356,7 @@
     - name: upload-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: upload-service
@@ -364,6 +370,7 @@
     - name: film-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: film-service
@@ -377,6 +384,7 @@
     - name: showtime-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: showtime-service
@@ -390,6 +398,7 @@
     - name: email-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: email-service
@@ -403,6 +412,7 @@
     - name: hall-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: hall-service
@@ -416,6 +426,7 @@
     - name: cinema-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: cinema-service
@@ -429,6 +440,7 @@
     - name: booking-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: booking-service
@@ -442,6 +454,7 @@
     - name: payment-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: payment-service
@@ -455,6 +468,7 @@
     - name: seat-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: seat-service

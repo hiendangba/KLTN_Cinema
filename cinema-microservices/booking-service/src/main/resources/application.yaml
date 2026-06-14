@@ -59,6 +59,8 @@ spring:
 
 server:
   port: ${SERVER_PORT:8095}
+  http2:
+    enabled: true
 
 booking:
   seat-lock-minutes: ${BOOKING_SEAT_LOCK_MINUTES:5}

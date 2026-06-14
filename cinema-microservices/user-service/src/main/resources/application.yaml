@@ -60,3 +60,5 @@ spring:
       port: ${GRPC_SERVER_PORT:9191}
 server:
   port: ${SERVER_PORT:8091}
+  http2:
+    enabled: true

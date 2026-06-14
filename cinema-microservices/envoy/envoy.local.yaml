@@ -272,10 +272,296 @@
                             cluster: payment-service
                             timeout: 30s
 
+    - name: listener_https
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 443
+      filter_chains:
+        - transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                alpn_protocols:
+                  - h2
+                  - http/1.1
+                tls_certificates:
+                  - certificate_chain:
+                      filename: /etc/envoy/certs/fullchain.pem
+                    private_key:
+                      filename: /etc/envoy/certs/privkey.pem
+          filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_https
+                normalize_path: true
+                use_remote_address: true
+                xff_num_trusted_hops: 1
+                access_log:
+                  - name: envoy.access_loggers.stdout
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+                http_filters:
+                  - name: envoy.filters.http.cors
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
+                  - name: envoy.filters.http.ext_authz
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+                      http_service:
+                        server_uri:
+                          uri: http://host.docker.internal:8090
+                          cluster: identity-service
+                          timeout: 1s
+                        path_prefix: /internal/auth/check
+                        authorization_request:
+                          allowed_headers:
+                            patterns:
+                              - exact: authorization
+                              - exact: cookie
+                        authorization_response:
+                          allowed_upstream_headers:
+                            patterns:
+                              - exact: x-user-id
+                              - exact: x-user-role
+                  - name: envoy.filters.http.router
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+                route_config:
+                  name: local_route
+                  virtual_hosts:
+                    - name: backend
+                      domains: ["*"]
+                      cors:
+                        allow_origin_string_match:
+                          - safe_regex:
+                              regex: ".*"
+                        allow_methods: "GET,POST,PUT,DELETE,PATCH,OPTIONS"
+                        allow_headers: "authorization,content-type,x-requested-with,accept,origin"
+                        expose_headers: "authorization,content-type,x-request-id,x-gateway"
+                        allow_credentials: true
+                        max_age: "86400"
+                      response_headers_to_add:
+                        - header:
+                            key: x-gateway
+                            value: envoy
+                          append_action: OVERWRITE_IF_EXISTS_OR_ADD
+                      routes:
+                        - match:
+                            path: /api/auth/manager
+                          route:
+                            cluster: identity-service
+                            timeout: 15s
+                        - match:
+                            path: /api/auth/staff
+                          route:
+                            cluster: identity-service
+                            timeout: 15s
+                        - match:
+                            prefix: /api/auth
+                          route:
+                            cluster: identity-service
+                            timeout: 15s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /media/
+                          route:
+                            cluster: upload-service
+                            timeout: 300s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /api/uploads
+                          route:
+                            cluster: upload-service
+                            timeout: 300s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /api/users
+                          route:
+                            cluster: user-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/films
+                          route:
+                            cluster: film-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/showtimes
+                          route:
+                            cluster: showtime-service
+                            timeout: 30s
+                        - match:
+                            path: /api/cinemas
+                          route:
+                            cluster: cinema-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/cinemas
+                          route:
+                            cluster: cinema-service
+                            timeout: 30s
+                        - match:
+                            path: /api/halls
+                          route:
+                            cluster: hall-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/halls
+                          route:
+                            cluster: hall-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/email
+                          route:
+                            cluster: email-service
+                            timeout: 30s
+                        - match:
+                            path: /api/seats
+                          route:
+                            cluster: seat-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/seats
+                          route:
+                            cluster: seat-service
+                            timeout: 30s
+                        - match:
+                            path: /api/bookings
+                          route:
+                            cluster: booking-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/bookings
+                          route:
+                            cluster: booking-service
+                            timeout: 30s
+                        - match:
+                            path: /api/payments/vietqr/banks
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /api/payments/vietqr/banks
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            path: /api/payments/webhooks/momo
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /api/payments/webhooks/momo
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            path: /payment/result
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            path: /ipn
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            path: /api/payments/public/result
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /api/payments/public/result
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            path: /api/payments/public/ipn
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            prefix: /api/payments/public/ipn
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            path: /api/payments
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/payments
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                        - match:
+                            path: /api/promotions
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+                        - match:
+                            prefix: /api/promotions
+                          route:
+                            cluster: payment-service
+                            timeout: 30s
+
   clusters:
     - name: identity-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -290,6 +576,7 @@
     - name: user-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -304,6 +591,7 @@
     - name: upload-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -318,6 +606,7 @@
     - name: film-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -332,6 +621,7 @@
     - name: showtime-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -346,6 +636,7 @@
     - name: email-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -360,6 +651,7 @@
     - name: hall-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -374,6 +666,7 @@
     - name: cinema-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -388,6 +681,7 @@
     - name: booking-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -402,6 +696,7 @@
     - name: payment-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:
@@ -416,6 +711,7 @@
     - name: seat-service
       connect_timeout: 1s
       type: LOGICAL_DNS
+      http2_protocol_options: {}
       dns_lookup_family: ALL
       lb_policy: ROUND_ROBIN
       load_assignment:

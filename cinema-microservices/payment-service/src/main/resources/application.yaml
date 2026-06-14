@@ -27,6 +27,8 @@ spring:
 
 server:
   port: ${SERVER_PORT:8098}
+  http2:
+    enabled: true
 
 vietqr:
   base-url: ${VIETQR_BASE_URL}

@@ -58,3 +58,5 @@ spring:
           address: "${SHOWTIME_GRPC_HOST:localhost}:${SHOWTIME_GRPC_PORT:9194}"
 server:
   port: ${SERVER_PORT:8092}
+  http2:
+    enabled: true

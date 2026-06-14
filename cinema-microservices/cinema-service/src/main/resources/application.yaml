@@ -40,3 +40,5 @@ spring:
 
 server:
   port: ${SERVER_PORT:8096}
+  http2:
+    enabled: true
