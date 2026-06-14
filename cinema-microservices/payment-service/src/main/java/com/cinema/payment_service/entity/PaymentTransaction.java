@@ -63,6 +63,12 @@ public class PaymentTransaction {
     @Column(name = "provider_ref", length = 120)
     private String providerRef;
 
+    @Column(name = "completed_by_user_id", columnDefinition = "uuid")
+    private UUID completedByUserId;
+
+    @Column(name = "completed_by_role", length = 20)
+    private String completedByRole;
+
     @Column(name = "checkout_url", nullable = false, length = 255)
     private String payUrl;
 

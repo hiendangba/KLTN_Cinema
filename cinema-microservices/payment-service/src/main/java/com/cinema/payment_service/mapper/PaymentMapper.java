@@ -37,6 +37,8 @@ public interface PaymentMapper {
     @Mapping(target = "productSubtotalSnapshot", source = "transaction.productSubtotalSnapshot", qualifiedByName = "normalizeNullableAmount")
     @Mapping(target = "checkoutFields", source = "checkoutFields")
     @Mapping(target = "qrCodeUrl", source = "qrCodeUrl")
+    @Mapping(target = "completedByUserId", source = "transaction.completedByUserId")
+    @Mapping(target = "completedByRole", source = "transaction.completedByRole")
     @Mapping(target = "refundAmount", source = "transaction.refundAmount", qualifiedByName = "normalizeNullableAmount")
     @Mapping(target = "promotionDiscountAmount", source = "transaction.promotionDiscountAmount", qualifiedByName = "normalizeNullableAmount")
     PaymentSessionResponse toPaymentSessionResponse(

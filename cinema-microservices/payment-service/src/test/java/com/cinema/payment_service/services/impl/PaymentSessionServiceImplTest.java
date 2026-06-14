@@ -46,6 +46,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -368,6 +369,139 @@ class PaymentSessionServiceImplTest {
         verify(paymentTransactionRepository).findFirstByBookingIdOrderByTimeCreatedDesc(bookingId);
         verify(paymentTransactionRepository, times(0)).saveAndFlush(any(PaymentTransaction.class));
         verifyNoInteractions(cinemaGrpcClient, momoPaymentGatewayClient);
+    }
+
+    @Test
+    void getSession_shouldAllowStaffWithinAssignedCinemaAndReturnQrCodeUrl() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        PaymentTransaction transaction = buildReusableTransaction(bookingId, ownerId);
+        transaction.setCinemaId(cinemaId);
+        transaction.setStatus(PaymentTransactionStatus.PENDING);
+        transaction.setResponsePayloadJson("{\"qrCodeUrl\":\"https://momo.example.com/qr\"}");
+
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(transaction));
+        when(cinemaGrpcClient.getCinemasByUserId(requesterId, HeaderNames.ROLE_STAFF))
+                .thenReturn(List.of(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema 1")));
+
+        PaymentSessionResponse response = paymentSessionService.getSession(bookingId, requesterId, HeaderNames.ROLE_STAFF);
+
+        assertNotNull(response);
+        assertEquals(bookingId, response.getBookingId());
+        assertEquals("https://momo.example.com/qr", response.getQrCodeUrl());
+        assertNull(response.getCompletedByUserId());
+        assertNull(response.getCompletedByRole());
+        verifyNoInteractions(bookingGrpcClient);
+    }
+
+    @Test
+    void completeSession_shouldMarkPaidAndStoreAuditForStaff() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        PaymentTransaction transaction = buildPendingTransaction("PAY-" + UUID.randomUUID(), BigDecimal.valueOf(180000));
+        transaction.setBookingId(bookingId);
+        transaction.setCinemaId(cinemaId);
+        transaction.setUserId(ownerId);
+        transaction.setStatus(PaymentTransactionStatus.PENDING);
+        transaction.setProviderRef("OLD_PROVIDER");
+
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(cinemaGrpcClient.getCinemasByUserId(requesterId, HeaderNames.ROLE_STAFF))
+                .thenReturn(List.of(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema 1")));
+
+        ActionMessageResponse response = paymentSessionService.completeSession(bookingId, requesterId, HeaderNames.ROLE_STAFF);
+
+        assertEquals(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage(), response.getMessage());
+        assertEquals(PaymentTransactionStatus.PAID, transaction.getStatus());
+        assertNotNull(transaction.getPaidAt());
+        assertNull(transaction.getProviderRef());
+        assertNull(transaction.getFailureReason());
+        assertEquals(requesterId, transaction.getCompletedByUserId());
+        assertEquals(HeaderNames.ROLE_STAFF, transaction.getCompletedByRole());
+        verify(bookingGrpcClient).confirmBookingPayment(
+                bookingId,
+                transaction.getAmount(),
+                transaction.getPaymentMethod(),
+                null,
+                transaction.getOrderInvoiceNumber());
+    }
+
+    @Test
+    void completeSession_shouldAllowAdminAcrossCinemaScope() {
+        UUID bookingId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        PaymentTransaction transaction = buildPendingTransaction("PAY-" + UUID.randomUUID(), BigDecimal.valueOf(180000));
+        transaction.setBookingId(bookingId);
+        transaction.setCinemaId(UUID.randomUUID());
+
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ActionMessageResponse response = paymentSessionService.completeSession(bookingId, requesterId, HeaderNames.ROLE_ADMIN);
+
+        assertEquals(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage(), response.getMessage());
+        assertEquals(requesterId, transaction.getCompletedByUserId());
+        assertEquals(HeaderNames.ROLE_ADMIN, transaction.getCompletedByRole());
+        verifyNoInteractions(cinemaGrpcClient);
+        verify(bookingGrpcClient).confirmBookingPayment(
+                bookingId,
+                transaction.getAmount(),
+                transaction.getPaymentMethod(),
+                null,
+                transaction.getOrderInvoiceNumber());
+    }
+
+    @Test
+    void completeSession_shouldRejectCustomerRole() {
+        UUID bookingId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        PaymentTransaction transaction = buildPendingTransaction("PAY-" + UUID.randomUUID(), BigDecimal.valueOf(180000));
+        transaction.setBookingId(bookingId);
+        transaction.setCinemaId(UUID.randomUUID());
+
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(transaction));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> paymentSessionService.completeSession(bookingId, requesterId, HeaderNames.ROLE_CUSTOMER));
+        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
+        verifyNoInteractions(bookingGrpcClient, cinemaGrpcClient);
+    }
+
+    @Test
+    void completeSession_shouldBeIdempotentWhenAlreadyPaid() {
+        UUID bookingId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        PaymentTransaction transaction = buildPendingTransaction("PAY-" + UUID.randomUUID(), BigDecimal.valueOf(180000));
+        transaction.setBookingId(bookingId);
+        transaction.setCinemaId(UUID.randomUUID());
+        transaction.setStatus(PaymentTransactionStatus.PAID);
+        transaction.setCompletedByUserId(UUID.randomUUID());
+        transaction.setCompletedByRole(HeaderNames.ROLE_ADMIN);
+
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(transaction));
+
+        ActionMessageResponse response = paymentSessionService.completeSession(bookingId, requesterId, HeaderNames.ROLE_ADMIN);
+
+        assertEquals(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage(), response.getMessage());
+        verify(paymentTransactionRepository, times(0)).save(any(PaymentTransaction.class));
+        verifyNoInteractions(bookingGrpcClient, cinemaGrpcClient);
     }
 
     @Test

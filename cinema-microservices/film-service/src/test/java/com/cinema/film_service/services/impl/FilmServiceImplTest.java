@@ -10,6 +10,7 @@ import com.cinema.film_service.dto.request.FilmCursorPageRequest;
 import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.entity.Film;
+import com.cinema.film_service.grpc.CinemaGrpcClient;
 import com.cinema.film_service.grpc.ShowtimeGrpcClient;
 import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.FilmRepository;
@@ -57,20 +58,11 @@ class FilmServiceImplTest {
     @Mock
     private ShowtimeGrpcClient showtimeGrpcClient;
 
+    @Mock
+    private CinemaGrpcClient cinemaGrpcClient;
+
     @InjectMocks
     private FilmServiceImpl filmService;
-
-    @Test
-    void searchCustomerFilms_shouldRejectNonCustomer() {
-        HttpServletRequest request = mockRequest("MANAGER");
-
-        BusinessException exception = assertThrows(
-                BusinessException.class,
-                () -> filmService.searchCustomerFilms(new FilmCursorPageRequest(), request));
-
-        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
-        verify(showtimeGrpcClient, never()).getActiveFilmIds();
-    }
 
     @Test
     void searchCustomerFilms_shouldScopeToAllowedStatusesAndActiveFilmIds() {
@@ -123,6 +115,58 @@ class FilmServiceImplTest {
     }
 
     @Test
+    void searchCustomerFilms_shouldAllowStaffWithinAssignedCinema() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Film film = buildFilm(filmId, "Film 1", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setSize(1);
+
+        HttpServletRequest httpRequest = mockRequest("STAFF", staffId);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(staffId, "STAFF")).thenReturn(List.of(cinemaId));
+        when(showtimeGrpcClient.getActiveFilmIdsByCinema(cinemaId)).thenReturn(Set.of(filmId));
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(film));
+        when(filmMapper.toResponse(film)).thenReturn(toResponse(film));
+
+        var response = filmService.searchCustomerFilms(request, httpRequest);
+
+        assertEquals(1, response.getSize());
+        assertEquals(1, response.getData().size());
+        verify(cinemaGrpcClient).getCinemaIdsByUserId(staffId, "STAFF");
+        verify(showtimeGrpcClient).getActiveFilmIdsByCinema(cinemaId);
+        verify(showtimeGrpcClient, never()).getActiveFilmIds();
+    }
+
+    @Test
+    void searchCustomerFilms_shouldAllowManagerWithinAssignedCinema() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID managerId = UUID.randomUUID();
+        Film film = buildFilm(filmId, "Film 1", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setSize(1);
+
+        HttpServletRequest httpRequest = mockRequest("MANAGER", managerId);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(managerId, "MANAGER")).thenReturn(List.of(cinemaId));
+        when(showtimeGrpcClient.getActiveFilmIdsByCinema(cinemaId)).thenReturn(Set.of(filmId));
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(film));
+        when(filmMapper.toResponse(film)).thenReturn(toResponse(film));
+
+        var response = filmService.searchCustomerFilms(request, httpRequest);
+
+        assertEquals(1, response.getSize());
+        assertEquals(1, response.getData().size());
+        verify(cinemaGrpcClient).getCinemaIdsByUserId(managerId, "MANAGER");
+        verify(showtimeGrpcClient).getActiveFilmIdsByCinema(cinemaId);
+        verify(showtimeGrpcClient, never()).getActiveFilmIds();
+    }
+
+    @Test
     void searchCustomerFilms_shouldScopeByCinemaIdWhenProvided() {
         UUID cinemaId = UUID.randomUUID();
         UUID film1Id = UUID.randomUUID();
@@ -142,6 +186,48 @@ class FilmServiceImplTest {
         assertEquals(1, response.getSize());
         assertEquals(1, response.getData().size());
         verify(showtimeGrpcClient, never()).getActiveFilmIds();
+    }
+
+    @Test
+    void searchCustomerFilms_shouldRejectCinemaOutsideStaffScope() {
+        UUID requestedCinemaId = UUID.randomUUID();
+        UUID staffCinemaId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setCinemaId(requestedCinemaId);
+
+        HttpServletRequest httpRequest = mockRequest("MANAGER", staffId);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(staffId, "MANAGER")).thenReturn(List.of(staffCinemaId));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> filmService.searchCustomerFilms(request, httpRequest));
+
+        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
+        verify(showtimeGrpcClient, never()).getActiveFilmIdsByCinema(any());
+    }
+
+    @Test
+    void searchCustomerFilms_shouldAllowAdminAcrossCinemas() {
+        UUID filmId = UUID.randomUUID();
+        Film film = buildFilm(filmId, "Film 1", FilmEnum.FilmStatus.COMING_SOON, LocalDate.of(2026, 6, 1));
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setSize(1);
+
+        HttpServletRequest httpRequest = mockRequest("ADMIN");
+        when(showtimeGrpcClient.getActiveFilmIds()).thenReturn(Set.of(filmId));
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(film));
+        when(filmMapper.toResponse(film)).thenReturn(toResponse(film));
+
+        var response = filmService.searchCustomerFilms(request, httpRequest);
+
+        assertEquals(1, response.getSize());
+        assertEquals(1, response.getData().size());
+        verify(showtimeGrpcClient).getActiveFilmIds();
+        verify(cinemaGrpcClient, never()).getCinemaIdsByUserId(any(), any());
     }
 
     @Test
@@ -217,8 +303,13 @@ class FilmServiceImplTest {
     }
 
     private HttpServletRequest mockRequest(String role) {
+        return mockRequest(role, null);
+    }
+
+    private HttpServletRequest mockRequest(String role, UUID userId) {
         HttpServletRequest request = org.mockito.Mockito.mock(HttpServletRequest.class);
         when(request.getHeader("X-User-Role")).thenReturn(role);
+        when(request.getHeader("X-User-ID")).thenReturn(userId == null ? null : userId.toString());
         return request;
     }
 

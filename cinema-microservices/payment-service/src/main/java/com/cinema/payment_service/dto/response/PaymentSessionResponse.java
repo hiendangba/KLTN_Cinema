@@ -25,6 +25,10 @@ public class PaymentSessionResponse {
     private String paymentMethod;
     private String orderInvoiceNumber;
     private String providerRef;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private UUID completedByUserId;
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String completedByRole;
     private String payUrl;
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private String qrCodeUrl;

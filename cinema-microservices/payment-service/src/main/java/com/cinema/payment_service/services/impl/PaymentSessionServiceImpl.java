@@ -198,18 +198,87 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     @Override
     @Transactional(readOnly = true)
-    public PaymentSessionResponse getSession(UUID bookingId, UUID requesterUserId) {
+    public PaymentSessionResponse getSession(UUID bookingId, UUID requesterUserId, String requesterRole) {
         if (bookingId == null || requesterUserId == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
         PaymentTransaction transaction = paymentTransactionRepository
                 .findFirstByBookingIdOrderByTimeCreatedDesc(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
-        ensureRequesterOwnsTransaction(transaction, requesterUserId);
+        ensureRequesterCanViewSession(transaction, requesterUserId, requesterRole);
         return paymentMapper.toPaymentSessionResponse(
                 transaction,
                 readCheckoutFields(transaction.getCheckoutPayloadJson()),
-                null);
+                extractCheckoutResponseField(transaction.getResponsePayloadJson(), "qrCodeUrl"));
+    }
+
+    @Override
+    @Transactional(noRollbackFor = BusinessException.class)
+    public ActionMessageResponse completeSession(UUID bookingId, UUID requesterUserId, String requesterRole) {
+        if (bookingId == null || requesterUserId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        PaymentTransaction transaction = paymentTransactionRepository
+                .findFirstByBookingIdOrderByTimeCreatedDesc(bookingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+        ensureRequesterCanCompleteSession(transaction, requesterUserId, requesterRole);
+
+        if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
+            return ActionMessageResponse.builder()
+                    .message(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage())
+                    .build();
+        }
+        if (transaction.getStatus() != PaymentTransactionStatus.PENDING) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        String normalizedRole = normalizeRole(requesterRole);
+        transaction.setStatus(PaymentTransactionStatus.PAID);
+        transaction.setPaidAt(LocalDateTime.now());
+        transaction.setProviderRef(null);
+        transaction.setFailureReason(null);
+        transaction.setCompletedByUserId(requesterUserId);
+        transaction.setCompletedByRole(normalizedRole);
+        paymentTransactionRepository.save(transaction);
+        log.info(
+                "PAYMENT_COMPLETE_MARK_PAID transactionId={} bookingId={} requesterUserId={} requesterRole={} amount={}",
+                transaction.getId(),
+                transaction.getBookingId(),
+                requesterUserId,
+                normalizedRole,
+                transaction.getAmount());
+
+        try {
+            bookingGrpcClient.confirmBookingPayment(
+                    transaction.getBookingId(),
+                    transaction.getAmount(),
+                    transaction.getPaymentMethod(),
+                    transaction.getProviderRef(),
+                    transaction.getOrderInvoiceNumber());
+        } catch (BusinessException ex) {
+            log.warn(
+                    "PAYMENT_COMPLETE_CONFIRM_BOOKING_FAILED transactionId={} bookingId={} requesterUserId={} requesterRole={} errorCode={}",
+                    transaction.getId(),
+                    transaction.getBookingId(),
+                    requesterUserId,
+                    normalizedRole,
+                    ex.getErrorCode().name());
+            transaction.setFailureReason("BOOKING_CONFIRM_FAILED:" + ex.getErrorCode().name());
+            paymentTransactionRepository.save(transaction);
+            throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
+        }
+
+        log.info(
+                "PAYMENT_COMPLETE_CONFIRMED transactionId={} bookingId={} requesterUserId={} requesterRole={} status={}",
+                transaction.getId(),
+                transaction.getBookingId(),
+                requesterUserId,
+                normalizedRole,
+                transaction.getStatus());
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage())
+                .build();
     }
 
     @Override
@@ -244,7 +313,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                         .map(transaction -> paymentMapper.toPaymentSessionResponse(
                                 transaction,
                                 readCheckoutFields(transaction.getCheckoutPayloadJson()),
-                                null))
+                                extractCheckoutResponseField(transaction.getResponsePayloadJson(), "qrCodeUrl")))
                         .toList())
                 .currentPage(page)
                 .totalPages(totalPages)
@@ -713,6 +782,76 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
+    private void ensureRequesterCanViewSession(PaymentTransaction transaction, UUID requesterUserId, String requesterRole) {
+        if (transaction == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+
+        String normalizedRole = normalizeRole(requesterRole);
+        if (HeaderNames.ROLE_ADMIN.equals(normalizedRole)) {
+            return;
+        }
+
+        if (HeaderNames.ROLE_CUSTOMER.equals(normalizedRole)) {
+            ensureRequesterOwnsTransaction(transaction, requesterUserId);
+            return;
+        }
+
+        if (HeaderNames.ROLE_STAFF.equals(normalizedRole) || HeaderNames.ROLE_MANAGER.equals(normalizedRole)) {
+            ensureRequesterCanAccessCinemaScopedTransaction(transaction, requesterUserId, normalizedRole);
+            return;
+        }
+
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private void ensureRequesterCanCompleteSession(PaymentTransaction transaction, UUID requesterUserId, String requesterRole) {
+        if (transaction == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+
+        String normalizedRole = normalizeRole(requesterRole);
+        if (HeaderNames.ROLE_ADMIN.equals(normalizedRole)) {
+            return;
+        }
+
+        if (HeaderNames.ROLE_STAFF.equals(normalizedRole) || HeaderNames.ROLE_MANAGER.equals(normalizedRole)) {
+            ensureRequesterCanAccessCinemaScopedTransaction(transaction, requesterUserId, normalizedRole);
+            return;
+        }
+
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private void ensureRequesterCanAccessCinemaScopedTransaction(PaymentTransaction transaction,
+                                                                 UUID requesterUserId,
+                                                                 String normalizedRole) {
+        if (requesterUserId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        UUID cinemaId = transaction.getCinemaId();
+        if (cinemaId == null) {
+            BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient
+                    .getBookingPaymentContext(transaction.getBookingId());
+            if (bookingContext != null) {
+                cinemaId = bookingContext.cinemaId();
+            }
+        }
+        if (cinemaId == null) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        List<UUID> accessibleCinemaIds = cinemaGrpcClient.getCinemasByUserId(requesterUserId, normalizedRole)
+                .stream()
+                .filter(cinema -> cinema != null && cinema.id() != null)
+                .map(CinemaGrpcClient.CinemaSummary::id)
+                .toList();
+        if (!accessibleCinemaIds.contains(cinemaId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
     private boolean requiresTransactionOwnershipCheck(String requesterRole) {
         return HeaderNames.ROLE_CUSTOMER.equals(normalizeRole(requesterRole));
     }
@@ -943,17 +1082,17 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     private String extractCheckoutResponseField(String responseJson, String fieldName) {
         if (!StringUtils.hasText(responseJson) || !StringUtils.hasText(fieldName)) {
-            return "";
+            return null;
         }
         try {
             JsonNode root = objectMapper.readTree(responseJson);
             JsonNode value = root.path(fieldName);
             if (value.isMissingNode() || value.isNull()) {
-                return "";
+                return null;
             }
             return value.isTextual() ? value.asText() : value.toString();
         } catch (Exception ex) {
-            return "";
+            return null;
         }
     }
 

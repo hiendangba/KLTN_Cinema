@@ -67,7 +67,20 @@ public class PaymentController extends BaseController {
             HttpServletRequest servletRequest,
             @PathVariable UUID bookingId) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
-        return ok(SuccessMessage.PAYMENT_SESSION_FETCHED, paymentSessionService.getSession(bookingId, requesterUserId));
+        String requesterRole = RequestAuthUtils.requireRoleHeader(servletRequest);
+        return ok(SuccessMessage.PAYMENT_SESSION_FETCHED,
+                paymentSessionService.getSession(bookingId, requesterUserId, requesterRole));
+    }
+
+    @PostMapping("/sessions/{bookingId}/complete")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> completeSession(
+            HttpServletRequest servletRequest,
+            @PathVariable UUID bookingId) {
+        UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
+        RequestAuthUtils.requireAnyRole(servletRequest, HeaderNames.ROLE_STAFF, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_ADMIN);
+        String requesterRole = RequestAuthUtils.requireRoleHeader(servletRequest);
+        return ok(SuccessMessage.PAYMENT_SESSION_COMPLETED,
+                paymentSessionService.completeSession(bookingId, requesterUserId, requesterRole));
     }
 
     @PostMapping("/me/sessions/search")

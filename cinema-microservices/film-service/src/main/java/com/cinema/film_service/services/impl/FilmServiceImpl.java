@@ -18,6 +18,7 @@ import com.cinema.film_service.dto.request.UpdateFilmRequest;
 import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.entity.Film;
+import com.cinema.film_service.grpc.CinemaGrpcClient;
 import com.cinema.film_service.grpc.ShowtimeGrpcClient;
 import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.FilmRepository;
@@ -34,7 +35,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -49,6 +52,7 @@ public class FilmServiceImpl implements FilmService {
     private final FilmRepositoryImpl filmRepositoryImpl;
     private final FilmMapper filmMapper;
     private final ShowtimeGrpcClient showtimeGrpcClient;
+    private final CinemaGrpcClient cinemaGrpcClient;
 
     @Override
     public ActionMessageResponse createFilm(CreateFilmRequest request, HttpServletRequest httpRequest) {
@@ -128,11 +132,8 @@ public class FilmServiceImpl implements FilmService {
     @Override
     @Transactional(readOnly = true)
     public CursorPageResponse<FilmResponse> searchCustomerFilms(FilmCursorPageRequest request, HttpServletRequest httpRequest) {
-        validateCustomerRole(httpRequest);
-
-        Set<UUID> activeFilmIds = request.getCinemaId() == null
-                ? showtimeGrpcClient.getActiveFilmIds()
-                : showtimeGrpcClient.getActiveFilmIdsByCinema(request.getCinemaId());
+        String role = normalizeRole(RequestAuthUtils.requireRoleHeader(httpRequest));
+        Set<UUID> activeFilmIds = resolveScopedActiveFilmIds(request, httpRequest, role);
         if (activeFilmIds.isEmpty()) {
             return emptyCursorPageResponse();
         }
@@ -297,11 +298,49 @@ public class FilmServiceImpl implements FilmService {
                 .build();
     }
 
-    private void validateAdminRole(HttpServletRequest httpRequest, String action) {
-        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN, log, action);
+    private Set<UUID> resolveScopedActiveFilmIds(FilmCursorPageRequest request, HttpServletRequest httpRequest, String role) {
+        UUID requestedCinemaId = request == null ? null : request.getCinemaId();
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return requestedCinemaId == null
+                    ? showtimeGrpcClient.getActiveFilmIds()
+                    : showtimeGrpcClient.getActiveFilmIdsByCinema(requestedCinemaId);
+        }
+
+        if (HeaderNames.ROLE_MANAGER.equals(role) || HeaderNames.ROLE_STAFF.equals(role)) {
+            UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
+            List<UUID> accessibleCinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(requesterUserId, role);
+            if (requestedCinemaId != null) {
+                if (!accessibleCinemaIds.contains(requestedCinemaId)) {
+                    throw new BusinessException(ErrorCode.FORBIDDEN);
+                }
+                return showtimeGrpcClient.getActiveFilmIdsByCinema(requestedCinemaId);
+            }
+
+            if (accessibleCinemaIds.isEmpty()) {
+                return Set.of();
+            }
+
+            Set<UUID> activeFilmIds = new LinkedHashSet<>();
+            for (UUID cinemaId : accessibleCinemaIds) {
+                activeFilmIds.addAll(showtimeGrpcClient.getActiveFilmIdsByCinema(cinemaId));
+            }
+            return activeFilmIds;
+        }
+
+        if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
+            return requestedCinemaId == null
+                    ? showtimeGrpcClient.getActiveFilmIds()
+                    : showtimeGrpcClient.getActiveFilmIdsByCinema(requestedCinemaId);
+        }
+
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
-    private void validateCustomerRole(HttpServletRequest httpRequest) {
-        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_CUSTOMER, log, "searchCustomerFilms");
+    private String normalizeRole(String role) {
+        return role == null ? "" : role.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void validateAdminRole(HttpServletRequest httpRequest, String action) {
+        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN, log, action);
     }
 }

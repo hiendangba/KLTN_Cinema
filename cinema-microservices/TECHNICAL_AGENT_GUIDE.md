@@ -590,7 +590,7 @@ Nhận job gửi mail bất đồng bộ từ **RabbitMQ** để giảm tải re
 | Method | Endpoint | Auth | Mô tả |
 |---|---|---|---|
 | `POST` | `/api/films/search` | ❌ Public | Tìm kiếm danh mục phim kết hợp Cursor Pagination + Filters. |
-| `POST` | `/api/films/customer/search` | ✅ CUSTOMER | Tìm phim cho khách hàng, chỉ trả phim đang chiếu/sắp chiếu và có showtime active. |
+| `POST` | `/api/films/customer/search` | ✅ CUSTOMER / STAFF / MANAGER / ADMIN | Tìm phim theo scope: customer xem phim active chung, staff/manager xem phim active trong cinema được gán, admin xem active film toàn hệ thống. |
 | `GET` | `/api/films/{id}` | ❌ Public | Lấy nguyên mẫu thông tin phim chi tiết (có đánh Cache Redis). |
 | `POST` | `/api/films` | ✅ ADMIN | Đăng tải thông tin Phim mới. |
 | `PUT` | `/api/films/{id}` | ✅ ADMIN | Chỉnh sửa cập nhật nội dung Phim. |
@@ -1798,6 +1798,25 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - Sửa tài liệu vận hành trong `TECHNICAL_AGENT_GUIDE.md` để ghi rõ đường `http://localhost:80` chỉ còn là compat, còn đường kiểm tra `h2` là `https://cinema-api.duckdns.org:443`.
 - Đã đối chiếu cấu hình Envoy hiện tại: không đổi giao tiếp nội bộ giữa các service, chỉ thay đổi negotiation phía client → gateway.
 - Remaining risk: muốn browser thật sự đi qua `h2` ở local thì máy dev phải resolve `cinema-api.duckdns.org` về host đang chạy Envoy và trình duyệt phải vào đúng `https://` URL đó.
+
+### Payment service: audit hoàn tất thanh toán
+
+- `payment-service` mở lại quyền xem session/QR và thêm luồng `complete` cho nghiệp vụ bán vé tại quầy.
+- `GET /api/payments/sessions/{bookingId}` giờ cho `STAFF` / `MANAGER` xem theo scope rạp của họ, `ADMIN` bypass toàn bộ, còn `CUSTOMER` vẫn chỉ xem booking của chính mình; response cũng trả thêm `qrCodeUrl` lấy từ payload MoMo đã lưu thay vì luôn `null`.
+- `POST /api/payments/sessions/{bookingId}/complete` chỉ cho `STAFF` / `MANAGER` / `ADMIN`, tự set `paidAt = now`, `providerRef = null`, rồi confirm booking như luồng payment thành công; transaction đã `PAID` được xử lý idempotent.
+- `payment_transaction` thêm audit `completedByUserId` và `completedByRole`; `PaymentSessionResponse` và `PaymentMapper` cũng được cập nhật để FE/admin panel tra cứu nhanh người đã đánh dấu hoàn tất.
+- Files touched: `common-lib/src/main/java/com/cinema/Enum/SuccessMessage.java`, `payment-service/src/main/java/com/cinema/payment_service/controller/PaymentController.java`, `payment-service/src/main/java/com/cinema/payment_service/services/PaymentSessionService.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `payment-service/src/main/java/com/cinema/payment_service/entity/PaymentTransaction.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/response/PaymentSessionResponse.java`, `payment-service/src/main/java/com/cinema/payment_service/mapper/PaymentMapper.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImplTest.java`.
+- Verification:
+  - rà soát tĩnh controller/service/mapper/test sau patch
+  - môi trường hiện tại không có `mvn`/wrapper nên chưa chạy được full Maven test trong workspace này
+- Remaining risk:
+  - nếu `booking-service` trả lỗi khi confirm booking sau khi payment đã được mark `PAID`, transaction vẫn được lưu audit nhưng luồng retry hiện tại sẽ không tự confirm lại ở lần bấm sau; nếu muốn retry mạnh tay hơn thì cần rule riêng cho trạng thái `PAID` nhưng `failureReason` có lỗi confirm booking.
+
+- Mở `POST /api/films/customer/search` cho `STAFF`/`MANAGER`/`ADMIN` theo scope rạp:
+  - `CUSTOMER` vẫn thấy phim active chung hoặc theo `cinemaId` nếu FE truyền.
+  - `STAFF` và `MANAGER` lấy danh sách cinema được gán từ `cinema-service`, rồi hợp active film ids từ từng cinema đó.
+  - `ADMIN` bypass cinema ownership, nhưng vẫn đi theo logic film active giống customer-facing.
+- `FilmServiceImplTest` đã được bổ sung case cho staff, manager, admin và case staff/manager bị chặn nếu trỏ sang cinema ngoài scope.
 
 ### Showtime search: tách enrich ghế khỏi metadata
 

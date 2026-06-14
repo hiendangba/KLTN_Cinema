@@ -49,6 +49,7 @@ public enum SuccessMessage {
     PRODUCT_FETCHED("Lấy sản phẩm thành công"),
     PRODUCTS_SEARCHED("Tìm kiếm sản phẩm thành công"),
     PAYMENT_SESSION_CREATED("Tạo phiên thanh toán thành công"),
+    PAYMENT_SESSION_COMPLETED("Hoàn tất phiên thanh toán thành công"),
     PAYMENT_REFUND_REQUESTED("Yêu cầu hoàn tiền thành công"),
     PROMOTION_CREATED("Tạo khuyến mãi thành công"),
     PROMOTION_UPDATED("Cập nhật khuyến mãi thành công"),
