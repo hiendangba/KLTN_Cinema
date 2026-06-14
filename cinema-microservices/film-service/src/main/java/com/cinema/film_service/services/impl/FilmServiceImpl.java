@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -126,19 +127,31 @@ public class FilmServiceImpl implements FilmService {
     @Override
     @Transactional(readOnly = true)
     public CursorPageResponse<FilmResponse> searchFilms(FilmCursorPageRequest request) {
-        return searchFilmsInternal(request, null);
+        Set<UUID> showtimeScopedFilmIds = resolveActiveFilmIdsByShowtimeDate(request == null ? null : request.getShowtimeDate());
+        if (request != null && request.getShowtimeDate() != null && showtimeScopedFilmIds.isEmpty()) {
+            return emptyCursorPageResponse();
+        }
+        return searchFilmsInternal(request, showtimeScopedFilmIds, false);
     }
 
     @Override
     @Transactional(readOnly = true)
     public CursorPageResponse<FilmResponse> searchCustomerFilms(FilmCursorPageRequest request, HttpServletRequest httpRequest) {
         String role = normalizeRole(RequestAuthUtils.requireRoleHeader(httpRequest));
-        Set<UUID> activeFilmIds = resolveScopedActiveFilmIds(request, httpRequest, role);
-        if (activeFilmIds.isEmpty()) {
+        Set<UUID> scopedFilmIds = resolveScopedActiveFilmIds(request, httpRequest, role);
+        if (scopedFilmIds.isEmpty()) {
             return emptyCursorPageResponse();
         }
 
-        return searchFilmsInternal(request, activeFilmIds);
+        Set<UUID> showtimeScopedFilmIds = resolveActiveFilmIdsByShowtimeDate(request == null ? null : request.getShowtimeDate());
+        if (request != null && request.getShowtimeDate() != null) {
+            scopedFilmIds = intersectFilmIds(scopedFilmIds, showtimeScopedFilmIds);
+            if (scopedFilmIds.isEmpty()) {
+                return emptyCursorPageResponse();
+            }
+        }
+
+        return searchFilmsInternal(request, scopedFilmIds, true);
     }
 
     @Override
@@ -162,17 +175,19 @@ public class FilmServiceImpl implements FilmService {
 
     private CursorPageResponse<FilmResponse> searchFilmsInternal(
             FilmCursorPageRequest request,
-            Set<UUID> activeFilmIds) {
+            Set<UUID> scopedFilmIds,
+            boolean applyCustomerStatusScope) {
         log.info(
-                "Getting films (cursor={}, size={}, keyword={}, sortBy={}, filterBy={}, dateRange={}, cinemaId={}, customerScope={})",
+                "Getting films (cursor={}, size={}, keyword={}, sortBy={}, filterBy={}, dateRange={}, showtimeDate={}, cinemaId={}, customerScope={})",
                 request.getCursor(),
                 request.getSize(),
                 request.getKeyword(),
                 request.getSortBy(),
                 request.getFilterBy(),
                 request.getDateRange(),
+                request.getShowtimeDate(),
                 request.getCinemaId(),
-                activeFilmIds != null);
+                applyCustomerStatusScope);
 
         String[] cursorParts = request.getParsedCompositeCursor();
         String keyword = request.getNormalizedKeyword();
@@ -184,8 +199,12 @@ public class FilmServiceImpl implements FilmService {
                 : new ArrayList<>(request.getFilterBy());
         appendReleaseDateRangeFilter(filterFields, request.getDateRange());
 
-        if (activeFilmIds != null) {
-            filterFields = scopeCustomerFilters(filterFields, activeFilmIds);
+        if (scopedFilmIds != null) {
+            if (applyCustomerStatusScope) {
+                filterFields = scopeCustomerFilters(filterFields, scopedFilmIds);
+            } else {
+                filterFields = scopeFilmFilters(filterFields, scopedFilmIds);
+            }
         }
 
         List<Film> films = filmRepositoryImpl.searchWithCursorAndSortAndFilter(
@@ -288,6 +307,18 @@ public class FilmServiceImpl implements FilmService {
         return scopedFilters;
     }
 
+    private List<FilterField<FilmField>> scopeFilmFilters(
+            List<FilterField<FilmField>> requestedFilters,
+            Set<UUID> scopedFilmIds) {
+        List<FilterField<FilmField>> scopedFilters = new ArrayList<>(requestedFilters);
+        scopedFilters.add(FilterField.<FilmField>builder()
+                .field(FilmField.ID)
+                .operator("IN")
+                .value(scopedFilmIds.stream().map(UUID::toString).toList())
+                .build());
+        return scopedFilters;
+    }
+
     private CursorPageResponse<FilmResponse> emptyCursorPageResponse() {
         return CursorPageResponse.<FilmResponse>builder()
                 .data(List.of())
@@ -334,6 +365,25 @@ public class FilmServiceImpl implements FilmService {
         }
 
         throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private Set<UUID> resolveActiveFilmIdsByShowtimeDate(LocalDate showtimeDate) {
+        if (showtimeDate == null) {
+            return null;
+        }
+        return showtimeGrpcClient.getActiveFilmIdsByShowtimeDate(showtimeDate);
+    }
+
+    private Set<UUID> intersectFilmIds(Set<UUID> left, Set<UUID> right) {
+        if (left == null || left.isEmpty()) {
+            return left == null ? right : Set.of();
+        }
+        if (right == null || right.isEmpty()) {
+            return Set.of();
+        }
+        Set<UUID> intersected = new LinkedHashSet<>(left);
+        intersected.retainAll(right);
+        return intersected;
     }
 
     private String normalizeRole(String role) {

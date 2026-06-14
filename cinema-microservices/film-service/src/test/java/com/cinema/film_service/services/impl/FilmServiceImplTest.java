@@ -231,6 +231,45 @@ class FilmServiceImplTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void searchCustomerFilms_shouldIntersectShowtimeDateWithCinemaScope() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID film1Id = UUID.randomUUID();
+        UUID film2Id = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        LocalDate showtimeDate = LocalDate.of(2026, 6, 14);
+        Film film = buildFilm(film1Id, "Film 1", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setSize(1);
+        request.setShowtimeDate(showtimeDate);
+
+        HttpServletRequest httpRequest = mockRequest("STAFF", staffId);
+        when(cinemaGrpcClient.getCinemaIdsByUserId(staffId, "STAFF")).thenReturn(List.of(cinemaId));
+        when(showtimeGrpcClient.getActiveFilmIdsByCinema(cinemaId)).thenReturn(Set.of(film1Id, film2Id));
+        when(showtimeGrpcClient.getActiveFilmIdsByShowtimeDate(showtimeDate)).thenReturn(Set.of(film1Id));
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(film));
+        when(filmMapper.toResponse(film)).thenReturn(toResponse(film));
+
+        var response = filmService.searchCustomerFilms(request, httpRequest);
+
+        assertEquals(1, response.getSize());
+        assertEquals(1, response.getData().size());
+        verify(showtimeGrpcClient).getActiveFilmIdsByShowtimeDate(showtimeDate);
+        ArgumentCaptor<List<FilterField<FilmField>>> filterCaptor = ArgumentCaptor.forClass(List.class);
+        verify(filmRepositoryImpl).searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), filterCaptor.capture());
+        List<FilterField<FilmField>> filters = filterCaptor.getValue();
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == FilmField.STATUS
+                        && "IN".equals(filter.getOperator())));
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == FilmField.ID
+                        && "IN".equals(filter.getOperator())
+                        && new HashSet<>((List<String>) filter.getValue()).equals(Set.of(film1Id.toString()))));
+    }
+
+    @Test
     void searchCustomerFilms_shouldKeepCursorPagination() {
         UUID film1Id = UUID.randomUUID();
         UUID film2Id = UUID.randomUUID();
@@ -300,6 +339,47 @@ class FilmServiceImplTest {
         assertEquals(FilmField.RELEASE_DATE, filters.get(0).getField());
         assertEquals("LTE", filters.get(0).getOperator());
         assertEquals(LocalDate.of(2026, 6, 1), filters.get(0).getValue());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchFilms_shouldFilterByShowtimeDateAndAgeRating() {
+        UUID filmId = UUID.randomUUID();
+        LocalDate showtimeDate = LocalDate.of(2026, 6, 14);
+        Film film = buildFilm(filmId, "Film 1", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+        film.setAgeRating(FilmEnum.AgeRating.RATING_4);
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setSize(1);
+        request.setShowtimeDate(showtimeDate);
+        request.setFilterBy(List.of(FilterField.<FilmField>builder()
+                .field(FilmField.AGE_RATING)
+                .operator("EQ")
+                .value(FilmEnum.AgeRating.RATING_4.name())
+                .build()));
+
+        when(showtimeGrpcClient.getActiveFilmIdsByShowtimeDate(showtimeDate)).thenReturn(Set.of(filmId));
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(film));
+        when(filmMapper.toResponse(film)).thenReturn(toResponse(film));
+
+        var response = filmService.searchFilms(request);
+
+        assertEquals(1, response.getSize());
+        assertEquals(1, response.getData().size());
+        verify(showtimeGrpcClient).getActiveFilmIdsByShowtimeDate(showtimeDate);
+        ArgumentCaptor<List<FilterField<FilmField>>> filterCaptor = ArgumentCaptor.forClass(List.class);
+        verify(filmRepositoryImpl).searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), filterCaptor.capture());
+        List<FilterField<FilmField>> filters = filterCaptor.getValue();
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == FilmField.AGE_RATING
+                        && "EQ".equals(filter.getOperator())
+                        && FilmEnum.AgeRating.RATING_4.name().equals(filter.getValue())));
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == FilmField.ID
+                        && "IN".equals(filter.getOperator())
+                        && new HashSet<>((List<String>) filter.getValue()).equals(Set.of(filmId.toString()))));
+        assertTrue(filters.stream().noneMatch(filter -> filter.getField() == FilmField.STATUS));
     }
 
     private HttpServletRequest mockRequest(String role) {

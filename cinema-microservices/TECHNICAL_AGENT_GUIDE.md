@@ -1818,6 +1818,21 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - `ADMIN` bypass cinema ownership, nhưng vẫn đi theo logic film active giống customer-facing.
 - `FilmServiceImplTest` đã được bổ sung case cho staff, manager, admin và case staff/manager bị chặn nếu trỏ sang cinema ngoài scope.
 
+### Film search: thêm `showtimeDate` và giữ `ageRating`
+
+- `film-service` thêm field request riêng `showtimeDate: LocalDate` cho cả `POST /api/films/search` và `POST /api/films/customer/search`, không tái dùng `dateRange` để tránh lẫn với `releaseDate`.
+- Khi có `showtimeDate`, film-service gọi gRPC nội bộ sang `showtime-service` để lấy danh sách film đang có showtime trong đúng ngày đó, rồi intersect với scope hiện tại:
+  - `film/search`: intersect với toàn bộ film active theo ngày, không ép status customer-style.
+  - `film/customer/search`: intersect với scope cinema/user hiện có, rồi vẫn giữ rule status active như cũ.
+- `ageRating` vẫn đi qua `filterBy` hiện có nên FE chỉ cần gửi thêm filter là dùng được, không đổi response shape.
+- `film-service` cũng đã được gắn thêm channel gRPC `cinema` trong config runtime và compose prod để `CinemaGrpcClient` không còn rơi về `localhost` trong container khi staff/manager gọi `film/customer/search`.
+- Files touched: `common-lib/src/main/proto/showtime_internal.proto`, `showtime-service/src/main/java/com/cinema/showtime_service/grpc/ShowtimeInternalGrpcService.java`, `showtime-service/src/main/java/com/cinema/showtime_service/repository/ShowTimeRepository.java`, `showtime-service/src/test/java/com/cinema/showtime_service/grpc/ShowtimeInternalGrpcServiceTest.java`, `film-service/src/main/resources/application.yaml`, `compose.prod.yaml`, `film-service/src/main/java/com/cinema/film_service/dto/request/FilmCursorPageRequest.java`, `film-service/src/main/java/com/cinema/film_service/grpc/ShowtimeGrpcClient.java`, `film-service/src/main/java/com/cinema/film_service/services/impl/FilmServiceImpl.java`, `film-service/src/test/java/com/cinema/film_service/services/impl/FilmServiceImplTest.java`.
+- Verification:
+  - rà soát tĩnh request DTO + service + gRPC client/reply flow sau patch
+  - chưa chạy Maven test do workspace hiện không có `mvn`/wrapper khả dụng
+- Remaining risk:
+  - nếu FE gửi đồng thời `dateRange` và `showtimeDate`, backend sẽ áp cả hai lớp filter; cần FE chọn đúng field theo mục tiêu search để tránh làm kết quả hẹp quá mức.
+
 ### Showtime search: tách enrich ghế khỏi metadata
 
 - `showtime-service/src/main/java/com/cinema/showtime_service/services/impl/ShowTimeServiceImpl.java` đã tách luồng enrich thành 2 bước riêng: metadata (`film`, `hall`, `cinemaName`) và seat availability (`totalSeatCapacity`, `occupiedSeats`, `availableSeats`).

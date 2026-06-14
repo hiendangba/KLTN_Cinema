@@ -8,6 +8,8 @@ import com.cinema.grpc.showtime.ListActiveFilmIdsReply;
 import com.cinema.grpc.showtime.ListActiveFilmIdsRequest;
 import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaReply;
 import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaRequest;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByShowtimeDateReply;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByShowtimeDateRequest;
 import com.cinema.grpc.showtime.ListActiveShowtimeIdsByHallReply;
 import com.cinema.grpc.showtime.ListActiveShowtimeIdsByHallRequest;
 import com.cinema.grpc.showtime.ShowtimeInternalServiceGrpc;
@@ -19,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -198,6 +202,55 @@ public class ShowtimeInternalGrpcService extends ShowtimeInternalServiceGrpc.Sho
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching active film ids by cinema", ex);
             responseObserver.onNext(ListActiveFilmIdsByCinemaReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void listActiveFilmIdsByShowtimeDate(ListActiveFilmIdsByShowtimeDateRequest request,
+                                                StreamObserver<ListActiveFilmIdsByShowtimeDateReply> responseObserver) {
+        LocalDate showtimeDate;
+        try {
+            showtimeDate = LocalDate.parse(request.getShowtimeDate());
+        } catch (Exception ex) {
+            responseObserver.onNext(ListActiveFilmIdsByShowtimeDateReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+            return;
+        }
+
+        try {
+            LocalDateTime startOfDay = showtimeDate.atStartOfDay();
+            LocalDateTime endExclusive = showtimeDate.plusDays(1).atStartOfDay();
+            ListActiveFilmIdsByShowtimeDateReply.Builder builder = ListActiveFilmIdsByShowtimeDateReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Active film ids fetched successfully");
+
+            showTimeRepository.findActiveFilmIdsByShowtimeDate(startOfDay, endExclusive)
+                    .stream()
+                    .distinct()
+                    .map(UUID::toString)
+                    .forEach(builder::addFilmIds);
+
+            responseObserver.onNext(builder.build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(ListActiveFilmIdsByShowtimeDateReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching active film ids by showtime date", ex);
+            responseObserver.onNext(ListActiveFilmIdsByShowtimeDateReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())

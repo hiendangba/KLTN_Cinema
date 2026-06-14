@@ -11,6 +11,7 @@ service ShowtimeInternalService {
   rpc ListActiveShowtimeIdsByHall(ListActiveShowtimeIdsByHallRequest) returns (ListActiveShowtimeIdsByHallReply);
   rpc ListActiveFilmIds(ListActiveFilmIdsRequest) returns (ListActiveFilmIdsReply);
   rpc ListActiveFilmIdsByCinema(ListActiveFilmIdsByCinemaRequest) returns (ListActiveFilmIdsByCinemaReply);
+  rpc ListActiveFilmIdsByShowtimeDate(ListActiveFilmIdsByShowtimeDateRequest) returns (ListActiveFilmIdsByShowtimeDateReply);
 }
 
 message GetShowtimeByIdRequest {
@@ -60,6 +61,17 @@ message ListActiveFilmIdsByCinemaRequest {
 }
 
 message ListActiveFilmIdsByCinemaReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated string film_ids = 4;
+}
+
+message ListActiveFilmIdsByShowtimeDateRequest {
+  string showtime_date = 1;
+}
+
+message ListActiveFilmIdsByShowtimeDateReply {
   bool success = 1;
   string error_key = 2;
   string message = 3;

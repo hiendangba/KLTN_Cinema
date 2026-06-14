@@ -4,6 +4,8 @@ import com.cinema.grpc.showtime.ListActiveFilmIdsReply;
 import com.cinema.grpc.showtime.ListActiveFilmIdsRequest;
 import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaReply;
 import com.cinema.grpc.showtime.ListActiveFilmIdsByCinemaRequest;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByShowtimeDateReply;
+import com.cinema.grpc.showtime.ListActiveFilmIdsByShowtimeDateRequest;
 import com.cinema.showtime_service.repository.ShowTimeRepository;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.Test;
@@ -70,6 +72,29 @@ class ShowtimeInternalGrpcServiceTest {
         assertEquals(film1.toString(), observer.value.getFilmIds(0));
         assertEquals(film2.toString(), observer.value.getFilmIds(1));
         verify(hallGrpcClient).listActiveHallIdsByCinema(cinemaId);
+    }
+
+    @Test
+    void listActiveFilmIdsByShowtimeDate_shouldReturnDistinctFilmIds() {
+        UUID film1 = UUID.randomUUID();
+        UUID film2 = UUID.randomUUID();
+        when(showTimeRepository.findActiveFilmIdsByShowtimeDate(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(film1, film2, film1));
+
+        CapturingObserver<ListActiveFilmIdsByShowtimeDateReply> observer = new CapturingObserver<>();
+        grpcService.listActiveFilmIdsByShowtimeDate(
+                ListActiveFilmIdsByShowtimeDateRequest.newBuilder()
+                        .setShowtimeDate("2026-06-14")
+                        .build(),
+                observer);
+
+        assertTrue(observer.completed);
+        assertTrue(observer.value.getSuccess());
+        assertEquals(2, observer.value.getFilmIdsCount());
+        assertEquals(film1.toString(), observer.value.getFilmIds(0));
+        assertEquals(film2.toString(), observer.value.getFilmIds(1));
     }
 
     private static class CapturingObserver<T> implements StreamObserver<T> {
