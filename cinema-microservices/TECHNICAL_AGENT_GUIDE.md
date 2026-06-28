@@ -26,7 +26,7 @@
 ## Changelog ngắn (2026-06-28)
 
 - `FE/CinemaStar` chatbot đã bỏ cơ chế đọc token từ `localStorage` cho riêng `/chat` và chuyển sang gửi cookie thật của browser bằng `credentials: include`.
-- `src/api/chatbot.js` ở `DEV` luôn đi qua `/chatbot/chat` qua Vite proxy; URL remote chỉ còn là fallback cho production, để tránh preflight redirect khi browser gọi thẳng `http://cinema-api.duckdns.org:8000/chat`.
+- `src/api/chatbot.js` ở `DEV` luôn đi qua `/chatbot/chat` qua Vite proxy; URL remote chỉ còn là fallback cho production, để tránh browser gọi thẳng vào chatbot HTTP cũ thay vì đi qua gateway HTTPS `https://cinema-api.duckdns.org/chat`.
 - `chatbot/main.py` giờ dùng CORS allowlist thay vì `allow_origins=["*"]`, để request có credentials từ FE origin được browser chấp nhận; cấu hình origin có thể override bằng `CHATBOT_CORS_ORIGINS`.
 - Files chạm: `FE/CinemaStar/src/api/chatbot.js`, `FE/CinemaStar/chatbot/main.py`, `FE/CinemaStar/chatbot/.env.example`.
 - Reason: trước đó FE chỉ forward `auth_cookie` từ storage cục bộ, nên khi deploy khác origin cookie không còn đi qua được và chatbot log `cookie=no`.
