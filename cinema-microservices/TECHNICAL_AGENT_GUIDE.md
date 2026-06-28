@@ -23,6 +23,21 @@
 - Verification: test mới đã được thêm cho admin bypass, manager scope, staff forbidden, manager không có cinema, và admin bị chặn khi cinema không active; build reactor hiện vẫn bị kẹt ở `common-lib` protobuf temp-dir issue trên workspace này nên chưa có green full-run.
 - Remaining risk: nếu cần CI pass thì vẫn phải xử lý lỗi plugin protobuf của `common-lib` trong môi trường build, vì đây là blocker ngoài logic product.
 
+## Changelog ngắn (2026-06-28)
+
+- `FE/CinemaStar` chatbot đã bỏ cơ chế đọc token từ `localStorage` cho riêng `/chat` và chuyển sang gửi cookie thật của browser bằng `credentials: include`.
+- `src/api/chatbot.js` ở `DEV` luôn đi qua `/chatbot/chat` qua Vite proxy; URL remote chỉ còn là fallback cho production, để tránh preflight redirect khi browser gọi thẳng `http://cinema-api.duckdns.org:8000/chat`.
+- `chatbot/main.py` giờ dùng CORS allowlist thay vì `allow_origins=["*"]`, để request có credentials từ FE origin được browser chấp nhận; cấu hình origin có thể override bằng `CHATBOT_CORS_ORIGINS`.
+- Files chạm: `FE/CinemaStar/src/api/chatbot.js`, `FE/CinemaStar/chatbot/main.py`, `FE/CinemaStar/chatbot/.env.example`.
+- Reason: trước đó FE chỉ forward `auth_cookie` từ storage cục bộ, nên khi deploy khác origin cookie không còn đi qua được và chatbot log `cookie=no`.
+- Verification: đã chuyển `/chat` sang `credentials: include` và giữ body chỉ còn `question`/`history`; CORS default đã giới hạn theo origin cụ thể thay vì wildcard.
+- `envoy/envoy.prod.yaml` đã thêm route `/chat` và cluster `chatbot` để public endpoint đi qua HTTPS gateway thay vì browser gọi thẳng `http://cinema-api.duckdns.org:8000/chat`.
+- `compose.prod.yaml` và `FE/CinemaStar/chatbot/docker-compose.yml` cùng join network `cinema-shared`, để Envoy resolve được hostname `chatbot` sang container Python ở compose riêng.
+- Files chạm: `envoy/envoy.prod.yaml`, `compose.prod.yaml`, `FE/CinemaStar/chatbot/docker-compose.yml`.
+- Reason: Envoy route `/chat` chỉ hoạt động nếu gateway và chatbot thật sự thấy nhau qua DNS Docker, nên 2 stack riêng vẫn phải share một network chung.
+- Verification: chatbot service có alias `chatbot` trên network chung, Envoy attach cùng network đó, nên upstream `chatbot:8000` có thể resolve qua Docker DNS thay vì cần chung một compose file.
+- Remaining risk: production vẫn phụ thuộc cookie auth của `identity-service` phải được set đúng `Secure` + `SameSite=None` thì browser mới gửi cross-site ổn định.
+
 ## Changelog ngắn (2026-06-10)
 
 - Chuẩn hóa success message và mutation response theo một enum chung trong `common-lib`, đồng thời bỏ helper string tự do ở `BaseController`.

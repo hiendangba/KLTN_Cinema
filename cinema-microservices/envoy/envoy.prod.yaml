@@ -130,6 +130,16 @@
                               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                               disabled: true
                         - match:
+                            path: /chat
+                          route:
+                            cluster: chatbot
+                            timeout: 60s
+                        - match:
+                            prefix: /chat/
+                          route:
+                            cluster: chatbot
+                            timeout: 60s
+                        - match:
                             prefix: /media/
                           route:
                             cluster: upload-service
@@ -451,6 +461,20 @@
                     socket_address:
                       address: booking-service
                       port_value: 8095
+    - name: chatbot
+      connect_timeout: 1s
+      type: LOGICAL_DNS
+      http2_protocol_options: {}
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: chatbot
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: chatbot
+                      port_value: 8000
     - name: payment-service
       connect_timeout: 1s
       type: LOGICAL_DNS

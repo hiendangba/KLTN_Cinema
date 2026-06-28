@@ -492,9 +492,16 @@ services:
     command:
       ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
     mem_limit: 70m
+    networks:
+      - default
+      - cinema-shared
 
 volumes:
   pgdata:
   redis_data:
   rabbitmq_data:
   upload_data:
+
+networks:
+  cinema-shared:
+    name: cinema-shared
