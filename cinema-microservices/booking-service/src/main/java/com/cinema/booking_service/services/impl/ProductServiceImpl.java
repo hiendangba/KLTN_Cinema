@@ -7,6 +7,7 @@ import com.cinema.booking_service.dto.response.ProductResponse;
 import com.cinema.booking_service.entity.Product;
 import com.cinema.booking_service.enums.ProductStatus;
 import com.cinema.booking_service.grpc.CinemaGrpcClient;
+import com.cinema.booking_service.grpc.CinemaGrpcClient.CinemaSummary;
 import com.cinema.booking_service.mapper.ProductMapper;
 import com.cinema.booking_service.repository.ProductRepository;
 import com.cinema.booking_service.services.ProductService;
@@ -42,7 +43,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ActionMessageResponse createProduct(CreateProductRequest request, HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
+        validateWriteRole(httpRequest);
         Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
         validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds);
 
@@ -65,7 +66,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ActionMessageResponse updateProduct(UUID id, UpdateProductRequest request, HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
+        validateWriteRole(httpRequest);
         Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
         validateCinemaAccess(request.getCinemaId(), accessibleCinemaIds);
 
@@ -89,7 +90,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ActionMessageResponse deleteProduct(UUID id, HttpServletRequest httpRequest) {
-        validateManagerRole(httpRequest);
+        validateWriteRole(httpRequest);
         Set<UUID> accessibleCinemaIds = resolveAccessibleCinemaIdsByUser(httpRequest);
         Product product = getManagedProductOrThrow(id, null, accessibleCinemaIds);
         product.setIsDeleted(true);
@@ -230,8 +231,8 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    private void validateManagerRole(HttpServletRequest httpRequest) {
-        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
+    private void validateWriteRole(HttpServletRequest httpRequest) {
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
     }
 
     private void validateOperatorRole(HttpServletRequest httpRequest) {
@@ -245,9 +246,13 @@ public class ProductServiceImpl implements ProductService {
     }
 
     private Set<UUID> resolveAccessibleCinemaIdsByUser(HttpServletRequest httpRequest) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return resolveAllActiveCinemaIds();
+        }
+
         try {
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
-            String role = RequestAuthUtils.requireRoleHeader(httpRequest);
             List<UUID> cinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId, role);
             if (cinemaIds.isEmpty()) {
                 throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
@@ -277,5 +282,15 @@ public class ProductServiceImpl implements ProductService {
             }
             throw ex;
         }
+    }
+
+    private Set<UUID> resolveAllActiveCinemaIds() {
+        List<CinemaSummary> cinemas = cinemaGrpcClient.getAllActiveCinemas();
+        if (cinemas == null || cinemas.isEmpty()) {
+            return Set.of();
+        }
+        return cinemas.stream()
+                .map(CinemaSummary::id)
+                .collect(java.util.stream.Collectors.toSet());
     }
 }

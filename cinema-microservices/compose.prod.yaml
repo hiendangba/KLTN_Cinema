@@ -201,6 +201,8 @@ services:
       REDIS_PASSWORD: ""
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
+      HALL_GRPC_HOST: hall-service
+      HALL_GRPC_PORT: 9197
       IDENTITY_GRPC_HOST: identity-service
       IDENTITY_GRPC_PORT: 9190
       FILM_GRPC_HOST: film-service

@@ -14,6 +14,15 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-06-28)
+
+- `booking-service` mở admin write access cho `PUT/POST/DELETE /api/bookings/products` theo pattern `admin bypass`, còn `MANAGER` vẫn phải đi qua scope cinema như cũ.
+- `ProductServiceImpl` giờ resolve cinema scope theo role: `ADMIN` lấy toàn bộ cinema active từ `cinemaGrpcClient.getAllActiveCinemas()`, `MANAGER` vẫn dùng `getCinemaIdsByUserId(...)`, `STAFF` vẫn bị chặn ở write path.
+- Files chạm: `booking-service/src/main/java/com/cinema/booking_service/services/impl/ProductServiceImpl.java`, `booking-service/src/test/java/com/cinema/booking_service/services/impl/ProductServiceImplTest.java`.
+- Reason: admin trước đó bị chặn nhầm ở `validateManagerRole(...)`, trong khi rule mong muốn là admin được thao tác trên mọi cinema active.
+- Verification: test mới đã được thêm cho admin bypass, manager scope, staff forbidden, manager không có cinema, và admin bị chặn khi cinema không active; build reactor hiện vẫn bị kẹt ở `common-lib` protobuf temp-dir issue trên workspace này nên chưa có green full-run.
+- Remaining risk: nếu cần CI pass thì vẫn phải xử lý lỗi plugin protobuf của `common-lib` trong môi trường build, vì đây là blocker ngoài logic product.
+
 ## Changelog ngắn (2026-06-10)
 
 - Chuẩn hóa success message và mutation response theo một enum chung trong `common-lib`, đồng thời bỏ helper string tự do ở `BaseController`.
@@ -1008,7 +1017,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 - Rule nghiệp vụ áp dụng:
   - Soft delete cho product.
   - Unique tên product trong cùng `cinemaId` (trên tập record chưa xóa).
-  - `create/update/delete` được scope theo cinema của operator.
+  - `create/update/delete` cho `ADMIN` bypass scope bằng danh sách cinema active; `MANAGER` vẫn scope theo cinema của operator.
 - Build check đã pass bằng Maven Wrapper:
   - `booking-service\\mvnw.cmd -DskipTests compile`
   - `booking-service\\mvnw.cmd -DskipTests test-compile`
@@ -1080,8 +1089,8 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
   - Lý do: customer không có ngữ cảnh "cinema quản lý", nên phải dựa vào cinema được chọn.
 - Quyết định 4: `GET /api/bookings/products/{id}` đọc theo `id` thuần.
   - Lý do: endpoint chi tiết by-id cần trả đúng record theo định danh; không ép scope manager cho use case đọc chi tiết cơ bản.
-- Quyết định 5: create/update/delete vẫn scope theo account operator qua `GetCinemaByUserId`.
-  - Lý do: tránh sửa dữ liệu xuyên cinema.
+- Quyết định 5: create/update/delete cho `ADMIN` bypass toàn hệ thống, còn `MANAGER` vẫn scope theo account operator qua `GetCinemaByUserId`.
+  - Lý do: admin cần thao tác mọi cinema active, nhưng manager vẫn phải tránh sửa dữ liệu xuyên cinema.
 - Quyết định 6: booking create dùng một request tổng hợp duy nhất cho frontend.
   - Lý do: đúng flow checkout thực tế (khách chọn ghế + bắp nước xong mới submit 1 lần).
 - Quyết định 7: dùng Redis lock ghế TTL 5 phút trong lúc chờ thanh toán.
@@ -1832,6 +1841,14 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - chưa chạy Maven test do workspace hiện không có `mvn`/wrapper khả dụng
 - Remaining risk:
   - nếu FE gửi đồng thời `dateRange` và `showtimeDate`, backend sẽ áp cả hai lớp filter; cần FE chọn đúng field theo mục tiêu search để tránh làm kết quả hẹp quá mức.
+
+### Booking history: gắn hall gRPC cho prod
+
+- `booking-service` trong `compose.prod.yaml` đã được bổ sung `HALL_GRPC_HOST=hall-service` và `HALL_GRPC_PORT=9197`.
+- `booking-service/src/main/resources/application.yaml` cũng đã có channel `hall` với default `localhost:9197`, nên env prod chỉ cần override host/port là đủ.
+- Mục đích là để `bookings/me/history/search` và các response booking khác không còn rơi về `localhost:9197` khi `HallGrpcClient` enrich `hallName`.
+- Không đổi logic code của `BookingServiceImpl`; chỉ sửa wiring runtime cho prod để `hallName` có thể resolve qua `hall-service`.
+- Files touched: `compose.prod.yaml`, `TECHNICAL_AGENT_GUIDE.md`.
 
 ### Showtime search: tách enrich ghế khỏi metadata
 
