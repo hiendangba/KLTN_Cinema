@@ -336,19 +336,17 @@ public class BookingServiceImpl implements BookingService {
                 request.getSelectedIds());
 
         return ExcelExportUtils.exportSingleSheet(
-                "Booking Revenue",
+                "Báo cáo hiệu suất",
+                "BÁO CÁO HIỆU SUẤT BOOKING THEO RẠP",
                 List.of(
-                        "Cinema ID",
-                        "Cinema Name",
-                        "Total Bookings",
-                        "Pending Count",
-                        "Reserved Count",
-                        "Confirmed Count",
-                        "Ticket Subtotal Amount",
-                        "Product Subtotal Amount",
-                        "Gross Amount",
-                        "Promotion Discount Amount",
-                        "Payable Amount"),
+                        "Mã rạp",
+                        "Tên rạp",
+                        "Tổng booking",
+                        "Số booking chờ xử lý",
+                        "Số booking giữ chỗ",
+                        "Số booking đã xác nhận",
+                        "Số booking hết hạn",
+                        "Tỷ lệ chuyển đổi"),
                 items.stream()
                         .map(item -> Arrays.asList(
                                 item.cinemaId(),
@@ -357,11 +355,8 @@ public class BookingServiceImpl implements BookingService {
                                 item.pendingCount(),
                                 item.reservedCount(),
                                 item.confirmedCount(),
-                                item.ticketSubtotalAmount(),
-                                item.productSubtotalAmount(),
-                                item.grossAmount(),
-                                item.promotionDiscountAmount(),
-                                item.payableAmount()))
+                                item.expiredCount(),
+                                item.conversionRate()))
                         .toList());
     }
 
@@ -769,13 +764,13 @@ public class BookingServiceImpl implements BookingService {
                         scopedCinemaIds,
                         from,
                         to,
-                        EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED))
+                        EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED, BookingStatus.EXPIRED))
                 : bookingRepositoryImpl.findAllForBookingRevenueReport(
                         scopedCinemaIds,
                         requestedFilmIds,
                         from,
                         to,
-                        EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED));
+                        EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED, BookingStatus.EXPIRED));
 
         for (Booking booking : bookings) {
             BookingRevenueAccumulator accumulator = accumulatorMap.get(booking.getCinemaId());
@@ -1275,11 +1270,8 @@ public class BookingServiceImpl implements BookingService {
                         .pendingCount(0)
                         .reservedCount(0)
                         .confirmedCount(0)
-                        .ticketSubtotalAmount(BigDecimal.ZERO)
-                        .productSubtotalAmount(BigDecimal.ZERO)
-                        .grossAmount(BigDecimal.ZERO)
-                        .promotionDiscountAmount(BigDecimal.ZERO)
-                        .payableAmount(BigDecimal.ZERO)
+                        .expiredCount(0)
+                        .conversionRate(BigDecimal.ZERO)
                         .build())
                 .toList();
     }
@@ -1452,11 +1444,8 @@ public class BookingServiceImpl implements BookingService {
             case PENDING_COUNT -> item.pendingCount();
             case RESERVED_COUNT -> item.reservedCount();
             case CONFIRMED_COUNT -> item.confirmedCount();
-            case TICKET_SUBTOTAL_AMOUNT -> item.ticketSubtotalAmount();
-            case PRODUCT_SUBTOTAL_AMOUNT -> item.productSubtotalAmount();
-            case GROSS_AMOUNT -> item.grossAmount();
-            case PROMOTION_DISCOUNT_AMOUNT -> item.promotionDiscountAmount();
-            case PAYABLE_AMOUNT -> item.payableAmount();
+            case EXPIRED_COUNT -> item.expiredCount();
+            case CONVERSION_RATE -> item.conversionRate();
         };
     }
 
@@ -1501,11 +1490,8 @@ public class BookingServiceImpl implements BookingService {
                     .pendingCount(0)
                     .reservedCount(0)
                     .confirmedCount(0)
-                    .ticketSubtotalAmount(BigDecimal.ZERO)
-                    .productSubtotalAmount(BigDecimal.ZERO)
-                    .grossAmount(BigDecimal.ZERO)
-                    .promotionDiscountAmount(BigDecimal.ZERO)
-                    .payableAmount(BigDecimal.ZERO)
+                    .expiredCount(0)
+                    .conversionRate(BigDecimal.ZERO)
                     .build();
         }
 
@@ -1513,11 +1499,7 @@ public class BookingServiceImpl implements BookingService {
         long pendingCount = 0L;
         long reservedCount = 0L;
         long confirmedCount = 0L;
-        BigDecimal ticketSubtotalAmount = BigDecimal.ZERO;
-        BigDecimal productSubtotalAmount = BigDecimal.ZERO;
-        BigDecimal grossAmount = BigDecimal.ZERO;
-        BigDecimal promotionDiscountAmount = BigDecimal.ZERO;
-        BigDecimal payableAmount = BigDecimal.ZERO;
+        long expiredCount = 0L;
 
         for (BookingRevenueItemResponse item : items) {
             if (item == null) {
@@ -1527,11 +1509,7 @@ public class BookingServiceImpl implements BookingService {
             pendingCount += item.pendingCount();
             reservedCount += item.reservedCount();
             confirmedCount += item.confirmedCount();
-            ticketSubtotalAmount = ticketSubtotalAmount.add(nvl(item.ticketSubtotalAmount()));
-            productSubtotalAmount = productSubtotalAmount.add(nvl(item.productSubtotalAmount()));
-            grossAmount = grossAmount.add(nvl(item.grossAmount()));
-            promotionDiscountAmount = promotionDiscountAmount.add(nvl(item.promotionDiscountAmount()));
-            payableAmount = payableAmount.add(nvl(item.payableAmount()));
+            expiredCount += item.expiredCount();
         }
 
         return BookingRevenueSummaryResponse.builder()
@@ -1539,26 +1517,17 @@ public class BookingServiceImpl implements BookingService {
                 .pendingCount(pendingCount)
                 .reservedCount(reservedCount)
                 .confirmedCount(confirmedCount)
-                .ticketSubtotalAmount(ticketSubtotalAmount)
-                .productSubtotalAmount(productSubtotalAmount)
-                .grossAmount(grossAmount)
-                .promotionDiscountAmount(promotionDiscountAmount)
-                .payableAmount(payableAmount)
+                .expiredCount(expiredCount)
+                .conversionRate(calculateConversionRate(confirmedCount, totalBookings))
                 .build();
     }
 
-    private static BigDecimal nvl(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
-    }
-
-    private static BigDecimal resolvePayableAmount(Booking booking) {
-        if (booking == null) {
+    private static BigDecimal calculateConversionRate(long confirmedCount, long totalBookings) {
+        if (totalBookings <= 0) {
             return BigDecimal.ZERO;
         }
-        if (booking.getPayableAmount() != null) {
-            return booking.getPayableAmount();
-        }
-        return nvl(booking.getFinalAmount()).subtract(nvl(booking.getPromotionDiscountAmount()));
+        return BigDecimal.valueOf(confirmedCount)
+                .divide(BigDecimal.valueOf(totalBookings), 4, java.math.RoundingMode.HALF_UP);
     }
 
     private List<UUID> normalizeUuidList(Collection<UUID> values) {
@@ -1579,11 +1548,7 @@ public class BookingServiceImpl implements BookingService {
         private long pendingCount;
         private long reservedCount;
         private long confirmedCount;
-        private BigDecimal ticketSubtotalAmount = BigDecimal.ZERO;
-        private BigDecimal productSubtotalAmount = BigDecimal.ZERO;
-        private BigDecimal grossAmount = BigDecimal.ZERO;
-        private BigDecimal promotionDiscountAmount = BigDecimal.ZERO;
-        private BigDecimal payableAmount = BigDecimal.ZERO;
+        private long expiredCount;
 
         private BookingRevenueAccumulator(UUID cinemaId, String cinemaName) {
             this.cinemaId = cinemaId;
@@ -1601,12 +1566,9 @@ public class BookingServiceImpl implements BookingService {
                 reservedCount++;
             } else if (booking.getBookingStatus() == BookingStatus.CONFIRMED) {
                 confirmedCount++;
+            } else if (booking.getBookingStatus() == BookingStatus.EXPIRED) {
+                expiredCount++;
             }
-            ticketSubtotalAmount = ticketSubtotalAmount.add(BookingServiceImpl.nvl(booking.getTicketSubtotal()));
-            productSubtotalAmount = productSubtotalAmount.add(BookingServiceImpl.nvl(booking.getProductSubtotal()));
-            grossAmount = grossAmount.add(BookingServiceImpl.nvl(booking.getFinalAmount()));
-            promotionDiscountAmount = promotionDiscountAmount.add(BookingServiceImpl.nvl(booking.getPromotionDiscountAmount()));
-            payableAmount = payableAmount.add(BookingServiceImpl.resolvePayableAmount(booking));
         }
 
         private BookingRevenueItemResponse toResponse() {
@@ -1617,11 +1579,8 @@ public class BookingServiceImpl implements BookingService {
                     .pendingCount(pendingCount)
                     .reservedCount(reservedCount)
                     .confirmedCount(confirmedCount)
-                    .ticketSubtotalAmount(ticketSubtotalAmount)
-                    .productSubtotalAmount(productSubtotalAmount)
-                    .grossAmount(grossAmount)
-                    .promotionDiscountAmount(promotionDiscountAmount)
-                    .payableAmount(payableAmount)
+                    .expiredCount(expiredCount)
+                    .conversionRate(calculateConversionRate(confirmedCount, totalBookings))
                     .build();
         }
     }

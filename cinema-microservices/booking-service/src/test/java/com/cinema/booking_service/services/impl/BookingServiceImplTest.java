@@ -164,15 +164,20 @@ class BookingServiceImplTest {
 
                 ArgumentCaptor<Collection<UUID>> cinemaIdsCaptor = ArgumentCaptor.forClass(Collection.class);
                 ArgumentCaptor<Collection<UUID>> filmIdsCaptor = ArgumentCaptor.forClass(Collection.class);
+                ArgumentCaptor<Collection<BookingStatus>> statusesCaptor = ArgumentCaptor.forClass(Collection.class);
                 org.mockito.Mockito.verify(bookingRepositoryImpl).findAllForBookingRevenueReport(
                                 cinemaIdsCaptor.capture(),
                                 filmIdsCaptor.capture(),
                                 any(),
                                 any(),
-                                anyCollection());
+                                statusesCaptor.capture());
 
                 assertEquals(List.of(cinema1), List.copyOf(cinemaIdsCaptor.getValue()));
                 assertEquals(List.of(film1), List.copyOf(filmIdsCaptor.getValue()));
+                assertEquals(
+                                EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED,
+                                                BookingStatus.EXPIRED),
+                                EnumSet.copyOf(statusesCaptor.getValue()));
                 assertEquals(1L, response.total().totalBookings());
                 assertEquals(1, response.items().size());
                 assertEquals(cinema1, response.items().get(0).cinemaId());
@@ -181,7 +186,7 @@ class BookingServiceImplTest {
         }
 
         @Test
-        void getAllCinemaRevenueReport_shouldAggregatePromotionDiscountAndPayableAmount() {
+        void getAllCinemaRevenueReport_shouldCalculateConversionRateFromBookingCounts() {
                 UUID cinema1 = UUID.randomUUID();
                 UUID film1 = UUID.randomUUID();
                 UUID film2 = UUID.randomUUID();
@@ -191,13 +196,8 @@ class BookingServiceImplTest {
 
                 Booking booking1 = buildBooking(cinema1, film1, BookingStatus.CONFIRMED,
                                 BigDecimal.valueOf(100000), BigDecimal.valueOf(50000));
-                booking1.setPromotionDiscountAmount(BigDecimal.valueOf(10000));
-                booking1.setPayableAmount(BigDecimal.valueOf(140000));
-
                 Booking booking2 = buildBooking(cinema1, film2, BookingStatus.RESERVED,
                                 BigDecimal.valueOf(120000), BigDecimal.valueOf(30000));
-                booking2.setPromotionDiscountAmount(BigDecimal.valueOf(5000));
-                booking2.setPayableAmount(BigDecimal.valueOf(145000));
 
                 when(bookingRepositoryImpl.findAllForBookingRevenueReport(anyCollection(), any(), any(),
                                 anyCollection()))
@@ -212,11 +212,104 @@ class BookingServiceImplTest {
 
                 BookingRevenueReportResponse response = bookingService.getAllCinemaRevenueReport(request);
 
-                assertEquals(BigDecimal.valueOf(300000), response.total().grossAmount());
-                assertEquals(BigDecimal.valueOf(15000), response.total().promotionDiscountAmount());
-                assertEquals(BigDecimal.valueOf(285000), response.total().payableAmount());
-                assertEquals(BigDecimal.valueOf(15000), response.items().get(0).promotionDiscountAmount());
-                assertEquals(BigDecimal.valueOf(285000), response.items().get(0).payableAmount());
+                assertEquals(new BigDecimal("0.5000"), response.total().conversionRate());
+                assertEquals(new BigDecimal("0.5000"), response.page().conversionRate());
+                assertEquals(new BigDecimal("0.5000"), response.items().get(0).conversionRate());
+        }
+
+        @Test
+        void getAllCinemaRevenueReport_shouldIncludeExpiredBookingsInCountsTotalsAndFiltering() {
+                UUID cinema1 = UUID.randomUUID();
+                UUID film1 = UUID.randomUUID();
+                UUID film2 = UUID.randomUUID();
+                UUID film3 = UUID.randomUUID();
+                UUID film4 = UUID.randomUUID();
+
+                when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+
+                Booking expiredBooking = buildBooking(
+                                cinema1, film1, BookingStatus.EXPIRED, BigDecimal.valueOf(70000), BigDecimal.valueOf(10000));
+                Booking confirmedBooking = buildBooking(
+                                cinema1, film2, BookingStatus.CONFIRMED, BigDecimal.valueOf(80000), BigDecimal.valueOf(5000));
+                Booking reservedBooking = buildBooking(
+                                cinema1, film3, BookingStatus.RESERVED, BigDecimal.valueOf(50000), BigDecimal.ZERO);
+                Booking pendingBooking = buildBooking(
+                                cinema1, film4, BookingStatus.PENDING, BigDecimal.valueOf(40000), BigDecimal.ZERO);
+
+                when(bookingRepositoryImpl.findAllForBookingRevenueReport(anyCollection(), any(), any(), anyCollection()))
+                                .thenReturn(List.of(expiredBooking, confirmedBooking, reservedBooking, pendingBooking));
+
+                BookingRevenueReportRequest request = BookingRevenueReportRequest.builder()
+                                .pageRequest(PageRequest.<BookingRevenueField>builder()
+                                                .page(1)
+                                                .size(10)
+                                                .filterBy(List.of(
+                                                                FilterField.<BookingRevenueField>builder()
+                                                                                .field(BookingRevenueField.EXPIRED_COUNT)
+                                                                                .operator("GTE")
+                                                                                .value(1)
+                                                                                .build()))
+                                                .sortBy(List.of(
+                                                                SortField.<BookingRevenueField>builder()
+                                                                                .field(BookingRevenueField.EXPIRED_COUNT)
+                                                                                .direction("DESC")
+                                                                                .build()))
+                                                .build())
+                                .build();
+
+                BookingRevenueReportResponse response = bookingService.getAllCinemaRevenueReport(request);
+
+                assertEquals(1L, response.total().expiredCount());
+                assertEquals(1L, response.page().expiredCount());
+                assertEquals(4L, response.total().totalBookings());
+                assertEquals(1, response.items().size());
+                assertEquals(1L, response.items().get(0).expiredCount());
+                assertEquals(new BigDecimal("0.2500"), response.total().conversionRate());
+                assertEquals(new BigDecimal("0.2500"), response.page().conversionRate());
+                assertEquals(new BigDecimal("0.2500"), response.items().get(0).conversionRate());
+        }
+
+        @Test
+        void getAllCinemaRevenueReport_shouldSupportFilteringAndSortingByConversionRate() {
+                UUID cinema1 = UUID.randomUUID();
+                UUID cinema2 = UUID.randomUUID();
+
+                when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"),
+                                new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
+
+                when(bookingRepositoryImpl.findAllForBookingRevenueReport(anyCollection(), any(), any(), anyCollection()))
+                                .thenReturn(List.of(
+                                                buildBooking(cinema1, UUID.randomUUID(), BookingStatus.CONFIRMED, BigDecimal.TEN, BigDecimal.ZERO),
+                                                buildBooking(cinema1, UUID.randomUUID(), BookingStatus.RESERVED, BigDecimal.TEN, BigDecimal.ZERO),
+                                                buildBooking(cinema2, UUID.randomUUID(), BookingStatus.CONFIRMED, BigDecimal.TEN, BigDecimal.ZERO),
+                                                buildBooking(cinema2, UUID.randomUUID(), BookingStatus.CONFIRMED, BigDecimal.TEN, BigDecimal.ZERO)));
+
+                BookingRevenueReportRequest request = BookingRevenueReportRequest.builder()
+                                .pageRequest(PageRequest.<BookingRevenueField>builder()
+                                                .page(1)
+                                                .size(10)
+                                                .filterBy(List.of(
+                                                                FilterField.<BookingRevenueField>builder()
+                                                                                .field(BookingRevenueField.CONVERSION_RATE)
+                                                                                .operator("GTE")
+                                                                                .value("0.7000")
+                                                                                .build()))
+                                                .sortBy(List.of(
+                                                                SortField.<BookingRevenueField>builder()
+                                                                                .field(BookingRevenueField.CONVERSION_RATE)
+                                                                                .direction("DESC")
+                                                                                .build()))
+                                                .build())
+                                .build();
+
+                BookingRevenueReportResponse response = bookingService.getAllCinemaRevenueReport(request);
+
+                assertEquals(1, response.items().size());
+                assertEquals(cinema2, response.items().get(0).cinemaId());
+                assertEquals(new BigDecimal("1.0000"), response.items().get(0).conversionRate());
+                assertEquals(new BigDecimal("1.0000"), response.page().conversionRate());
         }
 
         @Test
