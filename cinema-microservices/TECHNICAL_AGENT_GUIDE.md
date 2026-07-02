@@ -22,6 +22,18 @@
 - Verification: đã đối chiếu lại controller/service/DTO/export contract và update tài liệu hướng dẫn tương ứng; chưa chạy test vì đây là thay đổi tài liệu.
 - Remaining risk: nếu FE vẫn render theo cột tiền cũ thì table/export sẽ lệch shape; cần đồng bộ UI mapping theo note mới.
 
+- Thêm pipeline CI/CD GitHub Actions cho toàn bộ repo: chạy Maven test trước, build/push Docker image cho từng service lên GHCR, rồi SSH vào VPS để `docker compose pull && up -d`.
+- Files chạm: `.github/workflows/ci-cd.yml`, `README.md`.
+- Reason: muốn có flow push `main` là tự kiểm tra, tự build image, và tự đưa bản mới lên VPS theo `compose.prod.yaml` hiện có.
+- Verification: đã đối chiếu image naming với `compose.prod.yaml` để khớp `IMAGE_REPO/${service}:${IMAGE_TAG}`; chưa chạy workflow thật vì chưa có secrets/GitHub runner trong workspace này.
+- Remaining risk: workflow phụ thuộc đủ secrets `VPS_*` và `GHCR_*`, đồng thời VPS phải có Docker và quyền login GHCR.
+
+- `identity-service` từng gặp lỗi login 500 vì `JWT_ACCESS_EXPIRATION` trên VPS bị set sai đơn vị, dẫn tới TTL Redis của `accessToken` bị âm khi trừ buffer 60s.
+- Files liên quan: `identity-service/src/main/java/com/cinema/identity_service/services/impl/UserServiceImpl.java`, `identity-service/src/test/java/com/cinema/identity_service/services/impl/UserServiceImplTokenFlowTest.java`.
+- Reason: env thực tế đang là `JWT_ACCESS_EXPIRATION=70`, tức 70ms chứ không phải 70s, nên Redis `SET` trả `ERR invalid expire time in 'set' command'`.
+- Verification: xác nhận qua log runtime; code đã để nguyên logic cũ, và fix đúng là đổi env sang đơn vị milliseconds hợp lệ.
+- Remaining risk: nếu ai đó set lại theo kiểu số giây thay vì milliseconds, lỗi sẽ tái diễn ngay khi trừ `TOKEN_EXPIRY_BUFFER=60000`.
+
 - `payment-service` đã tách toàn bộ logic aggregate report doanh thu ra khỏi `PaymentSessionServiceImpl` sang helper top-level `payment_service.support.RevenueReportSupport`; service chỉ còn orchestration + repo access, còn report helper được test riêng.
 - Files chạm: `payment-service/src/main/java/com/cinema/payment_service/support/RevenueReportSupport.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `payment-service/src/test/java/com/cinema/payment_service/support/RevenueReportSupportTest.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImplTest.java`.
 - Reason: tránh nhét accumulator class nội bộ trong service, giữ code dễ đọc và đúng ranh giới support/service hơn.

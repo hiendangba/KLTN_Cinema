@@ -122,6 +122,31 @@ docker compose -f compose.prod.yaml logs -f showtime-service
 docker compose -f compose.prod.yaml down -v
 ```
 
+## CI/CD Tự Động
+
+Repo này đã có workflow GitHub Actions tại [`.github/workflows/ci-cd.yml`](/C:/hoctap/Study/KLTN/CinemaStar/cinema-microservices/.github/workflows/ci-cd.yml) với luồng:
+
+1. Push lên `main`.
+2. Chạy `./mvnw test`.
+3. Build và push Docker image cho từng service lên GHCR.
+4. SSH vào VPS và chạy `docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d --remove-orphans`.
+
+Secrets cần cấu hình trên GitHub:
+
+- `VPS_HOST`
+- `VPS_USER`
+- `VPS_SSH_KEY`
+- `VPS_APP_DIR`
+- `GHCR_USERNAME`
+- `GHCR_READ_TOKEN`
+- `VPS_SSH_PORT` nếu VPS không dùng port `22`
+
+Trên VPS, cần có sẵn:
+
+- Docker và Docker Compose
+- file env production chứa các biến như `JWT_SECRET`, `GOOGLE_CLIENT_IDS`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `VIETQR_API_KEY`, `MOMO_SECRET_KEY`, ...
+- quyền `docker login` vào GHCR bằng `GHCR_USERNAME` / `GHCR_READ_TOKEN`
+
 ## Các Nhóm API Chính
 
 - `Identity`: đăng ký, đăng nhập, OTP, refresh token.
