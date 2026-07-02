@@ -127,6 +127,8 @@
 - Mục đích là xem hiệu suất vận hành booking, không phải doanh thu thực thu.
 - Report này dùng cùng pattern `dateRange` + `pageRequest` + `items/page/total` để FE render thống nhất.
 - Nếu frontend không truyền `dateRange` thì report booking cũng lấy toàn bộ dữ liệu.
+- Export Excel của booking report cũng theo cùng contract này, nhưng sheet title và header đã đổi sang ngôn ngữ nghiệp vụ hiệu suất booking.
+- `conversionRate` trả về dạng số thập phân `0..1`, frontend tự format phần trăm nếu cần.
 
 ## Cập nhật mới 2026-05-29
 

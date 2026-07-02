@@ -14,6 +14,14 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-07-02)
+
+- `booking-service` đổi booking report từ ngữ nghĩa doanh thu sang hiệu suất vận hành: response bỏ các field tiền, thêm `expiredCount` và `conversionRate`, export Excel có title `BÁO CÁO HIỆU SUẤT BOOKING THEO RẠP`.
+- Files chạm: `booking-service/src/main/java/com/cinema/booking_service/services/impl/BookingServiceImpl.java`, `booking-service/src/main/java/com/cinema/booking_service/dto/request/BookingRevenueField.java`, `booking-service/src/main/java/com/cinema/booking_service/dto/response/BookingRevenueItemResponse.java`, `booking-service/src/main/java/com/cinema/booking_service/dto/response/BookingRevenueSummaryResponse.java`, `common-lib/src/main/java/com/cinema/excel/ExcelExportUtils.java`, `REPORT_GUIDE.md`, `REVENUE_REPORT_RULES.md`, `booking-service/BOOKING_PERFORMANCE_REPORT_NOTE.md`.
+- Reason: FE cần một note rõ contract mới để map lại table/export đúng theo report hiệu suất, không còn render như báo cáo tiền.
+- Verification: đã đối chiếu lại controller/service/DTO/export contract và update tài liệu hướng dẫn tương ứng; chưa chạy test vì đây là thay đổi tài liệu.
+- Remaining risk: nếu FE vẫn render theo cột tiền cũ thì table/export sẽ lệch shape; cần đồng bộ UI mapping theo note mới.
+
 ## Changelog ngắn (2026-06-28)
 
 - `chatbot/api/schemas.py` đã thêm lớp sanitize request theo contract từng nhóm API: page search, film search, showtime-by-film, report; chatbot giờ tự cắt field thừa và map alias sort `TIME_CREATED -> CREATED_AT` cho cinema-service trước khi gọi BE.
@@ -1880,6 +1888,18 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - `searchHalls` dùng lại cùng cache path với `getHallById`, nên request lặp lại cùng hall sẽ giảm đáng kể latency
   - `updateHall` và `deleteHall` vẫn evict `CACHE_HALLS` để tránh trả dữ liệu cũ
 - Mục tiêu của thay đổi này là giữ nguyên contract FE, nhưng giảm thời gian phản hồi cho các lần search lặp lại khi dữ liệu hall không đổi.
+
+## Changelog ngắn (2026-07-02)
+
+- Thêm report doanh thu theo phim cho `payment-service` với 2 endpoint mới: `POST /api/payments/revenues/films/search` và `POST /api/payments/revenues/films/export`.
+- Report mới aggregate theo `filmId`, dùng scope cinema theo role trong service (`ADMIN` toàn bộ active cinema, `MANAGER`/`STAFF` theo cinema được gán rồi intersect với `cinemaIds` request) và enrich `filmName` qua gRPC `film-service`.
+- Contract public mới chỉ giữ `filmId`, `filmName`, `cinemaCount`, `totalTransactions`, `paidCount`, `refundedCount`, `paidAmount`; không expose `grossAmount` cho report phim.
+- Files touched: `payment-service/src/main/java/com/cinema/payment_service/controller/PaymentController.java`, `payment-service/src/main/java/com/cinema/payment_service/services/PaymentSessionService.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `payment-service/src/main/java/com/cinema/payment_service/grpc/FilmGrpcClient.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/request/FilmRevenueField.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/request/FilmRevenueReportRequest.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/response/FilmRevenueItemResponse.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/response/FilmRevenueReportResponse.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/response/FilmRevenueSummaryResponse.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImplTest.java`.
+- Verification:
+  - static review of the new service/controller/test wiring
+  - Maven CLI is not installed in this workspace, so I could not run `payment-service` tests locally
+- Remaining risk:
+  - export/search message text still reuses the existing revenue-report success message, and summary-level `cinemaCount` is summed across items rather than recomputed as a distinct global count.
 
 ## Changelog ngắn (2026-06-14)
 

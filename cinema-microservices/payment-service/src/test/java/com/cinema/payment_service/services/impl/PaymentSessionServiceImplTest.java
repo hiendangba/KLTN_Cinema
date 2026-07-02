@@ -4,8 +4,11 @@ import com.cinema.payment_service.config.MomoGatewayProperties;
 import com.cinema.payment_service.dto.request.CinemaRevenueField;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.request.FilmRevenueField;
+import com.cinema.payment_service.dto.request.FilmRevenueReportRequest;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
+import com.cinema.payment_service.dto.response.FilmRevenueReportResponse;
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
@@ -14,6 +17,7 @@ import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
+import com.cinema.payment_service.grpc.FilmGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
@@ -38,9 +42,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mapstruct.factory.Mappers;
 
 import java.math.BigDecimal;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -78,6 +84,9 @@ class PaymentSessionServiceImplTest {
 
     @Mock
     private CinemaGrpcClient cinemaGrpcClient;
+
+    @Mock
+    private FilmGrpcClient filmGrpcClient;
 
     @Mock
     private MomoGatewayProperties momoGatewayProperties;
@@ -687,6 +696,235 @@ class PaymentSessionServiceImplTest {
                 isNull(),
                 isNull(),
                 eq(to));
+    }
+
+    @Test
+    void searchFilmRevenueReport_shouldAllowAdminAndAggregateByFilmAcrossCinemas() {
+        UUID cinema1 = UUID.randomUUID();
+        UUID cinema2 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+        UUID film2 = UUID.randomUUID();
+
+        when(httpRequest.getHeader(com.cinema.http.HeaderNames.X_USER_ROLE))
+                .thenReturn(HeaderNames.ROLE_ADMIN);
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"),
+                new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
+        when(filmGrpcClient.getFilmTitlesByIds(anyCollection())).thenReturn(Map.of(
+                film1, "Film One",
+                film2, "Film Two"));
+
+        PaymentTransaction tx1 = buildTransaction(cinema1, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 9, 0), null,
+                BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+        PaymentTransaction tx2 = buildTransaction(cinema2, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 10, 0), null,
+                BigDecimal.valueOf(200000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+        PaymentTransaction tx3 = buildTransaction(cinema1, film2, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 11, 0), null,
+                BigDecimal.valueOf(50000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                anyCollection(),
+                any(),
+                any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    List<UUID> cinemaIds = (List<UUID>) invocation.getArgument(0);
+                    @SuppressWarnings("unchecked")
+                    List<UUID> filmIds = (List<UUID>) invocation.getArgument(1);
+                    return List.of(tx1, tx2, tx3).stream()
+                            .filter(tx -> cinemaIds.contains(tx.getCinemaId()))
+                            .filter(tx -> filmIds == null || filmIds.isEmpty() || filmIds.contains(tx.getFilmId()))
+                            .toList();
+                });
+
+        PageRequest<FilmRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
+        FilmRevenueReportRequest request = FilmRevenueReportRequest.builder()
+                .cinemaIds(List.of(cinema1, cinema2))
+                .filmIds(List.of(film1, film2))
+                .pageRequest(pageRequest)
+                .build();
+
+        FilmRevenueReportResponse response = paymentSessionService.searchFilmRevenueReport(request, httpRequest);
+
+        ArgumentCaptor<List<UUID>> cinemaIdsCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<UUID>> filmIdsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(paymentTransactionRepositoryImpl).findAllForRevenueReport(
+                cinemaIdsCaptor.capture(),
+                filmIdsCaptor.capture(),
+                any(),
+                any());
+
+        assertEquals(List.of(cinema1, cinema2), cinemaIdsCaptor.getValue());
+        assertEquals(List.of(film1, film2), filmIdsCaptor.getValue());
+        assertEquals(2L, response.totalElements());
+        assertEquals(2, response.items().size());
+        assertEquals(film1, response.items().get(0).filmId());
+        assertEquals("Film One", response.items().get(0).filmName());
+        assertEquals(2L, response.items().get(0).cinemaCount());
+        assertEquals(2L, response.items().get(0).paidCount());
+        assertEquals(2L, response.items().get(0).totalTransactions());
+        assertEquals(BigDecimal.valueOf(300000), response.items().get(0).paidAmount());
+        assertEquals(film2, response.items().get(1).filmId());
+        assertEquals(1L, response.items().get(1).cinemaCount());
+    }
+
+    @Test
+    void searchFilmRevenueReport_shouldRestrictStaffScopeAndIntersectRequestedCinemaIds() {
+        UUID cinema1 = UUID.randomUUID();
+        UUID cinema2 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+        UUID film2 = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        when(httpRequest.getHeader(com.cinema.http.HeaderNames.X_USER_ROLE))
+                .thenReturn(HeaderNames.ROLE_STAFF);
+        when(httpRequest.getHeader(com.cinema.http.HeaderNames.X_USER_ID))
+                .thenReturn(requesterId.toString());
+        when(cinemaGrpcClient.getCinemasByUserId(requesterId, HeaderNames.ROLE_STAFF)).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+        when(filmGrpcClient.getFilmTitlesByIds(anyCollection())).thenReturn(Map.of(
+                film1, "Film One"));
+
+        PaymentTransaction tx1 = buildTransaction(cinema1, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 9, 0), null,
+                BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+        PaymentTransaction tx2 = buildTransaction(cinema2, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 10, 0), null,
+                BigDecimal.valueOf(200000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+        PaymentTransaction tx3 = buildTransaction(cinema1, film2, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 11, 0), null,
+                BigDecimal.valueOf(50000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                anyCollection(),
+                any(),
+                any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    List<UUID> cinemaIds = (List<UUID>) invocation.getArgument(0);
+                    @SuppressWarnings("unchecked")
+                    List<UUID> filmIds = (List<UUID>) invocation.getArgument(1);
+                    return List.of(tx1, tx2, tx3).stream()
+                            .filter(tx -> cinemaIds.contains(tx.getCinemaId()))
+                            .filter(tx -> filmIds == null || filmIds.isEmpty() || filmIds.contains(tx.getFilmId()))
+                            .toList();
+                });
+
+        PageRequest<FilmRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
+        FilmRevenueReportRequest request = FilmRevenueReportRequest.builder()
+                .cinemaIds(List.of(cinema1, cinema2))
+                .filmIds(List.of(film1))
+                .pageRequest(pageRequest)
+                .build();
+
+        FilmRevenueReportResponse response = paymentSessionService.searchFilmRevenueReport(request, httpRequest);
+
+        ArgumentCaptor<List<UUID>> cinemaIdsCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<UUID>> filmIdsCaptor = ArgumentCaptor.forClass(List.class);
+        verify(paymentTransactionRepositoryImpl).findAllForRevenueReport(
+                cinemaIdsCaptor.capture(),
+                filmIdsCaptor.capture(),
+                any(),
+                any());
+
+        assertEquals(List.of(cinema1), cinemaIdsCaptor.getValue());
+        assertEquals(List.of(film1), filmIdsCaptor.getValue());
+        assertEquals(1, response.items().size());
+        assertEquals(film1, response.items().get(0).filmId());
+        assertEquals(1L, response.items().get(0).cinemaCount());
+        assertEquals(BigDecimal.valueOf(100000), response.items().get(0).paidAmount());
+    }
+
+    @Test
+    void exportFilmRevenueReport_shouldUseSelectedFilmIdsAndFilmHeaders() throws Exception {
+        UUID cinema1 = UUID.randomUUID();
+        UUID cinema2 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+        UUID film2 = UUID.randomUUID();
+
+        when(httpRequest.getHeader(com.cinema.http.HeaderNames.X_USER_ROLE))
+                .thenReturn(HeaderNames.ROLE_ADMIN);
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"),
+                new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
+        when(filmGrpcClient.getFilmTitlesByIds(anyCollection())).thenReturn(Map.of(
+                film1, "Film One",
+                film2, "Film Two"));
+
+        PaymentTransaction tx1 = buildTransaction(cinema1, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 9, 0), null,
+                BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+        PaymentTransaction tx2 = buildTransaction(cinema2, film2, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 10, 0), null,
+                BigDecimal.valueOf(200000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                anyCollection(),
+                any(),
+                any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    List<UUID> cinemaIds = (List<UUID>) invocation.getArgument(0);
+                    @SuppressWarnings("unchecked")
+                    List<UUID> filmIds = (List<UUID>) invocation.getArgument(1);
+                    return List.of(tx1, tx2).stream()
+                            .filter(tx -> cinemaIds.contains(tx.getCinemaId()))
+                            .filter(tx -> filmIds == null || filmIds.isEmpty() || filmIds.contains(tx.getFilmId()))
+                            .toList();
+                });
+
+        PageRequest<FilmRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
+        FilmRevenueReportRequest request = FilmRevenueReportRequest.builder()
+                .cinemaIds(List.of(cinema1, cinema2))
+                .filmIds(List.of(film1, film2))
+                .selectedIds(List.of(film2))
+                .pageRequest(pageRequest)
+                .build();
+
+        byte[] file = paymentSessionService.exportFilmRevenueReport(request, httpRequest);
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                     new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            assertEquals("FILM REVENUE REPORT", sheet.getRow(0).getCell(0).getStringCellValue());
+            assertEquals("Film ID", sheet.getRow(1).getCell(0).getStringCellValue());
+            assertEquals("Film Name", sheet.getRow(1).getCell(1).getStringCellValue());
+            assertEquals("Cinema Count", sheet.getRow(1).getCell(2).getStringCellValue());
+            assertEquals("Total Transactions", sheet.getRow(1).getCell(3).getStringCellValue());
+            assertEquals("Paid Count", sheet.getRow(1).getCell(4).getStringCellValue());
+            assertEquals("Refunded Count", sheet.getRow(1).getCell(5).getStringCellValue());
+            assertEquals("Paid Amount", sheet.getRow(1).getCell(6).getStringCellValue());
+            assertEquals(2, sheet.getLastRowNum());
+            assertEquals(film2.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
+            assertEquals("Film Two", sheet.getRow(2).getCell(1).getStringCellValue());
+            assertEquals(1d, sheet.getRow(2).getCell(2).getNumericCellValue());
+            assertEquals(1d, sheet.getRow(2).getCell(3).getNumericCellValue());
+            assertEquals(1d, sheet.getRow(2).getCell(4).getNumericCellValue());
+            assertEquals(0d, sheet.getRow(2).getCell(5).getNumericCellValue());
+            assertEquals(200000d, sheet.getRow(2).getCell(6).getNumericCellValue());
+        }
     }
 
     @Test

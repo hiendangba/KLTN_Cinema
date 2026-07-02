@@ -7,6 +7,8 @@ import com.cinema.payment_service.config.MomoGatewayProperties;
 import com.cinema.payment_service.dto.request.CinemaRevenueField;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
+import com.cinema.payment_service.dto.request.FilmRevenueField;
+import com.cinema.payment_service.dto.request.FilmRevenueReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
@@ -14,6 +16,9 @@ import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueItemResponse;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.payment_service.dto.response.CinemaRevenueSummaryResponse;
+import com.cinema.payment_service.dto.response.FilmRevenueItemResponse;
+import com.cinema.payment_service.dto.response.FilmRevenueReportResponse;
+import com.cinema.payment_service.dto.response.FilmRevenueSummaryResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.dto.request.PageRequest;
@@ -28,6 +33,7 @@ import com.cinema.payment_service.entity.PaymentTransactionPromotion;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
+import com.cinema.payment_service.grpc.FilmGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
@@ -76,6 +82,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final PaymentTransactionRepositoryImpl paymentTransactionRepositoryImpl;
     private final BookingGrpcClient bookingGrpcClient;
     private final CinemaGrpcClient cinemaGrpcClient;
+    private final FilmGrpcClient filmGrpcClient;
     private final PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
     private final MomoGatewayProperties momoGatewayProperties;
     private final MomoPaymentGatewayClient momoPaymentGatewayClient;
@@ -462,6 +469,46 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                                 item.refundedAmount(),
                                 item.grossAmount(),
                                 item.netAmount()))
+                .toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public FilmRevenueReportResponse searchFilmRevenueReport(FilmRevenueReportRequest request,
+            HttpServletRequest httpRequest) {
+        validateFilmRevenueReportRequest(request);
+        return buildFilmRevenueReport(request, httpRequest);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportFilmRevenueReport(FilmRevenueReportRequest request, HttpServletRequest httpRequest) {
+        validateFilmRevenueReportRequest(request);
+        FilmRevenueReportResponse report = buildFilmRevenueReport(request, httpRequest);
+        List<FilmRevenueItemResponse> selectedItems = filterSelectedFilmRevenueItems(
+                report.items(),
+                request.getSelectedIds());
+
+        return ExcelExportUtils.exportSingleSheet(
+                "Film Revenue",
+                "FILM REVENUE REPORT",
+                List.of(
+                        "Film ID",
+                        "Film Name",
+                        "Cinema Count",
+                        "Total Transactions",
+                        "Paid Count",
+                        "Refunded Count",
+                        "Paid Amount"),
+                selectedItems.stream()
+                        .map(item -> Arrays.asList(
+                                item.filmId(),
+                                item.filmName(),
+                                item.cinemaCount(),
+                                item.totalTransactions(),
+                                item.paidCount(),
+                                item.refundedCount(),
+                                item.paidAmount()))
                         .toList());
     }
 
@@ -1337,6 +1384,294 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .toList();
     }
 
+    private void validateFilmRevenueReportRequest(FilmRevenueReportRequest request) {
+        if (request == null || request.getPageRequest() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        DateRange dateRange = request.getDateRange();
+        if (dateRange != null
+                && dateRange.getFrom() != null
+                && dateRange.getTo() != null
+                && dateRange.getTo().isBefore(dateRange.getFrom())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+    }
+
+    private FilmRevenueReportResponse buildFilmRevenueReport(
+            FilmRevenueReportRequest request,
+            HttpServletRequest httpRequest) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        List<UUID> scopeCinemaIds = resolveFilmRevenueCinemaScope(httpRequest, role, request.getCinemaIds());
+
+        DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
+        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
+
+        List<PaymentTransaction> revenueTransactions = paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                scopeCinemaIds,
+                requestedFilmIds,
+                from,
+                to);
+        Map<UUID, String> filmNames = filmGrpcClient.getFilmTitlesByIds(
+                revenueTransactions.stream()
+                        .map(PaymentTransaction::getFilmId)
+                        .filter(java.util.Objects::nonNull)
+                        .distinct()
+                        .toList());
+
+        List<FilmRevenueItemResponse> filteredItems = applyFilmRevenuePageRequest(
+                aggregateFilmRevenueItems(revenueTransactions, filmNames, from, to),
+                request.getPageRequest());
+        int page = request.getPageRequest().getPageOrDefault();
+        int size = request.getPageRequest().getSizeOrDefault();
+        long totalElements = filteredItems.size();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
+        List<FilmRevenueItemResponse> pageItems = paginate(filteredItems, page, size);
+
+        return FilmRevenueReportResponse.builder()
+                .from(from)
+                .to(to)
+                .generatedAt(LocalDateTime.now())
+                .currentPage(page)
+                .totalPages(totalPages)
+                .totalElements(totalElements)
+                .size(size)
+                .hasNext(page < totalPages)
+                .hasPrevious(page > 1)
+                .items(pageItems)
+                .page(toFilmSummary(pageItems))
+                .total(toFilmSummary(filteredItems))
+                .build();
+    }
+
+    private List<FilmRevenueItemResponse> aggregateFilmRevenueItems(
+            List<PaymentTransaction> revenueTransactions,
+            Map<UUID, String> filmNames,
+            LocalDateTime from,
+            LocalDateTime to) {
+        if (revenueTransactions == null || revenueTransactions.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, FilmRevenueAccumulator> accumulatorMap = new LinkedHashMap<>();
+        for (PaymentTransaction transaction : revenueTransactions) {
+            if (transaction == null || transaction.getFilmId() == null) {
+                continue;
+            }
+            FilmRevenueAccumulator accumulator = accumulatorMap.computeIfAbsent(
+                    transaction.getFilmId(),
+                    filmId -> new FilmRevenueAccumulator(filmId, normalizeStringValue(filmNames.get(filmId))));
+            accumulator.apply(transaction, from, to);
+        }
+
+        return accumulatorMap.values().stream()
+                .map(FilmRevenueAccumulator::toResponse)
+                .toList();
+    }
+
+    private List<FilmRevenueItemResponse> filterSelectedFilmRevenueItems(
+            List<FilmRevenueItemResponse> items,
+            List<UUID> selectedIds) {
+        List<UUID> normalizedSelectedIds = normalizeUuidList(selectedIds);
+        if (normalizedSelectedIds == null) {
+            return items == null ? List.of() : new ArrayList<>(items);
+        }
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .filter(item -> item != null
+                        && item.filmId() != null
+                        && normalizedSelectedIds.contains(item.filmId()))
+                .toList();
+    }
+
+    private List<UUID> resolveFilmRevenueCinemaScope(
+            HttpServletRequest httpRequest,
+            String role,
+            List<UUID> requestedCinemaIds) {
+        String normalizedRole = normalizeRole(role);
+        List<UUID> accessibleCinemaIds;
+        if (HeaderNames.ROLE_ADMIN.equals(normalizedRole)) {
+            accessibleCinemaIds = cinemaGrpcClient.getAllActiveCinemas().stream()
+                    .filter(cinema -> cinema != null && cinema.id() != null)
+                    .map(CinemaGrpcClient.CinemaSummary::id)
+                    .toList();
+        } else if (HeaderNames.ROLE_MANAGER.equals(normalizedRole) || HeaderNames.ROLE_STAFF.equals(normalizedRole)) {
+            UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
+            accessibleCinemaIds = cinemaGrpcClient.getCinemasByUserId(requesterUserId, normalizedRole).stream()
+                    .filter(cinema -> cinema != null && cinema.id() != null)
+                    .map(CinemaGrpcClient.CinemaSummary::id)
+                    .toList();
+            if (accessibleCinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+        } else {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        List<UUID> normalizedRequestedIds = normalizeUuidList(requestedCinemaIds);
+        if (normalizedRequestedIds == null) {
+            return accessibleCinemaIds;
+        }
+        return accessibleCinemaIds.stream()
+                .filter(normalizedRequestedIds::contains)
+                .distinct()
+                .toList();
+    }
+
+    private List<FilmRevenueItemResponse> applyFilmRevenuePageRequest(
+            List<FilmRevenueItemResponse> items,
+            PageRequest<FilmRevenueField> request) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+
+        List<FilmRevenueItemResponse> filtered = new ArrayList<>(items);
+        String keyword = request.getNormalizedKeyword();
+        if (keyword != null) {
+            filtered = filtered.stream()
+                    .filter(item -> matchesKeyword(item, keyword))
+                    .toList();
+            filtered = new ArrayList<>(filtered);
+        }
+
+        List<FilterField<FilmRevenueField>> filters = request.getFilterBy();
+        if (filters != null && !filters.isEmpty()) {
+            filtered = filtered.stream()
+                    .filter(item -> matchesAllFilters(item, filters))
+                    .toList();
+            filtered = new ArrayList<>(filtered);
+        }
+
+        filtered.sort(buildFilmRevenueComparator(request.getSortBy()));
+        return filtered;
+    }
+
+    private Comparator<FilmRevenueItemResponse> buildFilmRevenueComparator(
+            List<SortField<FilmRevenueField>> sortFields) {
+        Comparator<FilmRevenueItemResponse> defaultComparator = Comparator
+                .comparing(FilmRevenueItemResponse::paidAmount, Comparator.nullsLast(Comparator.naturalOrder()))
+                .reversed()
+                .thenComparing(FilmRevenueItemResponse::filmName, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                .thenComparing(FilmRevenueItemResponse::filmId, Comparator.nullsLast(Comparator.naturalOrder()));
+
+        if (sortFields == null || sortFields.isEmpty()) {
+            return defaultComparator;
+        }
+
+        Comparator<FilmRevenueItemResponse> merged = null;
+        for (SortField<FilmRevenueField> sort : sortFields) {
+            if (sort == null || sort.getField() == null) {
+                continue;
+            }
+            Comparator<FilmRevenueItemResponse> fieldComparator = (left, right) -> compareValues(
+                    getFilmRevenueFieldValue(left, sort.getField()),
+                    getFilmRevenueFieldValue(right, sort.getField()));
+            if ("DESC".equalsIgnoreCase(FilmRevenueField.normalizeDirection(sort.getDirection()))) {
+                fieldComparator = fieldComparator.reversed();
+            }
+            merged = merged == null ? fieldComparator : merged.thenComparing(fieldComparator);
+        }
+        return merged == null ? defaultComparator : merged.thenComparing(defaultComparator);
+    }
+
+    private boolean matchesKeyword(FilmRevenueItemResponse item, String keyword) {
+        if (!StringUtils.hasText(keyword) || item == null) {
+            return true;
+        }
+        return SearchTextUtils.containsIgnoreCase(item.filmName(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.filmId() == null ? null : item.filmId().toString(), keyword);
+    }
+
+    private boolean matchesAllFilters(
+            FilmRevenueItemResponse item,
+            List<FilterField<FilmRevenueField>> filters) {
+        for (FilterField<FilmRevenueField> filter : filters) {
+            if (!matchesFilter(item, filter)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean matchesFilter(FilmRevenueItemResponse item, FilterField<FilmRevenueField> filter) {
+        if (item == null || filter == null || filter.getField() == null || filter.getOperator() == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        String operator = filter.getOperator().trim().toUpperCase(Locale.ROOT);
+        Object rawValue = filter.getValue();
+        Object fieldValue = getFilmRevenueFieldValue(item, filter.getField());
+        Class<?> dataType = filter.getField().getDataType();
+
+        return switch (operator) {
+            case "EQ" ->
+                compareValues(fieldValue, FilmRevenueField.convertValue(String.valueOf(rawValue), dataType)) == 0;
+            case "NEQ" ->
+                compareValues(fieldValue, FilmRevenueField.convertValue(String.valueOf(rawValue), dataType)) != 0;
+            case "LIKE" -> fieldValue instanceof String text
+                    && SearchTextUtils.containsIgnoreCase(text, String.valueOf(rawValue));
+            case "GTE" ->
+                compareValues(fieldValue, FilmRevenueField.convertValue(String.valueOf(rawValue), dataType)) >= 0;
+            case "LTE" ->
+                compareValues(fieldValue, FilmRevenueField.convertValue(String.valueOf(rawValue), dataType)) <= 0;
+            case "IN" -> matchesInValues(fieldValue, rawValue, dataType);
+            case "BETWEEN" -> matchesBetweenValues(fieldValue, rawValue, dataType);
+            default -> throw new BusinessException(ErrorCode.INVALID_INPUT);
+        };
+    }
+
+    private Object getFilmRevenueFieldValue(FilmRevenueItemResponse item, FilmRevenueField field) {
+        return switch (field) {
+            case FILM_ID -> item.filmId();
+            case FILM_NAME -> item.filmName();
+            case CINEMA_COUNT -> item.cinemaCount();
+            case TOTAL_TRANSACTIONS -> item.totalTransactions();
+            case PAID_COUNT -> item.paidCount();
+            case REFUNDED_COUNT -> item.refundedCount();
+            case PAID_AMOUNT -> item.paidAmount();
+        };
+    }
+
+    private FilmRevenueSummaryResponse toFilmSummary(List<FilmRevenueItemResponse> items) {
+        if (items == null || items.isEmpty()) {
+            return FilmRevenueSummaryResponse.builder()
+                    .cinemaCount(0)
+                    .totalTransactions(0)
+                    .paidCount(0)
+                    .refundedCount(0)
+                    .paidAmount(ZERO)
+                    .build();
+        }
+
+        long cinemaCount = 0;
+        long totalTransactions = 0;
+        long paidCount = 0;
+        long refundedCount = 0;
+        BigDecimal paidAmount = ZERO;
+
+        for (FilmRevenueItemResponse item : items) {
+            if (item == null) {
+                continue;
+            }
+            cinemaCount += item.cinemaCount();
+            totalTransactions += item.totalTransactions();
+            paidCount += item.paidCount();
+            refundedCount += item.refundedCount();
+            paidAmount = paidAmount.add(normalizeAmount(item.paidAmount()));
+        }
+
+        return FilmRevenueSummaryResponse.builder()
+                .cinemaCount(cinemaCount)
+                .totalTransactions(totalTransactions)
+                .paidCount(paidCount)
+                .refundedCount(refundedCount)
+                .paidAmount(normalizeAmount(paidAmount))
+                .build();
+    }
+
     private List<UUID> normalizeUuidList(Collection<UUID> values) {
         if (values == null || values.isEmpty()) {
             return null;
@@ -1710,6 +2045,18 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         return new ArrayList<>(items.subList(fromIndex, toIndex));
     }
 
+    private List<FilmRevenueItemResponse> paginate(List<FilmRevenueItemResponse> items, int page, int size) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        int fromIndex = Math.max(0, (page - 1) * size);
+        if (fromIndex >= items.size()) {
+            return List.of();
+        }
+        int toIndex = Math.min(items.size(), fromIndex + size);
+        return new ArrayList<>(items.subList(fromIndex, toIndex));
+    }
+
     private CinemaRevenueSummaryResponse toSummary(List<CinemaRevenueItemResponse> items) {
         if (items == null || items.isEmpty()) {
             return CinemaRevenueSummaryResponse.builder()
@@ -1850,6 +2197,56 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 appendPromotionTokens(promotionCodes, snapshot.promotionCode());
                 appendPromotionTokens(promotionNames, snapshot.promotionName());
             }
+        }
+    }
+
+    private class FilmRevenueAccumulator {
+        private final UUID filmId;
+        private final String filmName;
+        private final java.util.Set<UUID> cinemaIds = new java.util.LinkedHashSet<>();
+        private long totalTransactions;
+        private long paidCount;
+        private long refundedCount;
+        private BigDecimal paidAmount = ZERO;
+
+        private FilmRevenueAccumulator(UUID filmId, String filmName) {
+            this.filmId = filmId;
+            this.filmName = filmName;
+        }
+
+        private void apply(PaymentTransaction transaction, LocalDateTime from, LocalDateTime to) {
+            if (transaction == null) {
+                return;
+            }
+
+            if (isBetween(transaction.getPaidAt(), from, to)) {
+                totalTransactions++;
+                paidCount++;
+                paidAmount = paidAmount.add(normalizeAmount(transaction.getAmount()));
+                if (transaction.getCinemaId() != null) {
+                    cinemaIds.add(transaction.getCinemaId());
+                }
+            }
+
+            if (isBetween(transaction.getRefundedAt(), from, to)) {
+                totalTransactions++;
+                refundedCount++;
+                if (transaction.getCinemaId() != null) {
+                    cinemaIds.add(transaction.getCinemaId());
+                }
+            }
+        }
+
+        private FilmRevenueItemResponse toResponse() {
+            return FilmRevenueItemResponse.builder()
+                    .filmId(filmId)
+                    .filmName(filmName)
+                    .cinemaCount(cinemaIds.size())
+                    .totalTransactions(totalTransactions)
+                    .paidCount(paidCount)
+                    .refundedCount(refundedCount)
+                    .paidAmount(paidAmount)
+                    .build();
         }
     }
 

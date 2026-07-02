@@ -65,6 +65,12 @@ Nó trả lời các câu hỏi:
 - Có bao nhiêu booking đang `PENDING`, `RESERVED`, `CONFIRMED`, `EXPIRED`?
 - Tỷ lệ chuyển đổi từ booking sang `CONFIRMED` là bao nhiêu?
 
+### Contract FE cần lưu ý
+- Response hiện không còn các field tiền như `ticketSubtotalAmount`, `productSubtotalAmount`, `grossAmount`, `promotionDiscountAmount`, `payableAmount`.
+- Response mới có thêm `expiredCount` và `conversionRate`.
+- File export Excel có title `BÁO CÁO HIỆU SUẤT BOOKING THEO RẠP`, không còn title kiểu doanh thu.
+- Note handoff riêng cho frontend: [booking-service/BOOKING_PERFORMANCE_REPORT_NOTE.md](./booking-service/BOOKING_PERFORMANCE_REPORT_NOTE.md)
+
 ### Dữ liệu gốc
 - `Booking`
 - Snapshot/field dùng để tổng hợp:
@@ -85,6 +91,7 @@ Nó trả lời các câu hỏi:
 ### Câu dễ nhớ
 - Booking performance = “booking vận hành ra sao?”
 - Booking report không phải payment report.
+- Nếu FE cần hiển thị %, hãy format `conversionRate` ở UI vì backend trả về số thập phân `0..1`.
 
 ---
 

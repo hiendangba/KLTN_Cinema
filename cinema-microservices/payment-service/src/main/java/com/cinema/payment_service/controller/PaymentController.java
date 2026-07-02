@@ -3,11 +3,13 @@ package com.cinema.payment_service.controller;
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
+import com.cinema.payment_service.dto.request.FilmRevenueReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
+import com.cinema.payment_service.dto.response.FilmRevenueReportResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.response.VietQrBankResponse;
@@ -127,6 +129,24 @@ public class PaymentController extends BaseController {
         RequestAuthUtils.requireAnyRole(servletRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
         byte[] file = paymentSessionService.exportCinemaRevenueReport(request, servletRequest);
         return ExcelExportUtils.buildDownloadResponse(file, "payment_revenue_report.xlsx");
+    }
+
+    @PostMapping("/revenues/films/search")
+    public ResponseEntity<APIResponse<FilmRevenueReportResponse>> searchFilmRevenueReport(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody FilmRevenueReportRequest request) {
+        RequestAuthUtils.requireAnyRole(servletRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+        return ok(SuccessMessage.CINEMA_REVENUE_REPORT_FETCHED,
+                paymentSessionService.searchFilmRevenueReport(request, servletRequest));
+    }
+
+    @PostMapping("/revenues/films/export")
+    public ResponseEntity<byte[]> exportFilmRevenueReport(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody FilmRevenueReportRequest request) {
+        RequestAuthUtils.requireAnyRole(servletRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
+        byte[] file = paymentSessionService.exportFilmRevenueReport(request, servletRequest);
+        return ExcelExportUtils.buildDownloadResponse(file, "payment_film_revenue_report.xlsx");
     }
 
     @PostMapping("/promotions/preview")

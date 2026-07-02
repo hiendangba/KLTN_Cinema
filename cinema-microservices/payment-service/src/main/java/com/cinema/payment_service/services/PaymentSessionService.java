@@ -2,10 +2,12 @@ package com.cinema.payment_service.services;
 
 import com.cinema.payment_service.dto.request.CreatePaymentSessionRequest;
 import com.cinema.payment_service.dto.request.CinemaRevenueReportRequest;
+import com.cinema.payment_service.dto.request.FilmRevenueReportRequest;
 import com.cinema.payment_service.dto.request.PaymentSessionField;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
+import com.cinema.payment_service.dto.response.FilmRevenueReportResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
@@ -37,6 +39,10 @@ public interface PaymentSessionService {
     CinemaRevenueReportResponse getMyCinemaRevenueReport(CinemaRevenueReportRequest request, UUID requesterUserId);
 
     byte[] exportCinemaRevenueReport(CinemaRevenueReportRequest request, HttpServletRequest httpRequest);
+
+    FilmRevenueReportResponse searchFilmRevenueReport(FilmRevenueReportRequest request, HttpServletRequest httpRequest);
+
+    byte[] exportFilmRevenueReport(FilmRevenueReportRequest request, HttpServletRequest httpRequest);
 
     PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId);
 
