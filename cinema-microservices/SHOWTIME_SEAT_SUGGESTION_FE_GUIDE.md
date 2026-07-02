@@ -2,7 +2,7 @@
 
 Tài liệu này dành cho FE để dùng đúng tính năng gợi ý ghế của `showtime-service`.
 
-Mục tiêu của API này là trả về **danh sách gợi ý tốt nhất theo thứ tự ưu tiên**, không phải lúc nào cũng đủ 5 phần tử.
+Mục tiêu của API là trả về **danh sách gợi ý tốt nhất theo thứ tự ưu tiên**, không phải lúc nào cũng đủ 5 phương án.
 
 ## 1. API
 
@@ -14,19 +14,19 @@ Mục tiêu của API này là trả về **danh sách gợi ý tốt nhất the
 ### Request body
 ```json
 {
-  "seatCount": 2,
+  "seatCount": 3,
   "preferCoupleSeat": true
 }
 ```
 
 ### Rule input
 - `seatCount` chỉ được từ `1` đến `5`
-- nếu `preferCoupleSeat = true` thì `seatCount` **phải là số chẵn**
-- chỉ cần đúng 2 field này, không cần thêm field khác
+- `preferCoupleSeat` là boolean bắt buộc
+- FE chỉ cần gửi đúng 2 field này
 
 ## 2. Response
 
-API trả `APIResponse<SeatSuggestionResponse>` theo style của repo.
+API trả `APIResponse<SeatSuggestionResponse>` theo style chung của repo.
 
 ### Shape mong đợi
 ```json
@@ -34,28 +34,18 @@ API trả `APIResponse<SeatSuggestionResponse>` theo style của repo.
   "success": true,
   "code": "SUCCESS",
   "message": "Seat suggestions fetched successfully",
-  "path": "/api/showtimes/7b9b.../seat-suggestions",
-  "timestamp": "2026-06-09T12:00:00",
   "data": {
     "showtimeId": "7b9b...",
-    "requestedSeatCount": 4,
+    "requestedSeatCount": 3,
     "preferCoupleSeat": true,
     "candidates": [
       {
-        "seatCodes": ["A5", "A6", "A7", "A8"],
-        "seatCount": 4,
+        "seatCodes": ["J7", "J8", "I8"],
+        "seatCount": 3,
         "hasCoupleSeats": true,
-        "totalPrice": 320000,
-        "score": 98,
-        "reason": "Gần trung tâm, cụm ghế liền nhau, có couple"
-      },
-      {
-        "seatCodes": ["B5", "B6", "B7", "B8"],
-        "seatCount": 4,
-        "hasCoupleSeats": true,
-        "totalPrice": 320000,
-        "score": 94,
-        "reason": "Cụm ghế đẹp, xa màn hình hơn"
+        "totalPrice": 290000,
+        "score": 128500,
+        "reason": "Ưu tiên ghế couple theo cặp cố định, ghép thêm ghế thường gần cặp ghế"
       }
     ]
   }
@@ -63,29 +53,43 @@ API trả `APIResponse<SeatSuggestionResponse>` theo style của repo.
 ```
 
 ### Điểm quan trọng
-- `candidates` là **up to 5 phần tử**
-- nếu backend chỉ tìm ra 3 phương án thì FE chỉ nhận 3
-- không có chuyện backend ép luôn trả đủ 5
+- `candidates` là **tối đa 5 phần tử**
+- nếu backend chỉ tìm ra 2 hoặc 3 phương án thì FE chỉ nhận đúng số đó
+- thứ tự backend trả về chính là thứ tự ưu tiên
 
 ## 3. Luật gợi ý ghế
 
 ### Ưu tiên chính
-1. Ghế phải **liền kề thật sự**
-2. Ưu tiên **gần trung tâm** nhất
-3. Nếu `preferCoupleSeat = true` thì **ưu tiên block couple**
-4. Nếu cùng điểm thì ưu tiên **hàng xa màn hình hơn**
+1. Ghế phải hợp lệ và còn trống
+2. Nếu `preferCoupleSeat = true` thì ưu tiên **ghế couple theo cặp cố định**
+3. Ưu tiên phương án gần trung tâm
+4. Nếu cần fallback thì vẫn ưu tiên phương án ít bị tách cụm hơn
+5. Nếu hòa điểm thì ưu tiên hàng xa màn hình hơn theo rule hiện tại của backend
 
 ### Luật couple
-- `preferCoupleSeat = true` chỉ hợp lệ khi `seatCount` là số chẵn
-- nếu tick couple thì backend ưu tiên block couple, nhưng vẫn phải thỏa rule ghế liền nhau
+- Ghế `COUPLE` là **1 ghế đôi trên UI**, nhưng backend vẫn lưu và trả về **2 seat code riêng**
+- Mỗi ghế couple có **ranh giới cặp cố định** từ layout/backend, ví dụ:
+  - `J5-J6`
+  - `J7-J8`
+  - `J9-J10`
+- Backend chỉ được chọn theo đúng cặp cố định đó
+- Backend **không được cắt lẻ** một nửa cặp couple
+- Backend **không được trượt cửa sổ ghế liền nhau** để tạo cặp mới, ví dụ:
+  - không được coi `J6-J7` là một cặp hợp lệ
+  - không được trả `J5, J6, J7`
+  - không được trả `J6, J7, J8, J9`
+- Nếu một ghế trong cặp không available thì loại cả cặp, ví dụ:
+  - `J8` bị book thì `J7-J8` không còn là couple hợp lệ
 
 ### Luật fallback
-- nếu không có block đúng số ghế, backend có thể fallback sang tổ hợp nhỏ hơn
-- ví dụ nhập `4` nhưng không có block 4 ghế liền nhau thì backend có thể trả phương án kiểu `3 + 1`, `2 + 2`, ...
-- phương án fallback vẫn phải được xếp theo độ gần trung tâm
+- Nếu không có đủ cặp couple phù hợp, backend sẽ fallback sang tổ hợp mixed:
+  - `1 couple pair + 1 single`
+  - `1 couple pair + 2 single`
+  - hoặc toàn ghế thường nếu không có cặp couple nào hợp lệ
+- Nhưng ngay cả khi fallback, backend vẫn **không chọn lẻ ghế couple**
 
 ### Khi nào báo lỗi
-- nếu tổng ghế trống **không đủ** cho `seatCount` thì backend trả lỗi “không đủ ghế”
+- Nếu tổng ghế trống không đủ cho `seatCount`, backend trả lỗi “không đủ ghế”
 
 ## 4. FE cần hiểu thế nào
 
@@ -94,54 +98,34 @@ API trả `APIResponse<SeatSuggestionResponse>` theo style của repo.
 - checkbox: `Ưu tiên ghế couple`
 
 ### Gợi ý UI
-- nếu checkbox couple được bật, FE nên chặn hoặc disable số lẻ (`1, 3, 5`)
-- FE chỉ cần gửi 2 field:
+- FE **không nên** chặn số lẻ chỉ vì bật couple
+- FE chỉ cần gửi:
   - `seatCount`
   - `preferCoupleSeat`
 
 ### Render kết quả
-- FE render danh sách theo đúng thứ tự backend trả về
-- phần tử đầu tiên là gợi ý mạnh nhất
-- nếu có ít hơn 5 phần tử thì vẫn là dữ liệu hợp lệ
+- render danh sách theo đúng thứ tự backend trả về
+- candidate đầu tiên là gợi ý mạnh nhất
+- nếu `hasCoupleSeats = true` thì có thể highlight rõ đây là phương án có couple
+- khi gặp cặp couple, FE có thể render `J7-J8` thành **1 ghế đôi**
+- FE không nên hiểu `seatCodes.length` là số ô ghế hiển thị khi candidate có couple
 
-## 5. Ví dụ request/response ngắn
+## 5. Ví dụ ngắn
 
-### Request
-```json
-{
-  "seatCount": 2,
-  "preferCoupleSeat": true
-}
-```
+### 3 ghế + ưu tiên couple
+- backend nên ưu tiên kiểu:
+  - `1 cặp couple cố định + 1 ghế thường gần cặp ghế`
 
-### Response khi có 3 candidate
-```json
-{
-  "data": {
-    "requestedSeatCount": 2,
-    "preferCoupleSeat": true,
-    "candidates": [
-      { "seatCodes": ["A5", "A6"], "seatCount": 2 },
-      { "seatCodes": ["B5", "B6"], "seatCount": 2 },
-      { "seatCodes": ["C5", "C6"], "seatCount": 2 }
-    ]
-  }
-}
-```
-
-### Response khi không đủ ghế
-```json
-{
-  "success": false,
-  "code": "...",
-  "message": "Không đủ ghế trống để gợi ý"
-}
-```
+### 4 ghế + ưu tiên couple
+- backend nên ưu tiên kiểu:
+  - `2 cặp couple cố định`
+- không được chọn kiểu cắt lẻ như lấy `J6, J7, J8, J9`
 
 ## 6. Kết luận cho FE
 
-- `top 5` là **giới hạn tối đa**, không phải số bắt buộc
-- `seatCount` luôn phải từ `1` đến `5`
-- `preferCoupleSeat = true` thì `seatCount` phải chẵn
-- backend ưu tiên ghế liền nhau, gần trung tâm, rồi mới tới couple và tie-break hàng xa màn hình hơn
-- nếu không đủ ghế trống thì backend báo lỗi, FE không tự đoán
+- `top 5` là giới hạn tối đa, không phải số bắt buộc
+- `seatCount` luôn từ `1` đến `5`
+- `preferCoupleSeat = true` vẫn có thể dùng với số lẻ
+- backend ưu tiên couple **theo cặp cố định**, không cắt lẻ
+- nếu không đủ cặp couple, backend sẽ dùng tối đa số cặp có thể rồi ghép ghế thường
+- response vẫn giữ `seatCodes` như hiện tại để không làm vỡ contract

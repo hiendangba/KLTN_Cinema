@@ -8,7 +8,9 @@ import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.HorizontalAlignment;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.VerticalAlignment;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -34,13 +36,23 @@ public final class ExcelExportUtils {
     }
 
     public static byte[] exportSingleSheet(String sheetName, List<String> headers, List<? extends List<?>> rows) {
+        return exportSingleSheet(sheetName, null, headers, rows);
+    }
+
+    public static byte[] exportSingleSheet(
+            String sheetName,
+            String title,
+            List<String> headers,
+            List<? extends List<?>> rows) {
         try (Workbook workbook = new XSSFWorkbook();
                 ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet(normalizeSheetName(sheetName));
+            CellStyle titleStyle = createTitleStyle(workbook);
             CellStyle headerStyle = createHeaderStyle(workbook);
+            int headerRowIndex = writeTitleRow(sheet, title, headers == null ? 0 : headers.size(), titleStyle);
 
-            writeHeaderRow(sheet, headers, headerStyle);
-            writeRows(sheet, rows);
+            writeHeaderRow(sheet, headerRowIndex, headers, headerStyle);
+            writeRows(sheet, headerRowIndex + 1, rows);
             autoSizeColumns(sheet, headers == null ? 0 : headers.size());
 
             workbook.write(out);
@@ -58,8 +70,28 @@ public final class ExcelExportUtils {
                 .body(content == null ? new byte[0] : content);
     }
 
-    private static void writeHeaderRow(Sheet sheet, List<String> headers, CellStyle headerStyle) {
+    private static int writeTitleRow(Sheet sheet, String title, int columnCount, CellStyle titleStyle) {
+        if (!StringUtils.hasText(title)) {
+            return 0;
+        }
+
         Row row = sheet.createRow(0);
+        Cell cell = row.createCell(0);
+        cell.setCellValue(title.trim());
+        cell.setCellStyle(titleStyle);
+
+        int lastColumnIndex = Math.max(0, columnCount - 1);
+        sheet.addMergedRegion(new CellRangeAddress(0, 0, 0, lastColumnIndex));
+        for (int i = 1; i <= lastColumnIndex; i++) {
+            Cell mergedCell = row.createCell(i);
+            mergedCell.setCellStyle(titleStyle);
+        }
+
+        return 1;
+    }
+
+    private static void writeHeaderRow(Sheet sheet, int rowIndex, List<String> headers, CellStyle headerStyle) {
+        Row row = sheet.createRow(rowIndex);
         if (headers == null || headers.isEmpty()) {
             return;
         }
@@ -71,12 +103,12 @@ public final class ExcelExportUtils {
         }
     }
 
-    private static void writeRows(Sheet sheet, List<? extends List<?>> rows) {
+    private static void writeRows(Sheet sheet, int startRowIndex, List<? extends List<?>> rows) {
         if (rows == null || rows.isEmpty()) {
             return;
         }
 
-        int rowIndex = 1;
+        int rowIndex = startRowIndex;
         for (List<?> rowData : rows) {
             Row row = sheet.createRow(rowIndex++);
             if (rowData == null || rowData.isEmpty()) {
@@ -127,6 +159,18 @@ public final class ExcelExportUtils {
         for (int i = 0; i < columnCount; i++) {
             sheet.autoSizeColumn(i);
         }
+    }
+
+    private static CellStyle createTitleStyle(Workbook workbook) {
+        Font font = workbook.createFont();
+        font.setBold(true);
+        font.setFontHeightInPoints((short) 14);
+
+        CellStyle style = workbook.createCellStyle();
+        style.setFont(font);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+        return style;
     }
 
     private static CellStyle createHeaderStyle(Workbook workbook) {

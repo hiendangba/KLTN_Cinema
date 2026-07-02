@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -189,8 +190,211 @@ class SeatSuggestionServiceImplTest {
         assertEquals(5, response.getRequestedSeatCount());
         assertTrue(response.getPreferCoupleSeat());
         assertTrue(response.getCandidates().size() > 0);
-        assertTrue(response.getCandidates().get(0).getReason().contains("Fallback"));
         assertTrue(response.getCandidates().get(0).getHasCoupleSeats());
+    }
+
+    @Test
+    void suggestSeatSuggestions_shouldPreferOneCouplePairAndOneNearestSingleForThreeSeats() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                1,
+                7,
+                "TOP",
+                seat("A1", 1, 1, "STANDARD"),
+                seat("A2", 1, 2, "STANDARD"),
+                seat("A3", 1, 3, "COUPLE"),
+                seat("A4", 1, 4, "COUPLE"),
+                seat("A5", 1, 5, "STANDARD"),
+                seat("A6", 1, 6, "STANDARD"),
+                seat("A7", 1, 7, "STANDARD")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse response = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(3)
+                        .preferCoupleSeat(true)
+                        .build());
+
+        assertTrue(response.getCandidates().get(0).getHasCoupleSeats());
+        assertTrue(response.getCandidates().get(0).getSeatCodes().containsAll(List.of("A3", "A4")));
+        assertEquals(3, response.getCandidates().get(0).getSeatCount());
+        assertTrue(
+                response.getCandidates().get(0).getSeatCodes().contains("A2")
+                        || response.getCandidates().get(0).getSeatCodes().contains("A5"));
+    }
+
+    @Test
+    void suggestSeatSuggestions_shouldNotSplitCouplePairsForFourSeats() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                1,
+                6,
+                "TOP",
+                seat("A1", 1, 1, "COUPLE"),
+                seat("A2", 1, 2, "COUPLE"),
+                seat("A3", 1, 3, "COUPLE"),
+                seat("A4", 1, 4, "COUPLE"),
+                seat("A5", 1, 5, "COUPLE"),
+                seat("A6", 1, 6, "COUPLE")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse response = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(4)
+                        .preferCoupleSeat(true)
+                        .build());
+
+        assertEquals(List.of("A1", "A2", "A3", "A4"), response.getCandidates().get(0).getSeatCodes());
+        assertFalse(response.getCandidates().stream().anyMatch(candidate -> candidate.getSeatCodes().equals(List.of("A2", "A3", "A4", "A5"))));
+    }
+
+    @Test
+    void suggestSeatSuggestions_shouldUseMaximumAvailableCouplePairsThenStandardSeats() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                1,
+                6,
+                "TOP",
+                seat("A1", 1, 1, "COUPLE"),
+                seat("A2", 1, 2, "COUPLE"),
+                seat("A3", 1, 3, "STANDARD"),
+                seat("A4", 1, 4, "STANDARD"),
+                seat("A5", 1, 5, "STANDARD"),
+                seat("A6", 1, 6, "STANDARD")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse response = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(4)
+                        .preferCoupleSeat(true)
+                        .build());
+
+        assertTrue(response.getCandidates().get(0).getSeatCodes().containsAll(List.of("A1", "A2")));
+        assertTrue(response.getCandidates().get(0).getSeatCodes().containsAll(List.of("A3", "A4")));
+    }
+
+    @Test
+    void suggestSeatSuggestions_shouldNotCrossFixedCouplePairBoundaries() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                1,
+                10,
+                "TOP",
+                seat("J5", 1, 5, "COUPLE"),
+                seat("J6", 1, 6, "COUPLE"),
+                seat("J7", 1, 7, "COUPLE"),
+                seat("J8", 1, 8, "COUPLE"),
+                seat("J9", 1, 9, "COUPLE"),
+                seat("J10", 1, 10, "COUPLE")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse responseForThreeSeats = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(3)
+                        .preferCoupleSeat(true)
+                        .build());
+
+        assertFalse(responseForThreeSeats.getCandidates().stream()
+                .anyMatch(candidate -> candidate.getSeatCodes().equals(List.of("J5", "J6", "J7"))));
+
+        SeatSuggestionResponse responseForFourSeats = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(4)
+                        .preferCoupleSeat(true)
+                        .build());
+
+        assertFalse(responseForFourSeats.getCandidates().stream()
+                .anyMatch(candidate -> candidate.getSeatCodes().equals(List.of("J6", "J7", "J8", "J9"))));
+        assertTrue(responseForFourSeats.getCandidates().stream()
+                .anyMatch(candidate -> candidate.getSeatCodes().equals(List.of("J5", "J6", "J7", "J8"))
+                        || candidate.getSeatCodes().equals(List.of("J7", "J8", "J9", "J10"))));
+    }
+
+    @Test
+    void suggestSeatSuggestions_shouldDropWholeCouplePairWhenOneSeatIsUnavailable() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                1,
+                10,
+                "TOP",
+                seat("J5", 1, 5, "COUPLE"),
+                seat("J6", 1, 6, "COUPLE"),
+                seat("J7", 1, 7, "COUPLE"),
+                seat("J8", 1, 8, "COUPLE"),
+                seat("J9", 1, 9, "COUPLE"),
+                seat("J10", 1, 10, "COUPLE")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of(
+                "J8", "BOOKED"
+        ));
+
+        SeatSuggestionResponse response = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(2)
+                        .preferCoupleSeat(true)
+                        .build());
+
+        assertFalse(response.getCandidates().stream()
+                .flatMap(candidate -> candidate.getSeatCodes().stream())
+                .anyMatch(seatCode -> seatCode.equals("J7") || seatCode.equals("J8")));
+        assertTrue(response.getCandidates().stream()
+                .anyMatch(candidate -> candidate.getSeatCodes().equals(List.of("J5", "J6"))
+                        || candidate.getSeatCodes().equals(List.of("J9", "J10"))));
     }
 
     @Test

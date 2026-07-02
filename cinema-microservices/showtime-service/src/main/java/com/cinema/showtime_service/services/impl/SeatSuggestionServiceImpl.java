@@ -63,26 +63,31 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
         SeatGrpcClient.LayoutBundle layout = seatGrpcClient.getLayoutByHallId(showTime.getHallId());
         List<SeatNode> availableSeats = loadAvailableSeats(showtimeId, layout, pricingPolicy);
         boolean preferCoupleSeat = Boolean.TRUE.equals(request.getPreferCoupleSeat());
-        boolean oddPreferCoupleSeat = preferCoupleSeat && request.getSeatCount() % 2 != 0;
+        Map<String, String> couplePartnerBySeatCode = buildCouplePartnerBySeatCode(layout);
 
         if (availableSeats.size() < request.getSeatCount()) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_AVAILABLE_SEATS);
         }
 
-        List<SeatSuggestionCandidateResponse> candidates = oddPreferCoupleSeat
-                ? List.of()
-                : buildExactCandidates(
+        List<SeatSuggestionCandidateResponse> candidates = preferCoupleSeat
+                ? buildCouplePreferredCandidates(
                         availableSeats,
                         layout,
                         request.getSeatCount(),
-                        preferCoupleSeat);
+                        couplePartnerBySeatCode)
+                : buildExactCandidates(
+                availableSeats,
+                layout,
+                request.getSeatCount(),
+                false);
 
         if (candidates.isEmpty()) {
             candidates = buildFallbackCandidates(
                     availableSeats,
                     layout,
                     request.getSeatCount(),
-                    preferCoupleSeat);
+                    preferCoupleSeat,
+                    couplePartnerBySeatCode);
         }
 
         candidates = candidates.stream()
@@ -178,12 +183,43 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
         return dedupeAndSort(candidates);
     }
 
+    private List<SeatSuggestionCandidateResponse> buildCouplePreferredCandidates(List<SeatNode> availableSeats,
+                                                                                 SeatGrpcClient.LayoutBundle layout,
+                                                                                 int seatCount,
+                                                                                 Map<String, String> couplePartnerBySeatCode) {
+        List<BlockCandidate> coupleBlocks = buildCouplePairBlocks(availableSeats, layout, couplePartnerBySeatCode);
+        List<SeatNode> standardSingles = availableSeats.stream()
+                .filter(seat -> !isCoupleSeat(seat))
+                .toList();
+
+        List<SeatSuggestionCandidateResponse> candidates = new ArrayList<>();
+        Set<String> dedupeKeys = new HashSet<>();
+        int maxCouplePairs = Math.min(seatCount / 2, coupleBlocks.size());
+        for (int targetCouplePairs = maxCouplePairs; targetCouplePairs >= 0; targetCouplePairs--) {
+            int singlesNeeded = seatCount - (targetCouplePairs * 2);
+            searchCouplePreferredCandidates(
+                    targetCouplePairs,
+                    targetCouplePairs,
+                    singlesNeeded,
+                    coupleBlocks,
+                    0,
+                    new ArrayList<>(),
+                    new LinkedHashSet<>(),
+                    standardSingles,
+                    layout,
+                    candidates,
+                    dedupeKeys);
+        }
+        return dedupeAndSort(candidates);
+    }
+
     private List<SeatSuggestionCandidateResponse> buildFallbackCandidates(List<SeatNode> availableSeats,
                                                                           SeatGrpcClient.LayoutBundle layout,
                                                                           int seatCount,
-                                                                          boolean preferCoupleSeat) {
+                                                                          boolean preferCoupleSeat,
+                                                                          Map<String, String> couplePartnerBySeatCode) {
         Map<Integer, List<BlockCandidate>> blocksBySize = buildBlocksBySize(availableSeats, layout, seatCount - 1,
-                preferCoupleSeat);
+                preferCoupleSeat, couplePartnerBySeatCode);
         List<SeatSuggestionCandidateResponse> candidates = new ArrayList<>();
         searchFallbackCandidates(
                 seatCount,
@@ -196,6 +232,113 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
                 candidates,
                 new HashSet<>());
         return dedupeAndSort(candidates);
+    }
+
+    private void searchCouplePreferredCandidates(int targetCouplePairs,
+                                                 int remainingCouplePairs,
+                                                 int singlesNeeded,
+                                                 List<BlockCandidate> coupleBlocks,
+                                                 int startIndex,
+                                                 List<BlockCandidate> chosenCoupleBlocks,
+                                                 Set<String> usedSeatCodes,
+                                                 List<SeatNode> standardSingles,
+                                                 SeatGrpcClient.LayoutBundle layout,
+                                                 List<SeatSuggestionCandidateResponse> results,
+                                                 Set<String> dedupeKeys) {
+        if (results.size() >= 1000) {
+            return;
+        }
+        if (remainingCouplePairs == 0) {
+            List<SeatNode> chosenCoupleSeats = chosenCoupleBlocks.stream()
+                    .flatMap(block -> block.seats().stream())
+                    .toList();
+            List<SeatNode> singlePool = standardSingles.stream()
+                    .filter(seat -> !usedSeatCodes.contains(seat.seatCode()))
+                    .sorted(singleSeatComparator(chosenCoupleSeats, layout))
+                    .limit(Math.max(8, singlesNeeded * 6))
+                    .toList();
+
+            searchSingleSeatCombinations(
+                    singlesNeeded,
+                    singlePool,
+                    0,
+                    new ArrayList<>(),
+                    chosenCoupleSeats,
+                    targetCouplePairs,
+                    layout,
+                    results,
+                    dedupeKeys);
+            return;
+        }
+
+        for (int index = startIndex; index < coupleBlocks.size(); index++) {
+            BlockCandidate block = coupleBlocks.get(index);
+            if (!Collections.disjoint(usedSeatCodes, block.seatCodeSet())) {
+                continue;
+            }
+            chosenCoupleBlocks.add(block);
+            usedSeatCodes.addAll(block.seatCodeSet());
+            searchCouplePreferredCandidates(
+                    targetCouplePairs,
+                    remainingCouplePairs - 1,
+                    singlesNeeded,
+                    coupleBlocks,
+                    index + 1,
+                    chosenCoupleBlocks,
+                    usedSeatCodes,
+                    standardSingles,
+                    layout,
+                    results,
+                    dedupeKeys);
+            chosenCoupleBlocks.remove(chosenCoupleBlocks.size() - 1);
+            usedSeatCodes.removeAll(block.seatCodeSet());
+        }
+    }
+
+    private void searchSingleSeatCombinations(int remainingSingles,
+                                              List<SeatNode> singlePool,
+                                              int startIndex,
+                                              List<SeatNode> chosenSingles,
+                                              List<SeatNode> chosenCoupleSeats,
+                                              int selectedCouplePairs,
+                                              SeatGrpcClient.LayoutBundle layout,
+                                              List<SeatSuggestionCandidateResponse> results,
+                                              Set<String> dedupeKeys) {
+        if (results.size() >= 1000) {
+            return;
+        }
+        if (remainingSingles == 0) {
+            List<SeatNode> seats = new ArrayList<>(chosenCoupleSeats);
+            seats.addAll(chosenSingles);
+            boolean exact = countGroups(seats.stream()
+                    .sorted(Comparator.comparingInt(SeatNode::row).thenComparingInt(SeatNode::col))
+                    .toList()) == 1;
+            SeatSuggestionCandidateResponse candidate = buildCandidate(
+                    seats,
+                    layout,
+                    true,
+                    exact,
+                    selectedCouplePairs);
+            if (dedupeKeys.add(canonicalKey(candidate.getSeatCodes()))) {
+                results.add(candidate);
+            }
+            return;
+        }
+
+        for (int index = startIndex; index < singlePool.size(); index++) {
+            chosenSingles.add(singlePool.get(index));
+            searchSingleSeatCombinations(
+                    remainingSingles - 1,
+                    singlePool,
+                    index + 1,
+                    chosenSingles,
+                    chosenCoupleSeats,
+                    selectedCouplePairs,
+                    layout,
+                    results,
+                    dedupeKeys);
+            chosenSingles.remove(chosenSingles.size() - 1);
+        }
     }
 
     private void searchFallbackCandidates(int remainingSeats,
@@ -251,12 +394,16 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
     private Map<Integer, List<BlockCandidate>> buildBlocksBySize(List<SeatNode> availableSeats,
                                                                  SeatGrpcClient.LayoutBundle layout,
                                                                  int maxSize,
-                                                                 boolean preferCoupleSeat) {
+                                                                 boolean preferCoupleSeat,
+                                                                 Map<String, String> couplePartnerBySeatCode) {
         Map<Integer, List<BlockCandidate>> result = new HashMap<>();
         for (List<SeatNode> segment : splitIntoSegments(availableSeats)) {
             for (int size = 1; size <= Math.min(maxSize, segment.size()); size++) {
                 for (int index = 0; index <= segment.size() - size; index++) {
                     List<SeatNode> window = segment.subList(index, index + size);
+                    if (!isValidSeatSelection(window, couplePartnerBySeatCode)) {
+                        continue;
+                    }
                     BlockCandidate block = new BlockCandidate(window);
                     result.computeIfAbsent(size, ignore -> new ArrayList<>()).add(block);
                 }
@@ -273,9 +420,10 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
 
     private Comparator<BlockCandidate> blockComparator(SeatGrpcClient.LayoutBundle layout,
                                                        boolean preferCoupleSeat) {
-        return Comparator.comparingDouble((BlockCandidate block) -> centerDistance(block.seats(), layout))
-                .thenComparing(Comparator.comparingInt((BlockCandidate block) -> preferCoupleSeat && block.hasCoupleSeats() ? 0 : 1))
+        return Comparator.comparingInt((BlockCandidate block) -> preferCoupleSeat ? -block.couplePairCount() : 0)
+                .thenComparingDouble((BlockCandidate block) -> centerDistance(block.seats(), layout))
                 .thenComparing(Comparator.comparingDouble((BlockCandidate block) -> -screenDistance(block.seats(), layout)))
+                .thenComparingInt(BlockCandidate::groupCount)
                 .thenComparing(BlockCandidate::canonicalSeatCodes);
     }
 
@@ -308,9 +456,17 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
     }
 
     private SeatSuggestionCandidateResponse buildCandidate(List<SeatNode> seats,
-                                                            SeatGrpcClient.LayoutBundle layout,
-                                                            boolean preferCoupleSeat,
-                                                            boolean exact) {
+                                                           SeatGrpcClient.LayoutBundle layout,
+                                                           boolean preferCoupleSeat,
+                                                           boolean exact) {
+        return buildCandidate(seats, layout, preferCoupleSeat, exact, countCoupleSeats(seats) / 2);
+    }
+
+    private SeatSuggestionCandidateResponse buildCandidate(List<SeatNode> seats,
+                                                           SeatGrpcClient.LayoutBundle layout,
+                                                           boolean preferCoupleSeat,
+                                                           boolean exact,
+                                                           int couplePairCount) {
         List<SeatNode> orderedSeats = seats.stream()
                 .sorted(Comparator.comparingInt(SeatNode::row).thenComparingInt(SeatNode::col))
                 .toList();
@@ -319,12 +475,11 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
                 .toList();
         boolean hasCouple = orderedSeats.stream().anyMatch(seat -> "COUPLE".equalsIgnoreCase(seat.seatType()));
         int seatCount = orderedSeats.size();
-        int coupleCount = (int) orderedSeats.stream().filter(seat -> "COUPLE".equalsIgnoreCase(seat.seatType())).count();
         long totalPrice = orderedSeats.stream().mapToLong(SeatNode::price).sum();
         double centerDistance = centerDistance(orderedSeats, layout);
         double screenDistance = screenDistance(orderedSeats, layout);
         int groupCount = countGroups(orderedSeats);
-        int score = calculateScore(centerDistance, screenDistance, preferCoupleSeat, hasCouple, coupleCount, exact, groupCount);
+        int score = calculateScore(centerDistance, screenDistance, preferCoupleSeat, couplePairCount, exact, groupCount);
 
         return SeatSuggestionCandidateResponse.builder()
                 .seatCodes(seatCodes)
@@ -332,22 +487,24 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
                 .hasCoupleSeats(hasCouple)
                 .totalPrice(totalPrice)
                 .score(score)
-                .reason(buildReason(exact, preferCoupleSeat, hasCouple, groupCount, seatCodes))
+                .reason(buildCleanReasonMessage(exact, preferCoupleSeat, couplePairCount, seatCount - (couplePairCount * 2), groupCount))
                 .build();
     }
 
     private int calculateScore(double centerDistance,
                                double screenDistance,
                                boolean preferCoupleSeat,
-                               boolean hasCoupleSeats,
-                               int coupleCount,
+                               int couplePairCount,
                                boolean exact,
                                int groupCount) {
         int score = 100_000;
+        if (preferCoupleSeat) {
+            score += couplePairCount * 60_000;
+        }
         score -= (int) Math.round(centerDistance * 10_000);
         score += (int) Math.round(screenDistance * 500);
-        if (preferCoupleSeat && hasCoupleSeats) {
-            score += coupleCount * 20_000;
+        if (preferCoupleSeat && couplePairCount > 0) {
+            score += 5_000;
         }
         if (exact) {
             score += 10_000;
@@ -356,20 +513,160 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
         return score;
     }
 
-    private String buildReason(boolean exact,
-                               boolean preferCoupleSeat,
-                               boolean hasCoupleSeats,
-                               int groupCount,
-                               List<String> seatCodes) {
+    private String buildCleanReasonMessage(boolean exact,
+                                           boolean preferCoupleSeat,
+                                           int couplePairCount,
+                                           int singleSeatCount,
+                                           int groupCount) {
         StringBuilder reason = new StringBuilder();
         reason.append(exact ? "Ghế liền nhau, gần trung tâm" : "Fallback tổ hợp ghế gần trung tâm");
-        if (preferCoupleSeat && hasCoupleSeats) {
-            reason.append(", ưu tiên couple");
+        if (preferCoupleSeat && couplePairCount > 0) {
+            reason.append(", ưu tiên ghế couple theo cặp cố định");
+            if (singleSeatCount > 0) {
+                reason.append(", ghép thêm ghế thường gần cặp ghế");
+            }
+        } else if (preferCoupleSeat) {
+            reason.append(", fallback khi không đủ cặp couple phù hợp");
         }
         if (!exact && groupCount > 1) {
             reason.append(", nhiều cụm ghế nhỏ");
         }
         return reason.toString();
+    }
+
+    private String buildReasonMessage(boolean exact,
+                                      boolean preferCoupleSeat,
+                                      int couplePairCount,
+                                      int singleSeatCount,
+                                      int groupCount) {
+        StringBuilder reason = new StringBuilder();
+        reason.append(exact ? "Ghế liền nhau, gần trung tâm" : "Fallback tổ hợp ghế gần trung tâm");
+        if (preferCoupleSeat && couplePairCount > 0) {
+            reason.append(", ưu tiên ghế couple theo cặp");
+            if (singleSeatCount > 0) {
+                reason.append(", ghép thêm ghế thường gần cặp ghế");
+            }
+        } else if (preferCoupleSeat) {
+            reason.append(", fallback khi không đủ cặp couple phù hợp");
+        }
+        if (!exact && groupCount > 1) {
+            reason.append(", nhiều cụm ghế nhỏ");
+        }
+        return reason.toString();
+    }
+
+    private Map<String, String> buildCouplePartnerBySeatCode(SeatGrpcClient.LayoutBundle layout) {
+        Map<String, String> partners = new HashMap<>();
+        if (layout == null || layout.getSeats() == null) {
+            return partners;
+        }
+
+        Map<Integer, List<LayoutSeatPayload>> byRow = layout.getSeats().stream()
+                .filter(Objects::nonNull)
+                .filter(this::isCoupleSeat)
+                .collect(Collectors.groupingBy(LayoutSeatPayload::getRow, LinkedHashMap::new, Collectors.toList()));
+
+        for (List<LayoutSeatPayload> rowSeats : byRow.values()) {
+            rowSeats.sort(Comparator.comparingInt(LayoutSeatPayload::getCol));
+            for (int index = 0; index < rowSeats.size(); index++) {
+                if (index + 1 >= rowSeats.size()) {
+                    continue;
+                }
+                LayoutSeatPayload current = rowSeats.get(index);
+                LayoutSeatPayload partner = rowSeats.get(index + 1);
+                if (partner.getCol() != current.getCol() + 1) {
+                    continue;
+                }
+
+                String currentSeatCode = normalizeSeatCode(current.getSeatCode());
+                String partnerSeatCode = normalizeSeatCode(partner.getSeatCode());
+                partners.put(currentSeatCode, partnerSeatCode);
+                partners.put(partnerSeatCode, currentSeatCode);
+                index++;
+            }
+        }
+        return partners;
+    }
+
+    private List<BlockCandidate> buildCouplePairBlocks(List<SeatNode> availableSeats,
+                                                       SeatGrpcClient.LayoutBundle layout,
+                                                       Map<String, String> couplePartnerBySeatCode) {
+        Map<String, SeatNode> seatByCode = availableSeats.stream()
+                .collect(Collectors.toMap(SeatNode::seatCode, Function.identity(), (left, right) -> left, LinkedHashMap::new));
+        Set<String> consumed = new HashSet<>();
+        List<BlockCandidate> blocks = new ArrayList<>();
+
+        for (SeatNode seat : availableSeats) {
+            if (!isCoupleSeat(seat) || !consumed.add(seat.seatCode())) {
+                continue;
+            }
+            String partnerCode = couplePartnerBySeatCode.get(seat.seatCode());
+            SeatNode partner = partnerCode == null ? null : seatByCode.get(partnerCode);
+            if (partner == null) {
+                continue;
+            }
+            consumed.add(partner.seatCode());
+            List<SeatNode> pairSeats = List.of(seat, partner).stream()
+                    .sorted(Comparator.comparingInt(SeatNode::row).thenComparingInt(SeatNode::col))
+                    .toList();
+            blocks.add(new BlockCandidate(pairSeats));
+        }
+
+        return blocks.stream()
+                .sorted(blockComparator(layout, true))
+                .limit(MAX_BLOCKS_PER_SIZE)
+                .toList();
+    }
+
+    private boolean isValidSeatSelection(List<SeatNode> seats, Map<String, String> couplePartnerBySeatCode) {
+        if (seats == null || seats.isEmpty()) {
+            return false;
+        }
+        Set<String> seatCodes = seats.stream()
+                .map(SeatNode::seatCode)
+                .collect(Collectors.toSet());
+        for (SeatNode seat : seats) {
+            if (!isCoupleSeat(seat)) {
+                continue;
+            }
+            String partnerCode = couplePartnerBySeatCode.get(seat.seatCode());
+            if (partnerCode == null || !seatCodes.contains(partnerCode)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private Comparator<SeatNode> singleSeatComparator(List<SeatNode> chosenCoupleSeats,
+                                                      SeatGrpcClient.LayoutBundle layout) {
+        return Comparator.comparingDouble((SeatNode seat) -> distanceToChosenCouples(seat, chosenCoupleSeats))
+                .thenComparingDouble(seat -> centerDistance(List.of(seat), layout))
+                .thenComparing(Comparator.comparingDouble((SeatNode seat) -> -screenDistance(List.of(seat), layout)))
+                .thenComparing(SeatNode::seatCode);
+    }
+
+    private double distanceToChosenCouples(SeatNode seat, List<SeatNode> chosenCoupleSeats) {
+        if (chosenCoupleSeats == null || chosenCoupleSeats.isEmpty()) {
+            return 0.0;
+        }
+        double minDistance = Double.MAX_VALUE;
+        for (SeatNode chosen : chosenCoupleSeats) {
+            double distance = Math.abs(seat.row() - chosen.row()) + Math.abs(seat.col() - chosen.col());
+            minDistance = Math.min(minDistance, distance);
+        }
+        return minDistance;
+    }
+
+    private boolean isCoupleSeat(SeatNode seat) {
+        return seat != null && "COUPLE".equalsIgnoreCase(seat.seatType());
+    }
+
+    private boolean isCoupleSeat(LayoutSeatPayload seat) {
+        return seat != null && "COUPLE".equalsIgnoreCase(seat.getSeatType());
+    }
+
+    private int countCoupleSeats(List<SeatNode> seats) {
+        return (int) seats.stream().filter(this::isCoupleSeat).count();
     }
 
     private int countGroups(List<SeatNode> seats) {
@@ -467,6 +764,25 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
 
         boolean hasCoupleSeats() {
             return seats.stream().anyMatch(seat -> "COUPLE".equalsIgnoreCase(seat.seatType()));
+        }
+
+        int couplePairCount() {
+            return (int) seats.stream().filter(seat -> "COUPLE".equalsIgnoreCase(seat.seatType())).count() / 2;
+        }
+
+        int groupCount() {
+            if (seats.isEmpty()) {
+                return 0;
+            }
+            int groups = 1;
+            for (int index = 1; index < seats.size(); index++) {
+                SeatNode previous = seats.get(index - 1);
+                SeatNode current = seats.get(index);
+                if (previous.row() != current.row() || current.col() != previous.col() + 1) {
+                    groups++;
+                }
+            }
+            return groups;
         }
 
         String canonicalSeatCodes() {

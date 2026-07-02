@@ -115,10 +115,16 @@
 ## Báo cáo bán hàng ở `booking-service`
 
 - Đây là báo cáo khác với report ở `payment-service`.
-- `booking-service` tính theo `Booking.timeCreated` và tổng tiền đơn `Booking.finalAmount`.
-- Booking chưa thanh toán vẫn được tính vào giá trị đơn hàng phát sinh.
-- Chỉ loại các booking đã `CANCELLED` hoặc `EXPIRED`.
-- Mục đích là xem “đã bán được bao nhiêu”, không phải “đã thu được bao nhiêu tiền”.
+- `booking-service` tính theo `Booking.timeCreated`.
+- Report booking tập trung vào:
+  - `totalBookings`
+  - `pendingCount`
+  - `reservedCount`
+  - `confirmedCount`
+  - `expiredCount`
+  - `conversionRate = confirmedCount / totalBookings`
+- Không dùng các amount như `finalAmount`, `ticketSubtotal`, `productSubtotal` để thể hiện doanh thu trong report booking.
+- Mục đích là xem hiệu suất vận hành booking, không phải doanh thu thực thu.
 - Report này dùng cùng pattern `dateRange` + `pageRequest` + `items/page/total` để FE render thống nhất.
 - Nếu frontend không truyền `dateRange` thì report booking cũng lấy toàn bộ dữ liệu.
 
@@ -134,7 +140,6 @@
   - Report doanh thu theo rạp đã lọc được đồng thời `cinemaIds` và `filmIds`.
   - Query report lọc ở mức `payment_transaction` trước khi aggregate theo rạp.
 - Ý nghĩa nghiệp vụ:
-  - booking report dùng để xem "đã bán bao nhiêu booking".
+  - booking report dùng để xem "booking vận hành ra sao theo trạng thái và tỷ lệ chuyển đổi".
   - payment report dùng để xem "đã thu bao nhiêu tiền thực tế".
   - cả hai report đều có thể lọc theo cinema và film mà không cần join ngược khi chạy report.
-

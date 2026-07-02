@@ -50,7 +50,7 @@ Nó trả lời các câu hỏi:
 
 ---
 
-## 2. Booking Revenue Report
+## 2. Booking Performance Report
 
 ### API
 - `POST /api/bookings/revenues/cinemas/search`
@@ -58,34 +58,32 @@ Nó trả lời các câu hỏi:
 - `POST /api/bookings/revenues/cinemas/export`
 
 ### Ý nghĩa
-Đây là report doanh thu nhìn từ góc độ booking.
+Đây là report hiệu suất vận hành nhìn từ góc độ booking.
 
 Nó trả lời các câu hỏi:
 - Có bao nhiêu booking đã tạo ra trong khoảng thời gian này?
-- Booking nào đang `PENDING`, `RESERVED`, `CONFIRMED`?
-- Tổng giá trị booking tạo ra là bao nhiêu?
+- Có bao nhiêu booking đang `PENDING`, `RESERVED`, `CONFIRMED`, `EXPIRED`?
+- Tỷ lệ chuyển đổi từ booking sang `CONFIRMED` là bao nhiêu?
 
 ### Dữ liệu gốc
 - `Booking`
 - Snapshot/field dùng để tổng hợp:
   - `cinemaId`
   - `filmId`
-  - `ticketSubtotal`
-  - `productSubtotal`
-  - `finalAmount`
+  - `bookingStatus`
   - `timeCreated`
 
 ### Dùng khi nào
 - Khi muốn nhìn “đã bán được bao nhiêu booking”.
-- Khi cần thống kê đơn hàng phát sinh trước khi xét thanh toán thực tế.
-- Khi nghiệp vụ cần đo hiệu quả bán hàng từ booking, không chỉ tiền đã thu.
+- Khi cần thống kê trạng thái booking trước khi xét thanh toán thực tế.
+- Khi nghiệp vụ cần đo hiệu quả bán hàng từ booking, không phải doanh thu thực thu.
 
 ### Ví dụ thực tế
 - Một rạp có nhiều booking nhưng nhiều booking chưa thanh toán. Report này vẫn cho thấy lượng booking phát sinh.
-- Manager muốn biết trong tuần này rạp mình tạo ra bao nhiêu booking, bao nhiêu booking đã confirm.
+- Manager muốn biết trong tuần này rạp mình tạo ra bao nhiêu booking, bao nhiêu booking đã confirm, bao nhiêu booking bị expire.
 
 ### Câu dễ nhớ
-- Booking revenue = “đơn đã được tạo ra bao nhiêu?”
+- Booking performance = “booking vận hành ra sao?”
 - Booking report không phải payment report.
 
 ---
@@ -135,7 +133,7 @@ Nó trả lời các câu hỏi:
 ## 4. Tóm tắt nhanh để học thuộc
 
 - `payment revenue report` = tổng tiền thực thu theo rạp.
-- `booking revenue report` = tổng booking và giá trị booking theo rạp.
+- `booking performance report` = tổng booking theo trạng thái và tỷ lệ chuyển đổi theo rạp.
 - `showtime performance report` = hiệu suất từng suất chiếu, đo bằng booking và occupancy.
 
 ## 5. Câu trả lời ngắn khi bị hỏi trên lớp
@@ -146,4 +144,3 @@ Nó trả lời các câu hỏi:
   - Booking nhìn theo đơn đặt vé, payment nhìn theo tiền thực thu.
 - Nếu hỏi “showtime performance là gì?”:
   - Là report đo suất chiếu nào bán tốt, dựa trên số booking và tỷ lệ lấp ghế.
-
