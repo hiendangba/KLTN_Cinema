@@ -16,13 +16,12 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
-
-import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
 public interface PaymentSessionService {
-    ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId, String requesterRole);
+    ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId,
+            String requesterRole);
 
     PaymentSessionResponse getSession(UUID bookingId, UUID requesterUserId, String requesterRole);
 

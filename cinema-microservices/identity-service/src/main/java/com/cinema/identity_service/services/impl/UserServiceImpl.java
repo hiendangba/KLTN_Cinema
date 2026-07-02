@@ -1092,8 +1092,9 @@ public class UserServiceImpl implements UserService {
             refreshTokenKey = REFRESH_TOKEN_PREFIX + tokenId;
 
             // Tao rotate token va luu vao redis
+            long accessTokenRedisTtl = Math.max(jwtServiceImpl.getAccessTokenExpiration() - TOKEN_EXPIRY_BUFFER, 0);
             redisTemplate.opsForValue().set(accessTokenKey, userId.toString(),
-                    jwtServiceImpl.getAccessTokenExpiration(),
+                    accessTokenRedisTtl,
                     TimeUnit.MILLISECONDS);
             redisTemplate.opsForValue().set(refreshTokenKey, userId.toString(), ttlMillis, TimeUnit.MILLISECONDS);
             redisTemplate.opsForSet().add(userTokensKey, tokenId);

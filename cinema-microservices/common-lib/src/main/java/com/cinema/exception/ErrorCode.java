@@ -10,7 +10,7 @@ public enum ErrorCode {
         VALIDATION_ERROR("9001", "Validation error", HttpStatus.BAD_REQUEST),
         NOT_FOUND("9002", "Resource not found", HttpStatus.NOT_FOUND),
         UNAUTHORIZED("9003", "Unauthorized", HttpStatus.UNAUTHORIZED),
-        FORBIDDEN("9004", "Bạn không có đủ quyền truy cập tài nguyên này!", HttpStatus.FORBIDDEN),
+        FORBIDDEN("9004", "Bạn không có đủ quyền truy cập tài nguyên này!", HttpStatus.NOT_FOUND),
         BAD_REQUEST("9005", "Bad request", HttpStatus.BAD_REQUEST),
         INVALID_FORMAT("9007", "Invalid format", HttpStatus.BAD_REQUEST),
         INTERNAL_ERROR("9500", "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
@@ -34,7 +34,7 @@ public enum ErrorCode {
         LOGIN_FAILED("4007", "Tên đăng nhập hoặc mật khẩu không chính xác!", HttpStatus.BAD_REQUEST),
         VERIFY_TOKEN_MISSING("4008", "Phiên xác thực OTP đã hết hạn. Vui lòng yêu cầu gửi lại mã OTP.",
                         HttpStatus.BAD_REQUEST),
-        REFRESH_TOKEN_MISSING("4009", "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.", HttpStatus.UNAUTHORIZED),
+        REFRESH_TOKEN_MISSING("4009", "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.", HttpStatus.NOT_FOUND),
 
         PASSWORD_REQUIRED("4010", "Mật khẩu mới là bắt buộc khi xác nhận OTP đặt lại mật khẩu", HttpStatus.BAD_REQUEST),
         PASSWORD_INVALID("4011", "Mật khẩu phải từ 8-32 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt",
@@ -72,7 +72,8 @@ public enum ErrorCode {
         HALL_MAINTENANCE("4305", "Phòng chiếu đang bảo trì", HttpStatus.BAD_REQUEST),
         MANAGER_NOT_ASSIGNED_CINEMA("4306", "Quản lý này không quản lý cinema nào cả", HttpStatus.BAD_REQUEST),
         HALL_LAYOUT_ALREADY_EXISTS("4307", "Sơ đồ ghế của phòng chiếu đã tồn tại", HttpStatus.CONFLICT),
-        HALL_LAYOUT_IN_USE("4308", "Phòng chiếu đang có suất chiếu được đặt vé, không thể sửa sơ đồ ghế", HttpStatus.CONFLICT),
+        HALL_LAYOUT_IN_USE("4308", "Phòng chiếu đang có suất chiếu được đặt vé, không thể sửa sơ đồ ghế",
+                        HttpStatus.CONFLICT),
         HALL_IMAGE_URL_ALREADY_EXISTS("4309", "URL hình ảnh đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
 
         EMAIL_SEND_FAILED("9100", "Gửi email thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
@@ -80,9 +81,12 @@ public enum ErrorCode {
         HALL_SERVICE_ERROR("9102", "Lỗi khi gọi Hall Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         BOOKING_TICKET_LIMIT_EXCEEDED("4401", "One booking can include at most 5 tickets.", HttpStatus.BAD_REQUEST),
         BOOKING_EXPIRED("4402", "Booking đã hết hạn thanh toán", HttpStatus.CONFLICT),
-        BOOKING_SERVICE_ERROR("9104", "Lỗi khi gọi Booking Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
-        CINEMA_SERVICE_ERROR("9105", "Lỗi khi gọi Cinema Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
-        SHOWTIME_SERVICE_ERROR("9106", "Lỗi khi gọi Showtime Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
+        BOOKING_SERVICE_ERROR("9104", "Lỗi khi gọi Booking Service. Vui lòng thử lại sau.",
+                        HttpStatus.SERVICE_UNAVAILABLE),
+        CINEMA_SERVICE_ERROR("9105", "Lỗi khi gọi Cinema Service. Vui lòng thử lại sau.",
+                        HttpStatus.SERVICE_UNAVAILABLE),
+        SHOWTIME_SERVICE_ERROR("9106", "Lỗi khi gọi Showtime Service. Vui lòng thử lại sau.",
+                        HttpStatus.SERVICE_UNAVAILABLE),
         SEAT_SERVICE_ERROR("9107", "Lỗi khi gọi Seat Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         UN_SUPPORTED_FIELD_TYPE("9103", "Loại dữ liệu của trường không được hỗ trợ", HttpStatus.BAD_REQUEST),
         TOO_MANY_FILES("9201", "Mỗi lần chỉ được tải lên tối đa 5 tệp", HttpStatus.BAD_REQUEST),
@@ -102,5 +106,3 @@ public enum ErrorCode {
         private final String message;
         private final HttpStatus httpStatus;
 }
-
-

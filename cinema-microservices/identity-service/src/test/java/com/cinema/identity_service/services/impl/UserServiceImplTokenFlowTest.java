@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -189,7 +190,7 @@ class UserServiceImplTokenFlowTest {
         String oldTokenId = "old-token-id";
         String oldRefreshToken = "old-refresh-token";
         long refreshRemaining = 90_000L;
-        long accessExp = 30_000L;
+        long accessExp = 120_000L;
         String refreshKey = "identity:token:refresh:" + oldTokenId;
         String accessKey = "identity:token:access:" + oldTokenId;
 
@@ -218,10 +219,17 @@ class UserServiceImplTokenFlowTest {
         assertThat(setCookies).anyMatch(v -> v.contains("refreshToken=new-refresh-token"));
 
         verify(redisTemplate).delete(refreshKey);
-        verify(valueOperations, times(2)).set(
-                argThat(key -> key.startsWith("identity:token:")),
+        InOrder inOrder = org.mockito.Mockito.inOrder(valueOperations);
+        inOrder.verify(valueOperations).set(
+                argThat(key -> key.startsWith("identity:token:access:")),
                 eq(userId.toString()),
-                anyLong(),
+                eq(accessExp - 60_000L),
+                eq(TimeUnit.MILLISECONDS)
+        );
+        inOrder.verify(valueOperations).set(
+                argThat(key -> key.startsWith("identity:token:refresh:")),
+                eq(userId.toString()),
+                argThat(ttl -> ttl > 0L && ttl <= refreshRemaining),
                 eq(TimeUnit.MILLISECONDS)
         );
     }

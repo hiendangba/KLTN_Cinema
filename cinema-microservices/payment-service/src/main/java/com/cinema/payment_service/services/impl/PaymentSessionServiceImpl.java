@@ -42,6 +42,7 @@ import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
+import com.cinema.payment_service.support.RevenueReportSupport;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.cinema.text.SearchTextUtils;
@@ -87,6 +88,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final MomoGatewayProperties momoGatewayProperties;
     private final MomoPaymentGatewayClient momoPaymentGatewayClient;
     private final PromotionEngine promotionEngine;
+    private final RevenueReportSupport revenueReportSupport;
     private final PaymentMapper paymentMapper;
     private final ObjectMapper objectMapper;
 
@@ -424,7 +426,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         List<CinemaRevenueItemResponse> items = filterSelectedCinemaRevenueItems(
-                aggregateCinemaRevenueItems(cinemas, request),
+                loadCinemaRevenueItems(cinemas, request),
                 request.getSelectedIds());
 
         return ExcelExportUtils.exportSingleSheet(
@@ -1078,20 +1080,6 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         return normalizeAmount(total);
     }
 
-    private BigDecimal sumPromotionDiscountSnapshots(List<PromotionSnapshotView> promotionSnapshots) {
-        if (promotionSnapshots == null || promotionSnapshots.isEmpty()) {
-            return ZERO;
-        }
-        BigDecimal total = ZERO;
-        for (PromotionSnapshotView snapshot : promotionSnapshots) {
-            if (snapshot == null) {
-                continue;
-            }
-            total = total.add(normalizeAmount(snapshot.discountAmount()));
-        }
-        return normalizeAmount(total);
-    }
-
     private static void appendPromotionTokens(List<String> target, String value) {
         if (target == null || !StringUtils.hasText(value)) {
             return;
@@ -1287,7 +1275,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
         LocalDateTime to = dateRange == null ? null : dateRange.getTo();
         PageRequest<CinemaRevenueField> pageRequest = request.getPageRequest();
-        List<CinemaRevenueItemResponse> filteredItems = aggregateCinemaRevenueItems(cinemas, request);
+        List<CinemaRevenueItemResponse> filteredItems = loadCinemaRevenueItems(cinemas, request);
         int page = pageRequest.getPageOrDefault();
         int size = pageRequest.getSizeOrDefault();
         long totalElements = filteredItems.size();
@@ -1310,7 +1298,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .build();
     }
 
-    private List<CinemaRevenueItemResponse> aggregateCinemaRevenueItems(
+    private List<CinemaRevenueItemResponse> loadCinemaRevenueItems(
             List<CinemaGrpcClient.CinemaSummary> cinemas,
             CinemaRevenueReportRequest request) {
         DateRange dateRange = request.getDateRange();
@@ -1318,53 +1306,47 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         LocalDateTime to = dateRange == null ? null : dateRange.getTo();
         List<UUID> requestedCinemaIds = normalizeUuidList(request.getCinemaIds());
         List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
-        List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
-        scopeCinemas = scopeCinemas.stream()
-                .filter(cinema -> cinema != null && cinema.id() != null)
-                .filter(cinema -> requestedCinemaIds == null || requestedCinemaIds.contains(cinema.id()))
-                .distinct()
-                .toList();
-
-        List<CinemaRevenueItemResponse> allItems = initializeRevenueItems(scopeCinemas);
-        if (allItems.isEmpty()) {
+        List<CinemaGrpcClient.CinemaSummary> scopeCinemas = resolveCinemaRevenueScope(cinemas, requestedCinemaIds);
+        if (scopeCinemas.isEmpty()) {
             return List.of();
         }
-
-        Map<UUID, CinemaRevenueAccumulator> accumulatorMap = allItems.stream()
-                .collect(java.util.stream.Collectors.toMap(
-                        CinemaRevenueItemResponse::cinemaId,
-                        item -> new CinemaRevenueAccumulator(item.cinemaId(), item.cinemaName()),
-                        (left, right) -> left,
-                        LinkedHashMap::new));
 
         List<PaymentTransaction> revenueTransactions = paymentTransactionRepositoryImpl.findAllForRevenueReport(
                 scopeCinemas.stream().map(CinemaGrpcClient.CinemaSummary::id).toList(),
                 requestedFilmIds,
                 from,
                 to);
-        Map<UUID, List<PromotionSnapshotView>> promotionSnapshotsByTransactionId = loadPromotionSnapshots(
-                revenueTransactions.stream()
-                        .map(PaymentTransaction::getId)
-                        .filter(java.util.Objects::nonNull)
-                        .toList());
-
-        for (PaymentTransaction transaction : revenueTransactions) {
-            CinemaRevenueAccumulator accumulator = accumulatorMap.get(transaction.getCinemaId());
-            if (accumulator == null) {
-                continue;
-            }
-            applyTransactionToAccumulator(
-                    accumulator,
-                    transaction,
-                    promotionSnapshotsByTransactionId.get(transaction.getId()),
-                    from,
-                    to);
-        }
-
-        List<CinemaRevenueItemResponse> allFilteredItems = accumulatorMap.values().stream()
-                .map(CinemaRevenueAccumulator::toResponse)
+        List<UUID> transactionIds = revenueTransactions.stream()
+                .map(PaymentTransaction::getId)
+                .filter(java.util.Objects::nonNull)
                 .toList();
-        return applyCinemaRevenuePageRequest(allFilteredItems, request.getPageRequest());
+        List<PaymentTransactionPromotion> promotionSnapshots = transactionIds.isEmpty()
+                ? List.of()
+                : paymentTransactionPromotionRepository.findAllByPaymentTransactionIdIn(
+                        transactionIds,
+                        org.springframework.data.domain.Sort.by(
+                                org.springframework.data.domain.Sort.Order.asc("paymentTransactionId"),
+                                org.springframework.data.domain.Sort.Order.asc("applyOrder"),
+                                org.springframework.data.domain.Sort.Order.asc("timeCreated"),
+                                org.springframework.data.domain.Sort.Order.asc("id")));
+        return applyCinemaRevenuePageRequest(
+                revenueReportSupport.aggregateCinemaRevenueItems(
+                        scopeCinemas,
+                        request,
+                        revenueTransactions,
+                        promotionSnapshots),
+                request.getPageRequest());
+    }
+
+    private List<CinemaGrpcClient.CinemaSummary> resolveCinemaRevenueScope(
+            List<CinemaGrpcClient.CinemaSummary> cinemas,
+            List<UUID> requestedCinemaIds) {
+        List<CinemaGrpcClient.CinemaSummary> scopeCinemas = cinemas == null ? List.of() : new ArrayList<>(cinemas);
+        return scopeCinemas.stream()
+                .filter(cinema -> cinema != null && cinema.id() != null)
+                .filter(cinema -> requestedCinemaIds == null || requestedCinemaIds.contains(cinema.id()))
+                .distinct()
+                .toList();
     }
 
     private List<CinemaRevenueItemResponse> filterSelectedCinemaRevenueItems(
@@ -1413,15 +1395,17 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 requestedFilmIds,
                 from,
                 to);
-        Map<UUID, String> filmNames = filmGrpcClient.getFilmTitlesByIds(
-                revenueTransactions.stream()
-                        .map(PaymentTransaction::getFilmId)
-                        .filter(java.util.Objects::nonNull)
-                        .distinct()
-                        .toList());
+        Map<UUID, String> filmNames = revenueTransactions.isEmpty()
+                ? Map.of()
+                : filmGrpcClient.getFilmTitlesByIds(
+                        revenueTransactions.stream()
+                                .map(PaymentTransaction::getFilmId)
+                                .filter(java.util.Objects::nonNull)
+                                .distinct()
+                                .toList());
 
         List<FilmRevenueItemResponse> filteredItems = applyFilmRevenuePageRequest(
-                aggregateFilmRevenueItems(revenueTransactions, filmNames, from, to),
+                revenueReportSupport.aggregateFilmRevenueItems(revenueTransactions, filmNames, request),
                 request.getPageRequest());
         int page = request.getPageRequest().getPageOrDefault();
         int size = request.getPageRequest().getSizeOrDefault();
@@ -1443,31 +1427,6 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .page(toFilmSummary(pageItems))
                 .total(toFilmSummary(filteredItems))
                 .build();
-    }
-
-    private List<FilmRevenueItemResponse> aggregateFilmRevenueItems(
-            List<PaymentTransaction> revenueTransactions,
-            Map<UUID, String> filmNames,
-            LocalDateTime from,
-            LocalDateTime to) {
-        if (revenueTransactions == null || revenueTransactions.isEmpty()) {
-            return List.of();
-        }
-
-        Map<UUID, FilmRevenueAccumulator> accumulatorMap = new LinkedHashMap<>();
-        for (PaymentTransaction transaction : revenueTransactions) {
-            if (transaction == null || transaction.getFilmId() == null) {
-                continue;
-            }
-            FilmRevenueAccumulator accumulator = accumulatorMap.computeIfAbsent(
-                    transaction.getFilmId(),
-                    filmId -> new FilmRevenueAccumulator(filmId, normalizeStringValue(filmNames.get(filmId))));
-            accumulator.apply(transaction, from, to);
-        }
-
-        return accumulatorMap.values().stream()
-                .map(FilmRevenueAccumulator::toResponse)
-                .toList();
     }
 
     private List<FilmRevenueItemResponse> filterSelectedFilmRevenueItems(
@@ -1683,132 +1642,6 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    private List<CinemaRevenueItemResponse> initializeRevenueItems(List<CinemaGrpcClient.CinemaSummary> cinemas) {
-        if (cinemas == null || cinemas.isEmpty()) {
-            return List.of();
-        }
-        return cinemas.stream()
-                .map(cinema -> CinemaRevenueItemResponse.builder()
-                        .cinemaId(cinema.id())
-                        .cinemaName(cinema.name())
-                        .totalTransactions(0)
-                        .pendingCount(0)
-                        .paidCount(0)
-                        .failedCount(0)
-                        .expiredCount(0)
-                        .refundPendingCount(0)
-                        .refundedCount(0)
-                        .ticketSubtotalAmount(ZERO)
-                        .productSubtotalAmount(ZERO)
-                        .promotionCode("")
-                        .promotionName("")
-                        .promotionDiscountAmount(ZERO)
-                        .paidAmount(ZERO)
-                        .refundedAmount(ZERO)
-                        .grossAmount(ZERO)
-                        .netAmount(ZERO)
-                        .build())
-                .toList();
-    }
-
-    private void applyTransactionToAccumulator(
-            CinemaRevenueAccumulator accumulator,
-            PaymentTransaction transaction,
-            List<PromotionSnapshotView> promotionSnapshots,
-            LocalDateTime from,
-            LocalDateTime to) {
-        if (transaction == null) {
-            return;
-        }
-
-        if (isBetween(transaction.getPaidAt(), from, to)) {
-            BigDecimal amount = normalizeAmount(transaction.getAmount());
-            List<PromotionSnapshotView> resolvedPromotionSnapshots = resolvePromotionSnapshots(
-                    transaction,
-                    promotionSnapshots);
-            accumulator.totalTransactions++;
-            accumulator.paidCount++;
-            accumulator.paidAmount = accumulator.paidAmount.add(amount);
-            accumulator.appendPromotionSnapshots(resolvedPromotionSnapshots);
-            accumulator.promotionDiscountAmount = accumulator.promotionDiscountAmount.add(
-                    sumPromotionDiscountSnapshots(resolvedPromotionSnapshots));
-            accumulator.grossAmount = accumulator.grossAmount.add(amount);
-            accumulator.netAmount = accumulator.netAmount.add(amount);
-            accumulator.ticketSubtotalAmount = accumulator.ticketSubtotalAmount.add(
-                    normalizeAmount(transaction.getTicketSubtotalSnapshot()));
-            accumulator.productSubtotalAmount = accumulator.productSubtotalAmount.add(
-                    normalizeAmount(transaction.getProductSubtotalSnapshot()));
-        }
-
-        if (isBetween(transaction.getRefundedAt(), from, to)) {
-            BigDecimal refundAmount = transaction.getRefundAmount() != null
-                    ? normalizeAmount(transaction.getRefundAmount())
-                    : normalizeAmount(transaction.getAmount());
-            accumulator.totalTransactions++;
-            accumulator.refundedCount++;
-            accumulator.refundedAmount = accumulator.refundedAmount.add(refundAmount);
-            accumulator.netAmount = accumulator.netAmount.subtract(refundAmount);
-            accumulator.ticketSubtotalAmount = accumulator.ticketSubtotalAmount.subtract(
-                    normalizeAmount(transaction.getTicketSubtotalSnapshot()));
-            accumulator.productSubtotalAmount = accumulator.productSubtotalAmount.subtract(
-                    normalizeAmount(transaction.getProductSubtotalSnapshot()));
-        }
-    }
-
-    private Map<UUID, List<PromotionSnapshotView>> loadPromotionSnapshots(Collection<UUID> paymentTransactionIds) {
-        if (paymentTransactionIds == null || paymentTransactionIds.isEmpty()) {
-            return Map.of();
-        }
-
-        List<PaymentTransactionPromotion> snapshots = paymentTransactionPromotionRepository
-                .findAllByPaymentTransactionIdIn(
-                        paymentTransactionIds,
-                        org.springframework.data.domain.Sort.by(
-                                org.springframework.data.domain.Sort.Order.asc("paymentTransactionId"),
-                                org.springframework.data.domain.Sort.Order.asc("applyOrder"),
-                                org.springframework.data.domain.Sort.Order.asc("timeCreated"),
-                                org.springframework.data.domain.Sort.Order.asc("id")));
-        if (snapshots == null || snapshots.isEmpty()) {
-            return Map.of();
-        }
-
-        Map<UUID, List<PromotionSnapshotView>> grouped = new LinkedHashMap<>();
-        for (PaymentTransactionPromotion snapshot : snapshots) {
-            if (snapshot == null || snapshot.getPaymentTransactionId() == null) {
-                continue;
-            }
-            grouped.computeIfAbsent(snapshot.getPaymentTransactionId(), key -> new ArrayList<>())
-                    .add(new PromotionSnapshotView(
-                            snapshot.getPromotionId(),
-                            normalizeStringValue(snapshot.getPromotionCode()),
-                            normalizeStringValue(snapshot.getPromotionName()),
-                            normalizeAmount(snapshot.getDiscountAmount()),
-                            snapshot.getApplyOrder(),
-                            snapshot.getTimeCreated()));
-        }
-        return grouped;
-    }
-
-    private List<PromotionSnapshotView> resolvePromotionSnapshots(
-            PaymentTransaction transaction,
-            List<PromotionSnapshotView> promotionSnapshots) {
-        if (promotionSnapshots != null && !promotionSnapshots.isEmpty()) {
-            return promotionSnapshots;
-        }
-
-        if (transaction == null || !StringUtils.hasText(transaction.getPromotionCode())) {
-            return List.of();
-        }
-
-        return List.of(new PromotionSnapshotView(
-                null,
-                normalizeStringValue(transaction.getPromotionCode()),
-                normalizeStringValue(transaction.getPromotionName()),
-                normalizeAmount(transaction.getPromotionDiscountAmount()),
-                1,
-                transaction.getTimeCreated()));
-    }
-
     private List<CinemaRevenueItemResponse> applyCinemaRevenuePageRequest(
             List<CinemaRevenueItemResponse> items,
             PageRequest<CinemaRevenueField> request) {
@@ -2014,38 +1847,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         return String.valueOf(left).compareTo(String.valueOf(right));
     }
 
-    private boolean isBetween(LocalDateTime value, LocalDateTime from, LocalDateTime to) {
-        if (value == null || from == null || to == null) {
-            if (value == null) {
-                return false;
-            }
-            if (from == null && to == null) {
-                return true;
-            }
-            if (from == null) {
-                return !value.isAfter(to);
-            }
-            if (to == null) {
-                return !value.isBefore(from);
-            }
-            return false;
-        }
-        return !value.isBefore(from) && !value.isAfter(to);
-    }
-
-    private List<CinemaRevenueItemResponse> paginate(List<CinemaRevenueItemResponse> items, int page, int size) {
-        if (items == null || items.isEmpty()) {
-            return List.of();
-        }
-        int fromIndex = Math.max(0, (page - 1) * size);
-        if (fromIndex >= items.size()) {
-            return List.of();
-        }
-        int toIndex = Math.min(items.size(), fromIndex + size);
-        return new ArrayList<>(items.subList(fromIndex, toIndex));
-    }
-
-    private List<FilmRevenueItemResponse> paginate(List<FilmRevenueItemResponse> items, int page, int size) {
+    private <T> List<T> paginate(List<T> items, int page, int size) {
         if (items == null || items.isEmpty()) {
             return List.of();
         }
@@ -2138,124 +1940,4 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .build();
     }
 
-    private static class CinemaRevenueAccumulator {
-        private final UUID cinemaId;
-        private final String cinemaName;
-        private long totalTransactions;
-        private long pendingCount;
-        private long paidCount;
-        private long failedCount;
-        private long expiredCount;
-        private long refundPendingCount;
-        private long refundedCount;
-        private BigDecimal ticketSubtotalAmount = ZERO;
-        private BigDecimal productSubtotalAmount = ZERO;
-        private final List<String> promotionCodes = new ArrayList<>();
-        private final List<String> promotionNames = new ArrayList<>();
-        private BigDecimal promotionDiscountAmount = ZERO;
-        private BigDecimal paidAmount = ZERO;
-        private BigDecimal refundedAmount = ZERO;
-        private BigDecimal grossAmount = ZERO;
-        private BigDecimal netAmount = ZERO;
-
-        private CinemaRevenueAccumulator(UUID cinemaId, String cinemaName) {
-            this.cinemaId = cinemaId;
-            this.cinemaName = cinemaName;
-        }
-
-        private CinemaRevenueItemResponse toResponse() {
-            return CinemaRevenueItemResponse.builder()
-                    .cinemaId(cinemaId)
-                    .cinemaName(cinemaName)
-                    .totalTransactions(totalTransactions)
-                    .pendingCount(pendingCount)
-                    .paidCount(paidCount)
-                    .failedCount(failedCount)
-                    .expiredCount(expiredCount)
-                    .refundPendingCount(refundPendingCount)
-                    .refundedCount(refundedCount)
-                    .ticketSubtotalAmount(ticketSubtotalAmount)
-                    .productSubtotalAmount(productSubtotalAmount)
-                    .promotionCode(joinPromotionTokens(promotionCodes))
-                    .promotionName(joinPromotionTokens(promotionNames))
-                    .promotionDiscountAmount(promotionDiscountAmount)
-                    .paidAmount(paidAmount)
-                    .refundedAmount(refundedAmount)
-                    .grossAmount(grossAmount)
-                    .netAmount(netAmount)
-                    .build();
-        }
-
-        private void appendPromotionSnapshots(List<PromotionSnapshotView> snapshots) {
-            if (snapshots == null || snapshots.isEmpty()) {
-                return;
-            }
-            for (PromotionSnapshotView snapshot : snapshots) {
-                if (snapshot == null) {
-                    continue;
-                }
-                appendPromotionTokens(promotionCodes, snapshot.promotionCode());
-                appendPromotionTokens(promotionNames, snapshot.promotionName());
-            }
-        }
-    }
-
-    private class FilmRevenueAccumulator {
-        private final UUID filmId;
-        private final String filmName;
-        private final java.util.Set<UUID> cinemaIds = new java.util.LinkedHashSet<>();
-        private long totalTransactions;
-        private long paidCount;
-        private long refundedCount;
-        private BigDecimal paidAmount = ZERO;
-
-        private FilmRevenueAccumulator(UUID filmId, String filmName) {
-            this.filmId = filmId;
-            this.filmName = filmName;
-        }
-
-        private void apply(PaymentTransaction transaction, LocalDateTime from, LocalDateTime to) {
-            if (transaction == null) {
-                return;
-            }
-
-            if (isBetween(transaction.getPaidAt(), from, to)) {
-                totalTransactions++;
-                paidCount++;
-                paidAmount = paidAmount.add(normalizeAmount(transaction.getAmount()));
-                if (transaction.getCinemaId() != null) {
-                    cinemaIds.add(transaction.getCinemaId());
-                }
-            }
-
-            if (isBetween(transaction.getRefundedAt(), from, to)) {
-                totalTransactions++;
-                refundedCount++;
-                if (transaction.getCinemaId() != null) {
-                    cinemaIds.add(transaction.getCinemaId());
-                }
-            }
-        }
-
-        private FilmRevenueItemResponse toResponse() {
-            return FilmRevenueItemResponse.builder()
-                    .filmId(filmId)
-                    .filmName(filmName)
-                    .cinemaCount(cinemaIds.size())
-                    .totalTransactions(totalTransactions)
-                    .paidCount(paidCount)
-                    .refundedCount(refundedCount)
-                    .paidAmount(paidAmount)
-                    .build();
-        }
-    }
-
-    private record PromotionSnapshotView(
-            UUID promotionId,
-            String promotionCode,
-            String promotionName,
-            BigDecimal discountAmount,
-            Integer applyOrder,
-            LocalDateTime timeCreated) {
-    }
 }

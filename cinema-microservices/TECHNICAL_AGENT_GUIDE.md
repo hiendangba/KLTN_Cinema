@@ -22,6 +22,17 @@
 - Verification: đã đối chiếu lại controller/service/DTO/export contract và update tài liệu hướng dẫn tương ứng; chưa chạy test vì đây là thay đổi tài liệu.
 - Remaining risk: nếu FE vẫn render theo cột tiền cũ thì table/export sẽ lệch shape; cần đồng bộ UI mapping theo note mới.
 
+- `payment-service` đã tách toàn bộ logic aggregate report doanh thu ra khỏi `PaymentSessionServiceImpl` sang helper top-level `payment_service.support.RevenueReportSupport`; service chỉ còn orchestration + repo access, còn report helper được test riêng.
+- Files chạm: `payment-service/src/main/java/com/cinema/payment_service/support/RevenueReportSupport.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `payment-service/src/test/java/com/cinema/payment_service/support/RevenueReportSupportTest.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImplTest.java`.
+- Reason: tránh nhét accumulator class nội bộ trong service, giữ code dễ đọc và đúng ranh giới support/service hơn.
+- Verification: chưa chạy Maven vì môi trường không có `mvn`; đã cập nhật service/test wiring để compile theo cấu trúc hiện tại.
+
+- `identity-service` giữ nguyên nghiệp vụ refresh cũ: khi rotate `refreshToken`, nếu `accessToken` cũ vẫn còn key trong Redis thì refresh bị từ chối và toàn bộ auth cookie bị clear.
+- Files chạm: `identity-service/src/main/java/com/cinema/identity_service/services/impl/UserServiceImpl.java`, `identity-service/src/test/java/com/cinema/identity_service/services/impl/UserServiceImplTokenFlowTest.java`.
+- Reason: đây là rule nghiệp vụ của hệ thống, không phải lỗi kỹ thuật; refresh chỉ được phép khi session cũ đã hết/được revoke khỏi Redis.
+- Verification: đã khôi phục lại nhánh `hasAccessToken` trong `refreshToken` và sửa test tương ứng; chưa chạy lại full Maven vì module `identity-service` hiện vẫn vướng lỗi compile sẵn có ở generated/proto symbols.
+- Remaining risk: nếu FE hoặc gateway gọi refresh trước khi access token Redis hết key, hệ thống sẽ trả `REFRESH_TOKEN_MISSING` theo đúng rule hiện tại.
+
 ## Changelog ngắn (2026-06-28)
 
 - `chatbot/api/schemas.py` đã thêm lớp sanitize request theo contract từng nhóm API: page search, film search, showtime-by-film, report; chatbot giờ tự cắt field thừa và map alias sort `TIME_CREATED -> CREATED_AT` cho cinema-service trước khi gọi BE.

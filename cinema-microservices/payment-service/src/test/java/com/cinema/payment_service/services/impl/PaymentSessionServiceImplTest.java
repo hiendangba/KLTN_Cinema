@@ -26,6 +26,7 @@ import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
+import com.cinema.payment_service.support.RevenueReportSupport;
 import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
@@ -99,6 +100,9 @@ class PaymentSessionServiceImplTest {
 
     @Spy
     private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
+
+    @Spy
+    private RevenueReportSupport revenueReportSupport = new RevenueReportSupport();
 
     @Mock
     private HttpServletRequest httpRequest;
