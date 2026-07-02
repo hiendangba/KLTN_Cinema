@@ -493,8 +493,11 @@ services:
       ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
     mem_limit: 70m
     networks:
-      - default
-      - cinema-shared
+      default: {}
+      cinema-shared:
+        aliases:
+          - cinema-api.duckdns.org
+          - cinema-api
 
 volumes:
   pgdata:

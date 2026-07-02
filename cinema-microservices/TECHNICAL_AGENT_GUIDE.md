@@ -16,12 +16,80 @@
 
 ## Changelog ngắn (2026-06-28)
 
+- `chatbot/api/schemas.py` đã thêm lớp sanitize request theo contract từng nhóm API: page search, film search, showtime-by-film, report; chatbot giờ tự cắt field thừa và map alias sort `TIME_CREATED -> CREATED_AT` cho cinema-service trước khi gọi BE.
+- Đã thêm test unit cho sanitizer outbound ở `chatbot/tests/test_request_body_sanitizer.py`, cover `search_cinemas`, `search_films_customer`, `search_showtimes_by_film`, và report body để chặn regress request sai format.
+- `FE/CinemaStar` chatbot đã chuyển luồng showtime theo tên phim sang orchestration 2 bước deterministic: resolve `filmId` bằng `search_films_customer`/`search_films`, rồi gọi `search_showtimes_by_film` trong cùng một turn chat.
+- `run_chat()` giờ có thể trả `iterations > 1` khi thực sự gọi nhiều API, thay vì cố định 1 như trước; `api_calls` cũng phản ánh đủ chuỗi lookup.
+- `chatbot/services/chat.py` đã được gắn log sequence theo từng bước gọi API: start/success/fail của `_execute_plan`, log start của special showtime flow, và log tổng `api_ids` cuối turn để debug nhanh trường hợp bot dừng ở bước 1.
+- `chatbot/services/chat.py` đã siết lại film-title extractor bằng cắt chuỗi accent-insensitive, để các cụm thừa như `ở rạp`, `vào ngày 29/06`, `hôm nay` không còn bị nhét vào keyword phim làm `search_films_customer` trả rỗng.
+- `chatbot/services/chat.py` đã sửa request search rạp dùng đúng field sort `CREATED_AT` của `cinema-service`; trước đó bot lỡ gửi `TIME_CREATED` nên `/api/cinemas/search` bị `9001` khi resolve cinema trước bước lấy suất chiếu.
+- `chatbot/prompts/select_api.py` đã siết rule router: nếu khách hỏi showtime có tên phim nhưng chưa có `filmId`, tuyệt đối không chọn `search_showtimes`; bot phải resolve phim trước.
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`, `FE/CinemaStar/chatbot/prompts/select_api.py`.
+- Reason: người dùng không biết `filmId`, nên chatbot phải tự đi qua bước lookup phim rồi mới truy suất suất chiếu.
+- Verification: đã compile kiểm tra Python syntax sau khi sửa; cần smoke test lại câu “liệt kê các suất chiếu của phim Mưa Đỏ cho tôi” để xác nhận bot đi qua `search_films_customer/search_films` → `search_showtimes_by_film`.
+
+- `FE/CinemaStar` chatbot đã mở rộng luồng suất chiếu theo rạp: khi khách chỉ nêu rạp/ngày mà không nêu phim, bot sẽ resolve `cinemaId`, lấy danh sách phim đang chiếu ở rạp đó, rồi gọi tiếp `search_showtimes_by_film` cho từng phim để trả về đúng suất chiếu thay vì dừng ở thông tin rạp.
+- `chatbot/apis/catalog.py` và `chatbot/prompts/select_api.py` được cập nhật để ghi rõ rule orchestrator mới: case theo rạp không được kết thúc ở `search_cinemas` hoặc `search_films_customer` đơn lẻ.
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`, `FE/CinemaStar/chatbot/apis/catalog.py`, `FE/CinemaStar/chatbot/prompts/select_api.py`.
+- Reason: màn chat trước đó chỉ trả thông tin rạp do chưa đi tiếp sang showtime lookup cho từng phim trong rạp.
+- Verification: đã sửa orchestration code; cần smoke test lại câu “cho tôi suất chiếu của rạp lê văn việt” để xác nhận bot trả ra danh sách suất thay vì cinema info.
+
+- `FE/CinemaStar` chatbot đã đổi nhánh tìm suất chiếu theo tên phim sang đa ứng viên: thay vì chốt đúng 1 `filmId`, bot sẽ rank các film match tốt nhất rồi gọi `search_showtimes_by_film` cho nhiều film candidate, giảm lỗi bỏ sót khi title như `1917` có nhiều biến thể.
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`.
+- Reason: các title mơ hồ hoặc trùng tên có thể trả nhiều film item, và chỉ chọn 1 filmId dễ khiến bot kết luận sai là không có suất chiếu.
+- Verification: đã cập nhật code; cần smoke test lại câu “Liệt kê danh sách suất chiếu và rạp của phim 1917 giúp tôi” để xem bot lấy được showtime từ đúng biến thể phim.
+
+- `FE/CinemaStar` chatbot giờ validate `filmId` bằng UUID trước khi gọi `search_showtimes_by_film`; nếu upstream trả item không có UUID hợp lệ thì bot bỏ qua item đó thay vì gọi `/showtimes/films/1917/search` và gây lỗi `Invalid uuid format`.
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`.
+- Reason: path param của showtime API phải là UUID thật từ `search_films_customer`, không được suy diễn từ title.
+- Verification: đã thêm chặn và log cảnh báo cho item invalid; cần restart chatbot rồi test lại câu `1917` để xác nhận path ra UUID đúng chuẩn.
+
+- `FE/CinemaStar` chatbot đã làm history-aware cho các câu tham chiếu như "film này": resolver giờ đọc cả history để lấy lại tên phim/rạp vừa được nhắc, thay vì chỉ nhìn câu hiện tại rồi suy ra sai.
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`.
+- Reason: câu rút gọn của khách sau khi đã nhắc phim/rạp trước đó không đủ dữ liệu để regex hiện tại tự suy ra đúng `filmId` hoặc `cinemaId`.
+- Verification: logic đã được nối vào `run_chat()`; cần smoke test lại hội thoại nhiều lượt như case `1917` + `rạp Lê Văn Việt` + `ngày mai` để xác nhận bot dùng đúng ngữ cảnh cũ.
+
+- `FE/CinemaStar` chatbot đã siết lại `_extract_cinema_keyword()` để cắt bỏ các phần thừa như "ngày mai", "suất chiếu", "lúc mấy" khỏi keyword rạp trước khi search, tránh nhét cả câu hỏi vào tên rạp và làm lệch search_cinemas.
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`.
+- Reason: câu hỏi kiểu "rạp cinema lê văn việt ngày mai có suất chiếu..." trước đó khiến keyword rạp bị quá dài, nên bot trả lại thông tin rạp thay vì đi tiếp tới showtime lookup.
+- Verification: đã cập nhật rule trimming; cần restart chatbot và test lại câu hỏi theo rạp + ngày để xác nhận nó trả showtime thay vì chỉ cinema info.
+
+- `FE/CinemaStar` chatbot đã đổi default missing-date của showtime sang quét một dải 7 ngày kế tiếp thay vì chỉ hỏi ngược khách hoặc chỉ mặc định "hôm nay".
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`.
+- Reason: câu kiểu "tra giúp em suất chiếu của phim Mưa Đỏ với ạ" không nên bắt khách tự nêu ngày; bot phải tự thử các ngày gần nhất để tìm suất trước khi kết luận thiếu dữ liệu.
+- Verification: code đã compile pass; cần smoke test lại case "Mưa đỏ" không nêu ngày để xác nhận bot tự tìm được showtime trong dải ngày gần nhất nếu có dữ liệu.
+
+- `FE/CinemaStar` chatbot đã tách serializer request theo API: `/api/films/customer/search` chỉ gửi `showtimeDate`, còn `/api/showtimes/films/{filmId}/search` chỉ gửi `date`, tránh field thừa làm BE trả `9001`.
+- Files chạm: `FE/CinemaStar/chatbot/api/schemas.py`, `FE/CinemaStar/chatbot/services/chat.py`.
+- Reason: request body chung trước đó bị serialize cả `date` và `showtimeDate`, trong khi film-service/customer-search chỉ chấp nhận `showtimeDate`.
+- Verification: đã chỉnh executor để truyền `api_id` vào serializer; cần restart chatbot và test lại case "bắt đầu từ 7h sáng ngày mai" để xác nhận request film-search không còn bị 9001.
+
+- `FE/CinemaStar` chatbot đã bỏ lọc `showtimeDate` ở bước `search_films_customer` khi khách chưa nói ngày rõ ràng; ngày chỉ còn được quét ở bước `search_showtimes_by_film`.
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`.
+- Reason: khóa film search vào một ngày mặc định khiến nhánh orchestration dừng sớm và không thật sự đi qua 2 API khi khách hỏi suất chiếu tổng quát.
+- Verification: logic đã refactor sang "search film theo title trước, search showtime theo dải ngày sau"; cần smoke test lại câu hỏi thiếu ngày để xác nhận iterations tăng >1 khi có dữ liệu.
+
+- `FE/CinemaStar` chatbot đã thêm nhánh đặc biệt cho câu hỏi khách về suất chiếu theo rạp/ngày: trước hết resolve `cinemaId` bằng `search_cinemas`, rồi gọi `search_films_customer` để lấy phim có suất chiếu, thay vì đẩy khách vào `search_showtimes` và bắt phải có `filmId`.
+- `SearchFilmsRequestBody` trong chatbot giờ đồng bộ cả `showtimeDate` lẫn alias `date`, để request gửi sang BE khớp `film-service`/`showtime-service` mà không bị lệch field.
+- `chatbot/apis/catalog.py` và `chatbot/prompts/select_api.py` đã siết rule router: khách hỏi “có suất chiếu tối nay ở rạp X” không được chọn `search_showtimes`; phải đi theo luồng customer/public.
+- Files chạm: `FE/CinemaStar/chatbot/services/chat.py`, `FE/CinemaStar/chatbot/api/schemas.py`, `FE/CinemaStar/chatbot/apis/catalog.py`, `FE/CinemaStar/chatbot/prompts/select_api.py`.
+- Reason: khách không biết `filmId`, nên bot cần tự resolve rạp và ngày xem trước khi tra cứu thay vì trả lỗi format từ API nội bộ.
+- Verification: chưa chạy full integration; cần smoke test lại câu “có suất chiếu tối nay không rạp cinema lê văn việt á” để xác nhận bot đi qua `search_cinemas` → `search_films_customer` và không còn hit `/api/showtimes/search`.
+
 - `booking-service` mở admin write access cho `PUT/POST/DELETE /api/bookings/products` theo pattern `admin bypass`, còn `MANAGER` vẫn phải đi qua scope cinema như cũ.
 - `ProductServiceImpl` giờ resolve cinema scope theo role: `ADMIN` lấy toàn bộ cinema active từ `cinemaGrpcClient.getAllActiveCinemas()`, `MANAGER` vẫn dùng `getCinemaIdsByUserId(...)`, `STAFF` vẫn bị chặn ở write path.
 - Files chạm: `booking-service/src/main/java/com/cinema/booking_service/services/impl/ProductServiceImpl.java`, `booking-service/src/test/java/com/cinema/booking_service/services/impl/ProductServiceImplTest.java`.
 - Reason: admin trước đó bị chặn nhầm ở `validateManagerRole(...)`, trong khi rule mong muốn là admin được thao tác trên mọi cinema active.
 - Verification: test mới đã được thêm cho admin bypass, manager scope, staff forbidden, manager không có cinema, và admin bị chặn khi cinema không active; build reactor hiện vẫn bị kẹt ở `common-lib` protobuf temp-dir issue trên workspace này nên chưa có green full-run.
 - Remaining risk: nếu cần CI pass thì vẫn phải xử lý lỗi plugin protobuf của `common-lib` trong môi trường build, vì đây là blocker ngoài logic product.
+
+## Changelog ngắn (2026-06-28)
+
+- `booking-service` test compile bị fail vì import `ActionMessageResponse` nhầm từ package nội bộ thay vì `com.cinema.dto.response`.
+- Files chạm: `booking-service/src/test/java/com/cinema/booking_service/services/impl/ProductServiceImplTest.java`.
+- Reason: `ActionMessageResponse` là DTO chung trong `common-lib`, nên test package local không thể tự định nghĩa lại cùng tên mà phải import đúng source thật.
+- Verification: build reactor gốc bằng `booking-service/mvnw.cmd -f ..\pom.xml -DskipTests -pl booking-service -am package` đã pass sau khi sửa import; module đơn lẻ không phải cách verify tin cậy cho case này.
+- Remaining risk: nếu CI vẫn build theo module riêng lẻ, cần đảm bảo nó dùng reactor root để kéo `common-lib` mới nhất thay vì cache cũ.
 
 ## Changelog ngắn (2026-06-28)
 
@@ -35,7 +103,8 @@
 - `compose.prod.yaml` và `FE/CinemaStar/chatbot/docker-compose.yml` cùng join network `cinema-shared`, để Envoy resolve được hostname `chatbot` sang container Python ở compose riêng.
 - Files chạm: `envoy/envoy.prod.yaml`, `compose.prod.yaml`, `FE/CinemaStar/chatbot/docker-compose.yml`.
 - Reason: Envoy route `/chat` chỉ hoạt động nếu gateway và chatbot thật sự thấy nhau qua DNS Docker, nên 2 stack riêng vẫn phải share một network chung.
-- Verification: chatbot service có alias `chatbot` trên network chung, Envoy attach cùng network đó, nên upstream `chatbot:8000` có thể resolve qua Docker DNS thay vì cần chung một compose file.
+- `compose.prod.yaml` cũng thêm alias `cinema-api.duckdns.org` cho Envoy trên network chung, để chatbot gọi `CINEMA_API_BASE_URL=https://cinema-api.duckdns.org/api` nhưng DNS nội bộ vẫn resolve về gateway, tránh lỗi intermittent `Temporary failure in name resolution`.
+- Verification: chatbot service có alias `chatbot` trên network chung, Envoy attach cùng network đó, nên upstream `chatbot:8000` có thể resolve qua Docker DNS thay vì cần chung một compose file; chatbot cluster phải giữ HTTP/1.1 upstream, không bật `http2_protocol_options`, vì Uvicorn sẽ trả `Invalid HTTP request received` nếu nhận HTTP/2 preface.
 - Remaining risk: production vẫn phụ thuộc cookie auth của `identity-service` phải được set đúng `Secure` + `SameSite=None` thì browser mới gửi cross-site ổn định.
 
 ## Changelog ngắn (2026-06-10)
@@ -1874,6 +1943,61 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - `.\showtime-service\mvnw.cmd --% -f pom.xml -pl showtime-service -am -DskipTests compile`
 - Remaining risk:
   - keyword search vẫn là in-memory filter sau enrich metadata, nên nếu số suất chiếu tăng rất lớn thì phần gRPC lấy film/hall/cinema name vẫn có chi phí; muốn tối ưu tiếp phải đẩy search index xuống DB hoặc denormalize dữ liệu tìm kiếm.
+
+## Changelog ngắn (2026-06-29)
+
+- Siết lại contract text cho chatbot `call_api` trong `chatbot/apis/catalog.py` và `chatbot/prompts/call_api.py` để LLM chỉ thấy field hợp lệ của từng API, thay vì mô tả chung chung dễ sinh sai payload.
+- Hành vi mới:
+  - `search_cinemas` và `search_my_managed_cinemas` now advertise `sortBy.field=CREATED_AT`, không còn gợi ý `TIME_CREATED`.
+  - `search_showtimes_by_film` chỉ còn body contract `page/size/date/cinemaId` + path `filmId`; prompt ghi rõ không được dùng `showtimeDate` ở API này.
+  - report APIs hiển thị đúng `pageRequest` nested và tách rõ API nào được phép / không được phép dùng `selectedIds`.
+- Lý do: LLM trước đó hay trộn field giữa các API gần giống nhau, gây ra lỗi `9001` / body sai định dạng ngay lần hỏi đầu tiên hoặc chọn nhầm field sort.
+- Files đã cập nhật:
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\apis\catalog.py`
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\prompts\call_api.py`
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\tests\test_call_api_prompt_contract.py`
+- Verify:
+  - `tests.test_request_body_sanitizer`
+  - `tests.test_call_api_prompt_contract`
+  - `py_compile` cho các file chatbot đã sửa
+- Remaining risk:
+  - contract text đã chặt hơn, nhưng nếu BE contract đổi tiếp thì vẫn cần cập nhật lại whitelist trong `catalog.py` và sanitizer ở `api/schemas.py` đồng thời.
+
+## Changelog ngắn (2026-06-29)
+
+- Đồng nhất luồng hỏi suất chiếu cho `ADMIN` và `CUSTOMER` trong chatbot `chat.py`: cả hai role đều đi qua cùng helper showtime 2 bước thay vì admin rơi về router 1 bước.
+- Hành vi mới:
+  - khi câu hỏi có dấu hiệu showtime và đã resolve được phim, bot luôn lấy `filmId` trước rồi mới gọi `search_showtimes_by_film`
+  - log giờ ghi rõ `role=` để tránh hiểu nhầm đây chỉ là flow của customer
+  - `select_api` prompt cũng được chỉnh để coi `ADMIN` giống `CUSTOMER` ở nhánh hỏi showtime
+- Lý do: trước đó `ADMIN` có thể bị đi đường khác với `CUSTOMER`, làm sai bản chất nghiệp vụ vì cùng một câu hỏi nhưng số API gọi ra không nhất quán.
+- Files đã cập nhật:
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\services\chat.py`
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\prompts\select_api.py`
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\apis\catalog.py`
+- Verify:
+  - rà soát logic showtime orchestration sau patch
+  - sẽ chạy lại compile/test chatbot ở bước tiếp theo
+- Remaining risk:
+  - nếu sau này thêm role mới có quyền xem showtime, cần quyết định rõ có nhập chung flow 2 bước này hay không để tránh lệch hành vi giữa các role.
+
+## Changelog ngắn (2026-06-29)
+
+- Mở rộng showtime orchestration trong `chatbot/services/chat.py` cho toàn bộ `CUSTOMER / ADMIN / MANAGER / STAFF`.
+- Hành vi mới:
+  - bất kỳ role nào hỏi suất chiếu đều đi qua cùng flow resolve phim -> lấy `filmId` -> gọi `search_showtimes_by_film`
+  - router prompt `select_api.py` cũng coi 4 role này như nhau ở nhánh showtime
+  - `catalog.py` ghi rõ use case của `search_showtimes_by_film` áp dụng cho cả 4 role, tránh cảm giác đây là flow riêng của customer
+- Lý do: nếu chỉ một vài role dùng flow 2 bước còn role khác quay về flow 1 bước, bản chất nghiệp vụ sẽ lệch và dễ sinh kết quả không nhất quán.
+- Files đã cập nhật:
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\services\chat.py`
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\prompts\select_api.py`
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\apis\catalog.py`
+  - `C:\hoctap\Study\KLTN\FE\CinemaStar\chatbot\tests\test_call_api_prompt_contract.py`
+- Verify:
+  - sẽ chạy lại test chatbot sau patch
+- Remaining risk:
+  - nếu backend/permission model sau này thêm role mới, cần quyết định xem role đó có được nhập chung vào orchestration showtime này hay không.
 
 
 

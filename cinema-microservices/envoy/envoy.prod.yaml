@@ -464,7 +464,6 @@
     - name: chatbot
       connect_timeout: 1s
       type: LOGICAL_DNS
-      http2_protocol_options: {}
       lb_policy: ROUND_ROBIN
       load_assignment:
         cluster_name: chatbot
