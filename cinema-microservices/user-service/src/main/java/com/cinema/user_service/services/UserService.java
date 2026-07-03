@@ -65,6 +65,10 @@ public interface UserService {
 
     UserResponse getUserById(UUID userId);
 
+    long addLoyaltyPoints(UUID userId, long points);
+
+    long deductLoyaltyPoints(UUID userId, long points);
+
     UserExistenceResponse checkUserExists(UUID userId);
 
     PageResponse<UserResponse> getAllStaff(PageRequest<?> pageRequest, HttpServletRequest request);

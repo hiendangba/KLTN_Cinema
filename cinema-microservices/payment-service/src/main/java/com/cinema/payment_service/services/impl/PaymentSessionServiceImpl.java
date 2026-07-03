@@ -36,6 +36,7 @@ import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.FilmGrpcClient;
+import com.cinema.payment_service.grpc.UserGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
@@ -87,6 +88,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final BookingGrpcClient bookingGrpcClient;
     private final CinemaGrpcClient cinemaGrpcClient;
     private final FilmGrpcClient filmGrpcClient;
+    private final UserGrpcClient userGrpcClient;
     private final PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
     private final PromotionRepository promotionRepository;
     private final MomoGatewayProperties momoGatewayProperties;
@@ -107,6 +109,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         UUID bookingId = request.getBookingId();
         String requestedPromotionCode = normalizePromotionCode(request.getPromotionCode());
         UUID requestedPromotionId = request.getPromotionId();
+        long requestedLoyaltyPointsUsed = normalizeRequestedLoyaltyPoints(request.getLoyaltyPointsUsed());
         BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
         ensureRequesterCanCreateSessionForBooking(requesterUserId, requesterRole, bookingContext);
         ensureBookable(bookingContext);
@@ -127,7 +130,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 ensureRequesterOwnsTransaction(latest, requesterUserId);
             }
             if (isReusable(latest, bookingContext)
-                    && canReuseLatestTransaction(latest, requestedPromotionId, requestedPromotionCode)) {
+                    && canReuseLatestTransaction(
+                    latest,
+                    requestedPromotionId,
+                    requestedPromotionCode,
+                    requestedLoyaltyPointsUsed)) {
+                validateRequestedLoyaltyPoints(bookingContext.userId(), requestedLoyaltyPointsUsed);
                 syncBookingPromotionSnapshot(bookingContext, latest, null);
                 return ActionMessageResponse.builder()
                         .message(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage())
@@ -156,6 +164,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 requestedPromotionCode,
                 bookingContext,
                 requesterUserId);
+        applyLoyaltyPointsIfNeeded(transaction, requestedLoyaltyPointsUsed);
         syncBookingPromotionSnapshot(bookingContext, transaction, appliedPromotions);
 
         transaction.setPayUrl(momoGatewayProperties.getRedirectUrl());
@@ -284,6 +293,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             paymentTransactionRepository.save(transaction);
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
+
+        settleLoyaltyPoints(transaction);
 
         log.info(
                 "PAYMENT_COMPLETE_CONFIRMED transactionId={} bookingId={} requesterUserId={} requesterRole={} status={}",
@@ -524,6 +535,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     @Override
     @Transactional(readOnly = true)
     public PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId) {
+        validateRequestedLoyaltyPoints(requesterUserId, request == null ? null : request.getLoyaltyPointsUsed());
         return promotionEngine.previewPromotion(request, requesterUserId);
     }
 
@@ -785,6 +797,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "booking_error", ex.getErrorCode().name()));
         }
 
+        settleLoyaltyPoints(transaction);
+
         log.info(
                 "{}_CONFIRMED orderId={} requestId={} transactionId={} bookingId={} status={}",
                 logPrefix,
@@ -952,6 +966,20 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         return StringUtils.hasText(role) ? role.trim().toUpperCase(Locale.ROOT) : "";
     }
 
+    private long normalizeLongValue(Long value) {
+        return value == null || value < 0 ? 0L : value;
+    }
+
+    private long normalizeRequestedLoyaltyPoints(Long value) {
+        if (value == null) {
+            return 0L;
+        }
+        if (value < 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return value;
+    }
+
     private boolean isReusable(PaymentTransaction latest, BookingGrpcClient.BookingPaymentContext bookingContext) {
         boolean momoPayment = latest.getPaymentMethod() != null
                 && latest.getPaymentMethod().toUpperCase(Locale.ROOT).startsWith("MOMO");
@@ -971,9 +999,14 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     private boolean canReuseLatestTransaction(PaymentTransaction latest,
                                               UUID requestedPromotionId,
-                                              String requestedPromotionCode) {
+                                              String requestedPromotionCode,
+                                              long requestedLoyaltyPointsUsed) {
         String latestPromotionCode = normalizePromotionCode(latest.getPromotionCode());
         String normalizedRequestedPromotionCode = normalizePromotionCode(requestedPromotionCode);
+        long latestLoyaltyPointsUsed = normalizeLongValue(latest.getLoyaltyPointsUsed());
+        if (latestLoyaltyPointsUsed != requestedLoyaltyPointsUsed) {
+            return false;
+        }
         if (requestedPromotionId != null) {
             UUID latestPromotionId = paymentTransactionPromotionRepository
                     .findAllByPaymentTransactionIdOrderByApplyOrderAsc(latest.getId())
@@ -996,6 +1029,104 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return true;
         }
         return normalizedRequestedPromotionCode.equals(latestPromotionCode);
+    }
+
+    private void applyLoyaltyPointsIfNeeded(PaymentTransaction transaction, long requestedLoyaltyPointsUsed) {
+        if (transaction == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        long normalizedRequestedPoints = normalizeRequestedLoyaltyPoints(requestedLoyaltyPointsUsed);
+        BigDecimal normalizedAmount = normalizeAmount(transaction.getAmount());
+        if (normalizedRequestedPoints <= 0) {
+            transaction.setLoyaltyPointsUsed(0L);
+            transaction.setLoyaltyPointsEarned(normalizedAmount.longValueExact());
+            return;
+        }
+
+        if (transaction.getUserId() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        UserGrpcClient.UserBasicInfo user = userGrpcClient.getUserBasicById(transaction.getUserId());
+        long availablePoints = normalizeLongValue(user.loyaltyPoints());
+        if (normalizedRequestedPoints > availablePoints) {
+            throw new BusinessException(ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
+        }
+
+        long appliedPoints = Math.min(normalizedRequestedPoints, normalizedAmount.longValueExact());
+        BigDecimal payableAmount = normalizedAmount.subtract(BigDecimal.valueOf(appliedPoints));
+        transaction.setLoyaltyPointsUsed(appliedPoints);
+        transaction.setAmount(normalizeAmount(payableAmount));
+        transaction.setLoyaltyPointsEarned(normalizeAmount(payableAmount).longValueExact());
+    }
+
+    private void settleLoyaltyPoints(PaymentTransaction transaction) {
+        if (transaction == null || transaction.getUserId() == null) {
+            return;
+        }
+
+        long loyaltyPointsUsed = normalizeLongValue(transaction.getLoyaltyPointsUsed());
+        long loyaltyPointsEarned = normalizeLongValue(transaction.getLoyaltyPointsEarned());
+        if (loyaltyPointsUsed <= 0 && loyaltyPointsEarned <= 0) {
+            return;
+        }
+
+        boolean deducted = false;
+        try {
+            if (loyaltyPointsUsed > 0) {
+                userGrpcClient.deductUserLoyaltyPoints(transaction.getUserId(), loyaltyPointsUsed);
+                deducted = true;
+            }
+            if (loyaltyPointsEarned > 0) {
+                userGrpcClient.addUserLoyaltyPoints(transaction.getUserId(), loyaltyPointsEarned);
+            }
+        } catch (BusinessException ex) {
+            log.warn(
+                    "LOYALTY_POINTS_SYNC_FAILED transactionId={} bookingId={} userId={} used={} earned={} errorCode={}",
+                    transaction.getId(),
+                    transaction.getBookingId(),
+                    transaction.getUserId(),
+                    loyaltyPointsUsed,
+                    loyaltyPointsEarned,
+                    ex.getErrorCode().name());
+            if (deducted) {
+                try {
+                    userGrpcClient.addUserLoyaltyPoints(transaction.getUserId(), loyaltyPointsUsed);
+                    log.info(
+                            "LOYALTY_POINTS_ROLLBACK_SUCCESS transactionId={} bookingId={} userId={} restored={}",
+                            transaction.getId(),
+                            transaction.getBookingId(),
+                            transaction.getUserId(),
+                            loyaltyPointsUsed);
+                } catch (BusinessException rollbackEx) {
+                    log.error(
+                            "LOYALTY_POINTS_ROLLBACK_FAILED transactionId={} bookingId={} userId={} restored={} errorCode={}",
+                            transaction.getId(),
+                            transaction.getBookingId(),
+                            transaction.getUserId(),
+                            loyaltyPointsUsed,
+                            rollbackEx.getErrorCode().name());
+                }
+            }
+        }
+    }
+
+    private void validateRequestedLoyaltyPoints(UUID userId, Long requestedLoyaltyPointsUsed) {
+        long normalizedRequestedPoints = normalizeRequestedLoyaltyPoints(requestedLoyaltyPointsUsed);
+        if (normalizedRequestedPoints <= 0) {
+            return;
+        }
+
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        UserGrpcClient.UserBasicInfo user = userGrpcClient.getUserBasicById(userId);
+        long availablePoints = normalizeLongValue(user.loyaltyPoints());
+        if (normalizedRequestedPoints > availablePoints) {
+            throw new BusinessException(ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
+        }
     }
 
     private List<PromotionQuote> applyPromotionIfNeeded(PaymentTransaction transaction,

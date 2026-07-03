@@ -11,6 +11,8 @@ import com.cinema.grpc.user.DeleteCustomerProfileForBookingRequest;
 import com.cinema.grpc.user.CreateCustomerProfileRequest;
 import com.cinema.grpc.user.CreateManagerProfileRequest;
 import com.cinema.grpc.user.CreateStaffProfileRequest;
+import com.cinema.grpc.user.AdjustUserLoyaltyPointsReply;
+import com.cinema.grpc.user.AdjustUserLoyaltyPointsRequest;
 import com.cinema.grpc.user.GetUserBasicByIdReply;
 import com.cinema.grpc.user.GetUserBasicByIdRequest;
 import com.cinema.grpc.user.UserBasicPayload;
@@ -206,6 +208,20 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
     }
 
     @Override
+    public void addUserLoyaltyPoints(
+            AdjustUserLoyaltyPointsRequest request,
+            StreamObserver<AdjustUserLoyaltyPointsReply> responseObserver) {
+        handleLoyaltyPointsAdjustment(request, responseObserver, true);
+    }
+
+    @Override
+    public void deductUserLoyaltyPoints(
+            AdjustUserLoyaltyPointsRequest request,
+            StreamObserver<AdjustUserLoyaltyPointsReply> responseObserver) {
+        handleLoyaltyPointsAdjustment(request, responseObserver, false);
+    }
+
+    @Override
     public void getUserBasicById(GetUserBasicByIdRequest request,
                                  StreamObserver<GetUserBasicByIdReply> responseObserver) {
         try {
@@ -216,6 +232,7 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                     .setUser(UserBasicPayload.newBuilder()
                             .setId(user.getId().toString())
                             .setName(blankToEmpty(user.getName()))
+                            .setLoyaltyPoints(user.getLoyaltyPoints() == null ? 0L : user.getLoyaltyPoints())
                             .build())
                     .build());
             responseObserver.onCompleted();
@@ -236,6 +253,47 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching user by id", ex);
             responseObserver.onNext(GetUserBasicByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    private void handleLoyaltyPointsAdjustment(
+            AdjustUserLoyaltyPointsRequest request,
+            StreamObserver<AdjustUserLoyaltyPointsReply> responseObserver,
+            boolean isAddition) {
+        try {
+            UUID userId = UUID.fromString(request.getUserId());
+            long loyaltyPoints = request.getLoyaltyPoints();
+            long nextPoints = isAddition
+                    ? userService.addLoyaltyPoints(userId, loyaltyPoints)
+                    : userService.deductLoyaltyPoints(userId, loyaltyPoints);
+            responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage(isAddition ? "Loyalty points added successfully" : "Loyalty points deducted successfully")
+                    .setLoyaltyPoints(nextPoints)
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while adjusting user loyalty points", ex);
+            responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())

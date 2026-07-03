@@ -55,6 +55,10 @@ public class User {
     @Column(name = "account_name")
     String accountName;
 
+    @Column(name = "loyalty_points", nullable = false)
+    @Builder.Default
+    Long loyaltyPoints = 0L;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserEnum.UserRole role;
@@ -74,6 +78,9 @@ public class User {
             this.id = UuidCreator.getTimeOrderedEpoch();
         }
         this.isDeleted = false;
+        if (this.loyaltyPoints == null) {
+            this.loyaltyPoints = 0L;
+        }
         timeCreated = LocalDateTime.now();
         timeUpdated = LocalDateTime.now();
     }

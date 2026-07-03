@@ -22,6 +22,7 @@ import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.grpc.FilmGrpcClient;
+import com.cinema.payment_service.grpc.UserGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PromotionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
@@ -96,6 +97,9 @@ class PaymentSessionServiceImplTest {
 
     @Mock
     private FilmGrpcClient filmGrpcClient;
+
+    @Mock
+    private UserGrpcClient userGrpcClient;
 
     @Mock
     private MomoGatewayProperties momoGatewayProperties;
@@ -320,6 +324,108 @@ class PaymentSessionServiceImplTest {
                 "CinemaStar 10%",
                 BigDecimal.valueOf(18000).setScale(0),
                 BigDecimal.valueOf(162000).setScale(0));
+    }
+
+    @Test
+    void createSession_shouldApplyLoyaltyPointsAndStoreSnapshot() {
+        UUID bookingId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = new BookingGrpcClient.BookingPaymentContext(
+                bookingId,
+                showtimeId,
+                cinemaId,
+                filmId,
+                userId,
+                BigDecimal.valueOf(180000),
+                LocalDateTime.now().plusMinutes(30),
+                "PENDING",
+                "UNPAID",
+                BigDecimal.valueOf(150000),
+                BigDecimal.valueOf(30000),
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(180000));
+
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.empty());
+        when(userGrpcClient.getUserBasicById(userId))
+                .thenReturn(new UserGrpcClient.UserBasicInfo(userId, "Customer", 50000L));
+        stubSuccessfulCheckout();
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+        request.setLoyaltyPointsUsed(20000L);
+
+        ActionMessageResponse response = paymentSessionService.createSession(request, userId, HeaderNames.ROLE_CUSTOMER);
+
+        ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
+        verify(paymentTransactionRepository).save(transactionCaptor.capture());
+        PaymentTransaction saved = transactionCaptor.getValue();
+
+        assertNotNull(response);
+        assertEquals(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage(), response.getMessage());
+        assertEquals(Long.valueOf(20000L), saved.getLoyaltyPointsUsed());
+        assertEquals(Long.valueOf(160000L), saved.getLoyaltyPointsEarned());
+        assertEquals(BigDecimal.valueOf(160000), saved.getAmount());
+        verify(userGrpcClient).getUserBasicById(userId);
+        verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
+                bookingId,
+                null,
+                null,
+                null,
+                BigDecimal.ZERO.setScale(0),
+                BigDecimal.valueOf(160000).setScale(0));
+    }
+
+    @Test
+    void createSession_shouldRejectLoyaltyPointsWhenBalanceIsInsufficient() {
+        UUID bookingId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = new BookingGrpcClient.BookingPaymentContext(
+                bookingId,
+                showtimeId,
+                cinemaId,
+                filmId,
+                userId,
+                BigDecimal.valueOf(180000),
+                LocalDateTime.now().plusMinutes(30),
+                "PENDING",
+                "UNPAID",
+                BigDecimal.valueOf(150000),
+                BigDecimal.valueOf(30000),
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(180000));
+
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.empty());
+        when(userGrpcClient.getUserBasicById(userId))
+                .thenReturn(new UserGrpcClient.UserBasicInfo(userId, "Customer", 10000L));
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+        request.setLoyaltyPointsUsed(20000L);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> paymentSessionService.createSession(request, userId, HeaderNames.ROLE_CUSTOMER));
+
+        assertEquals(ErrorCode.LOYALTY_POINTS_INSUFFICIENT, exception.getErrorCode());
+        verify(paymentTransactionRepository, times(0)).saveAndFlush(any(PaymentTransaction.class));
+        verifyNoInteractions(momoPaymentGatewayClient);
     }
 
     @Test
@@ -1044,6 +1150,8 @@ class PaymentSessionServiceImplTest {
     void handleMomoReturn_shouldMarkPaidAndConfirmBooking() {
         String orderId = "PAY-" + UUID.randomUUID();
         PaymentTransaction transaction = buildPendingTransaction(orderId, BigDecimal.valueOf(200000));
+        transaction.setLoyaltyPointsUsed(20000L);
+        transaction.setLoyaltyPointsEarned(180000L);
         MomoIpnRequest request = buildSignedMomoRequest(orderId, 200000L, 0, "Successful.", 123456789L);
 
         when(momoGatewayProperties.getAccessKey()).thenReturn("access-key");
@@ -1063,6 +1171,8 @@ class PaymentSessionServiceImplTest {
                 transaction.getPaymentMethod(),
                 transaction.getProviderRef(),
                 transaction.getOrderInvoiceNumber());
+        verify(userGrpcClient).deductUserLoyaltyPoints(transaction.getUserId(), 20000L);
+        verify(userGrpcClient).addUserLoyaltyPoints(transaction.getUserId(), 180000L);
     }
 
     @Test

@@ -43,6 +43,8 @@ public interface PaymentMapper {
     @Mapping(target = "completedByRole", source = "transaction.completedByRole")
     @Mapping(target = "refundAmount", source = "transaction.refundAmount", qualifiedByName = "normalizeNullableAmount")
     @Mapping(target = "promotionDiscountAmount", source = "transaction.promotionDiscountAmount", qualifiedByName = "normalizeNullableAmount")
+    @Mapping(target = "loyaltyPointsUsed", source = "transaction.loyaltyPointsUsed")
+    @Mapping(target = "loyaltyPointsEarned", source = "transaction.loyaltyPointsEarned")
     PaymentSessionResponse toPaymentSessionResponse(
             PaymentTransaction transaction,
             java.util.Map<String, String> checkoutFields,

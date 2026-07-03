@@ -27,6 +27,7 @@ public class UserResponse {
     String bankCode;
     String accountNumber;
     String accountName;
+    Long loyaltyPoints;
     IdentityAccountResponse identityAccount;
 
     @Getter

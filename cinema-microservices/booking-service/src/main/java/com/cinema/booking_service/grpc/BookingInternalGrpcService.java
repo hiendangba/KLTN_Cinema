@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -137,6 +138,9 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                         .build());
                 responseObserver.onCompleted();
                 return;
+            }
+            if (booking.getReservedUntil() == null || !booking.getReservedUntil().isAfter(LocalDateTime.now())) {
+                throw new BusinessException(ErrorCode.BOOKING_EXPIRED);
             }
 
             BigDecimal expectedAmount = resolvePayableAmount(booking);
@@ -299,11 +303,13 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                     .map(code -> code == null ? "" : code.trim().toUpperCase(Locale.ROOT))
                     .filter(code -> !code.isBlank())
                     .toList();
+            LocalDateTime now = LocalDateTime.now();
 
-            Set<String> locked = bookingSeatItemRepository.findSeatCodesByShowtimeAndStatuses(
+            Set<String> locked = bookingSeatItemRepository.findActiveLockedSeatCodesByShowtimeAndStatuses(
                             showtimeId,
                             normalizedSeatCodes,
-                            EnumSet.of(BookingStatus.RESERVED, BookingStatus.PENDING))
+                            EnumSet.of(BookingStatus.RESERVED, BookingStatus.PENDING),
+                            now)
                     .stream()
                     .collect(Collectors.toSet());
             Set<String> booked = bookingSeatItemRepository.findSeatCodesByShowtimeAndStatuses(

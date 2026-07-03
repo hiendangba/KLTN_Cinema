@@ -112,6 +112,12 @@ public class PaymentTransaction {
     @Column(name = "promotion_discount_amount", precision = 12, scale = 2)
     private BigDecimal promotionDiscountAmount;
 
+    @Column(name = "loyalty_points_used")
+    private Long loyaltyPointsUsed;
+
+    @Column(name = "loyalty_points_earned")
+    private Long loyaltyPointsEarned;
+
     @Column(name = "webhook_event_key", length = 255)
     private String webhookEventKey;
 
@@ -131,6 +137,12 @@ public class PaymentTransaction {
         }
         if (status == null) {
             status = PaymentTransactionStatus.PENDING;
+        }
+        if (loyaltyPointsUsed == null) {
+            loyaltyPointsUsed = 0L;
+        }
+        if (loyaltyPointsEarned == null) {
+            loyaltyPointsEarned = 0L;
         }
         LocalDateTime now = LocalDateTime.now();
         timeCreated = now;

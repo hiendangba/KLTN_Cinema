@@ -17,6 +17,8 @@ service UserInternalService {
   rpc DeleteManagerProfile(DeleteProfileRequest) returns (cinema.common.v1.OperationReply);
   rpc DeleteStaffProfile(DeleteProfileRequest) returns (cinema.common.v1.OperationReply);
   rpc CheckUserExists(CheckUserExistsRequest) returns (CheckUserExistsReply);
+  rpc AddUserLoyaltyPoints(AdjustUserLoyaltyPointsRequest) returns (AdjustUserLoyaltyPointsReply);
+  rpc DeductUserLoyaltyPoints(AdjustUserLoyaltyPointsRequest) returns (AdjustUserLoyaltyPointsReply);
   rpc GetUserBasicById(GetUserBasicByIdRequest) returns (GetUserBasicByIdReply);
 }
 
@@ -81,9 +83,22 @@ message GetUserBasicByIdRequest {
   string user_id = 1;
 }
 
+message AdjustUserLoyaltyPointsRequest {
+  string user_id = 1;
+  int64 loyalty_points = 2;
+}
+
+message AdjustUserLoyaltyPointsReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  int64 loyalty_points = 4;
+}
+
 message UserBasicPayload {
   string id = 1;
   string name = 2;
+  int64 loyalty_points = 3;
 }
 
 message GetUserBasicByIdReply {

@@ -58,7 +58,7 @@ public class PaymentController extends BaseController {
     @PostMapping("/sessions")
     public ResponseEntity<APIResponse<ActionMessageResponse>> createSession(
             HttpServletRequest servletRequest,
-            @RequestBody CreatePaymentSessionRequest request) {
+            @Valid @RequestBody CreatePaymentSessionRequest request) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
         String requesterRole = RequestAuthUtils.requireRoleHeader(servletRequest);
         return created(SuccessMessage.PAYMENT_SESSION_CREATED,
@@ -153,7 +153,7 @@ public class PaymentController extends BaseController {
     @PostMapping("/promotions/preview")
     public ResponseEntity<APIResponse<PromotionPreviewResponse>> previewPromotion(
             HttpServletRequest servletRequest,
-            @RequestBody PromotionPreviewRequest request) {
+            @Valid @RequestBody PromotionPreviewRequest request) {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
         return ok(SuccessMessage.PROMOTION_PREVIEW_FETCHED,
                 paymentSessionService.previewPromotion(request, requesterUserId));

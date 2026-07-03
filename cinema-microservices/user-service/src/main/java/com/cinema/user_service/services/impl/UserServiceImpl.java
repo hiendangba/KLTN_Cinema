@@ -606,6 +606,16 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public long addLoyaltyPoints(UUID userId, long points) {
+        return adjustLoyaltyPoints(userId, points, true);
+    }
+
+    @Override
+    public long deductLoyaltyPoints(UUID userId, long points) {
+        return adjustLoyaltyPoints(userId, points, false);
+    }
+
+    @Override
     public UserExistenceResponse checkUserExists(UUID userId) {
         boolean exists = userRepository.existsByIdAndIsDeletedFalse(userId);
         return UserExistenceResponse.builder()
@@ -698,6 +708,46 @@ public class UserServiceImpl implements UserService {
         if (!Objects.equals(currentPhone, nextPhone) && userRepository.existsByPhone(nextPhone)) {
             throw new BusinessException(ErrorCode.PHONE_EXISTED);
         }
+    }
+
+    private long adjustLoyaltyPoints(UUID userId, long points, boolean isAddition) {
+        if (userId == null) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        if (points < 0) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        User user = userRepository.findByIdAndIsDeletedFalse(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        long currentPoints = user.getLoyaltyPoints() == null ? 0L : user.getLoyaltyPoints();
+        if (points == 0) {
+            return currentPoints;
+        }
+
+        long nextPoints;
+        try {
+            if (isAddition) {
+                nextPoints = Math.addExact(currentPoints, points);
+            } else {
+                if (currentPoints < points) {
+                    throw new BusinessException(ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
+                }
+                nextPoints = currentPoints - points;
+            }
+        } catch (ArithmeticException ex) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+
+        user.setLoyaltyPoints(nextPoints);
+        userRepository.save(user);
+        log.info("User loyalty points updated: userId={}, operation={}, delta={}, current={}, next={}",
+                userId,
+                isAddition ? "ADD" : "DEDUCT",
+                points,
+                currentPoints,
+                nextPoints);
+        return nextPoints;
     }
 
     private void softDelete(User user) {

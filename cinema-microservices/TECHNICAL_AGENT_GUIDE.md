@@ -16,6 +16,18 @@
 
 ## Changelog ngắn (2026-07-03)
 
+- `booking-service` đã chặn luôn confirm thanh toán nếu booking đã quá `reservedUntil`, kể cả khi scheduler chưa kịp đổi trạng thái sang `EXPIRED`.
+- Files chạm: `booking-service/src/main/java/com/cinema/booking_service/grpc/BookingInternalGrpcService.java`, `booking-service/src/test/java/com/cinema/booking_service/grpc/BookingInternalGrpcServiceTest.java`.
+- Reason: nếu chỉ mở ghế lại ở seat-map mà không chặn confirm payment thì có thể xảy ra race condition, khách thanh toán trễ vẫn bị nhận vé.
+- Verification: thêm test `confirmBookingPayment_shouldRejectWhenReservationExpired`, và vẫn giữ nhánh `getSeatRuntimeStates` trả `AVAILABLE` sau khi quá hạn để UI không bị kẹt ghế.
+- Remaining risk: scheduler vẫn cần chạy để dọn DB/Redis, nhưng nghiệp vụ thanh toán giờ đã có “gate” cuối cùng theo `reservedUntil`.
+
+- `booking-service` đã đổi nguồn sự thật của runtime seat state: `getSeatRuntimeStates` giờ chỉ coi booking `PENDING/RESERVED` là `LOCKED` khi `reservedUntil` هنوز còn hiệu lực, còn booking quá hạn sẽ trả `AVAILABLE` ngay mà không chờ scheduler quét.
+- Files chạm: `booking-service/src/main/java/com/cinema/booking_service/repository/BookingSeatItemRepository.java`, `booking-service/src/main/java/com/cinema/booking_service/grpc/BookingInternalGrpcService.java`, `booking-service/src/test/java/com/cinema/booking_service/grpc/BookingInternalGrpcServiceTest.java`.
+- Reason: `seat-map` đang đọc trạng thái ghế từ booking-service; nếu chỉ chờ job dọn hết hạn thì sơ đồ có thể giữ ghế cũ lâu hơn TTL Redis.
+- Verification: thêm test cho case booking đã hết `reservedUntil` nhưng vẫn còn `RESERVED` trong DB, đảm bảo API runtime seat trả `AVAILABLE`.
+- Remaining risk: scheduler vẫn cần giữ để dọn DB sang `EXPIRED` và release Redis, nhưng nó không còn là điều kiện để seat-map mở lại ghế.
+
 - `booking-service` đã tách lỗi “ghế đã được giữ / đã có người đặt” ra khỏi `BAD_REQUEST` chung bằng `ErrorCode.SEAT_ALREADY_LOCKED`, để FE hiển thị message rõ ràng hơn khi khách chọn trùng ghế.
 - Files chạm: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `booking-service/src/main/java/com/cinema/booking_service/services/impl/BookingServiceImpl.java`, `booking-service/src/test/java/com/cinema/booking_service/services/impl/BookingServiceImplTest.java`.
 - Reason: case ghế đang bị giữ là xung đột nghiệp vụ, không phải lỗi input chung; nếu trả `9005` thì người dùng chỉ thấy "Bad request" và không biết phải chọn ghế khác.
@@ -1387,7 +1399,7 @@ MAIL_PASSWORD=mat_khau_ung_dung_app_pass_cua_ban
 
 ---
 
-Cập nhật kỹ thuật gần nhất: 13/05/2026.
+Cập nhật kỹ thuật gần nhất: 03/07/2026.
 
 ### 2026-05-20 - Tối giản API hall
 - Trạng thái: Đã chấp nhận
@@ -2090,6 +2102,30 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - Verification cuối: `SeatSuggestionServiceImplTest` pass 13/13 sau khi khóa `seatCount=1` đi nhánh normal và giữ couple-first chỉ cho `seatCount>1`.
 - Case đã chốt trong test: `J7/J8` vẫn thắng ở layout 3 ghế, case `J1/J2` + `J13/J14` trả `I14`, và case 5 ghế với `J7-J10` couple trả `I9, J7, J8, J9, J10`.
 - Remaining risk: trọng số score đang khớp layout hiện tại; nếu hall khác có bố cục lệch mạnh thì có thể cần tune lại.
+- Thêm loyalty points v1 theo hướng balance ở `user-service`, snapshot ở `payment-service`:
+  - `user-service` thêm cột `loyalty_points`, expose trong `UserResponse` và `GetUserBasicById`, đồng thời có 2 RPC nội bộ `AddUserLoyaltyPoints` và `DeductUserLoyaltyPoints`
+  - `payment-service` thêm snapshot `loyaltyPointsUsed`/`loyaltyPointsEarned` vào `payment_transaction`, kiểm tra số dư trước khi cho áp điểm ở checkout/preview, và sync điểm sau khi payment confirm
+  - thêm `UserGrpcClient` cho payment-service để đọc balance và gọi gRPC cộng/trừ điểm
+- Files chạm thêm:
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\proto\user_internal.proto`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\java\com\cinema\exception\ErrorCode.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\user-service\src\main\java\com\cinema\user_service\entity\User.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\user-service\src\main\java\com\cinema\user_service\dto\response\UserResponse.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\user-service\src\main\java\com\cinema\user_service\mapper\UserMapper.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\user-service\src\main\java\com\cinema\user_service\services\UserService.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\user-service\src\main\java\com\cinema\user_service\services\impl\UserServiceImpl.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\user-service\src\main\java\com\cinema\user_service\grpc\UserInternalGrpcService.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\entity\PaymentTransaction.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\dto\request\CreatePaymentSessionRequest.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\dto\request\PromotionPreviewRequest.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\dto\response\PaymentSessionResponse.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\mapper\PaymentMapper.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\grpc\UserGrpcClient.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\services\impl\PaymentSessionServiceImpl.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\controller\PaymentController.java`
+- Verification:
+  - `user-service` test mới `UserServiceImplLoyaltyPointsTest` pass 3/3
+  - `payment-service` test `PaymentSessionServiceImplTest` pass 25/25 khi chạy reactor `-pl payment-service -am`
 - Normal mode đã được siết lại theo rule mới: ghế couple bị loại khỏi nhánh chuẩn nếu standard seats đã đủ, và chỉ mở rộng sang couple khi standard không đủ số lượng yêu cầu.
 - Verification mới nhất: `SeatSuggestionServiceImplTest` pass 14/14 sau khi thêm test `preferCoupleSeat=false` để khóa top 1 normal chỉ đi qua ghế standard khi còn đủ tiêu chuẩn.
 - VIP được nhập chung vào pool normal cùng STANDARD:

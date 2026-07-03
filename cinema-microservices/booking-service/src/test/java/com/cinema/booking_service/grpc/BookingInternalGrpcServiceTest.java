@@ -6,6 +6,8 @@ import com.cinema.booking_service.enums.PaymentStatus;
 import com.cinema.booking_service.repository.BookingRepository;
 import com.cinema.booking_service.repository.BookingSeatItemRepository;
 import com.cinema.booking_service.services.SeatLockService;
+import com.cinema.grpc.booking.GetSeatRuntimeStatesReply;
+import com.cinema.grpc.booking.GetSeatRuntimeStatesRequest;
 import com.cinema.grpc.booking.ConfirmBookingPaymentReply;
 import com.cinema.grpc.booking.ConfirmBookingPaymentRequest;
 import com.cinema.grpc.booking.UpsertBookingPromotionSnapshotReply;
@@ -17,8 +19,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -27,11 +33,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class BookingInternalGrpcServiceTest {
 
     @Mock
@@ -103,6 +111,32 @@ class BookingInternalGrpcServiceTest {
     }
 
     @Test
+    void confirmBookingPayment_shouldRejectWhenReservationExpired() {
+        UUID bookingId = UUID.randomUUID();
+        Booking booking = buildBooking(bookingId);
+        booking.setReservedUntil(LocalDateTime.now().minusMinutes(1));
+
+        when(bookingRepository.findLockedByIdAndIsDeletedFalse(bookingId)).thenReturn(Optional.of(booking));
+
+        CapturingObserver<ConfirmBookingPaymentReply> observer = new CapturingObserver<>();
+        grpcService.confirmBookingPayment(
+                ConfirmBookingPaymentRequest.newBuilder()
+                        .setBookingId(bookingId.toString())
+                        .setTransactionAmount("300000")
+                        .setPaymentMethod("MOMO_QR")
+                        .setProviderRef("provider-ref")
+                        .setOrderInvoiceNumber("PAY-002")
+                        .build(),
+                observer);
+
+        assertTrue(observer.completed);
+        assertFalse(observer.value.getSuccess());
+        assertEquals("BOOKING_EXPIRED", observer.value.getErrorKey());
+        verify(bookingRepository, never()).save(any());
+        verify(seatLockService, never()).releaseSeats(any(UUID.class), anyList());
+    }
+
+    @Test
     void upsertBookingPromotionSnapshot_shouldPersistPromoSnapshot() {
         UUID bookingId = UUID.randomUUID();
         UUID promotionId = UUID.randomUUID();
@@ -133,6 +167,41 @@ class BookingInternalGrpcServiceTest {
         verify(bookingRepository).save(booking);
     }
 
+    @Test
+    void getSeatRuntimeStates_shouldReturnAvailableWhenReservationExpired() {
+        UUID showtimeId = UUID.randomUUID();
+        Booking booking = buildBooking(UUID.randomUUID());
+        booking.setShowtimeId(showtimeId);
+        booking.setReservedUntil(LocalDateTime.now().minusMinutes(1));
+
+        when(bookingSeatItemRepository.findActiveLockedSeatCodesByShowtimeAndStatuses(
+                any(UUID.class),
+                anyList(),
+                anyList(),
+                any(LocalDateTime.class))).thenReturn(List.of());
+        when(bookingSeatItemRepository.findSeatCodesByShowtimeAndStatuses(
+                any(UUID.class),
+                anyList(),
+                anyList())).thenReturn(List.of());
+
+        CapturingObserver<GetSeatRuntimeStatesReply> observer = new CapturingObserver<>();
+        grpcService.getSeatRuntimeStates(
+                GetSeatRuntimeStatesRequest.newBuilder()
+                        .setShowtimeId(showtimeId.toString())
+                        .addSeatCodes("F7")
+                        .build(),
+                observer);
+
+        assertTrue(observer.completed);
+        assertTrue(observer.value.getSuccess());
+        assertEquals("AVAILABLE", observer.value.getSeatStatesList().get(0).getState());
+        verify(bookingSeatItemRepository).findActiveLockedSeatCodesByShowtimeAndStatuses(
+                eq(showtimeId),
+                eq(List.of("F7")),
+                eq(java.util.EnumSet.of(BookingStatus.RESERVED, BookingStatus.PENDING)),
+                any(LocalDateTime.class));
+    }
+
     private Booking buildBooking(UUID bookingId) {
         Booking booking = new Booking();
         booking.setId(bookingId);
@@ -144,6 +213,7 @@ class BookingInternalGrpcServiceTest {
         booking.setPromotionDiscountAmount(BigDecimal.ZERO);
         booking.setPayableAmount(BigDecimal.valueOf(300000));
         booking.setIsDeleted(false);
+        booking.setReservedUntil(LocalDateTime.now().plusMinutes(5));
         return booking;
     }
 
