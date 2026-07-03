@@ -255,7 +255,7 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
             List<SeatNode> singlePool = standardSingles.stream()
                     .filter(seat -> !usedSeatCodes.contains(seat.seatCode()))
                     .sorted(singleSeatComparator(chosenCoupleSeats, layout))
-                    .limit(Math.max(8, singlesNeeded * 6))
+                    .limit(Math.max(12, singlesNeeded * 8))
                     .toList();
 
             searchSingleSeatCombinations(
@@ -420,8 +420,16 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
 
     private Comparator<BlockCandidate> blockComparator(SeatGrpcClient.LayoutBundle layout,
                                                        boolean preferCoupleSeat) {
-        return Comparator.comparingInt((BlockCandidate block) -> preferCoupleSeat ? -block.couplePairCount() : 0)
-                .thenComparingDouble((BlockCandidate block) -> centerDistance(block.seats(), layout))
+        if (preferCoupleSeat) {
+            return Comparator.comparingInt((BlockCandidate block) -> -block.couplePairCount())
+                    .thenComparingInt(BlockCandidate::rowSpan)
+                    .thenComparing(Comparator.comparingDouble((BlockCandidate block) -> -screenDistance(block.seats(), layout)))
+                    .thenComparingInt((BlockCandidate block) -> -block.maxCol())
+                    .thenComparingInt(BlockCandidate::groupCount)
+                    .thenComparing(BlockCandidate::canonicalSeatCodes);
+        }
+
+        return Comparator.comparingDouble((BlockCandidate block) -> centerDistance(block.seats(), layout))
                 .thenComparing(Comparator.comparingDouble((BlockCandidate block) -> -screenDistance(block.seats(), layout)))
                 .thenComparingInt(BlockCandidate::groupCount)
                 .thenComparing(BlockCandidate::canonicalSeatCodes);
@@ -479,7 +487,9 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
         double centerDistance = centerDistance(orderedSeats, layout);
         double screenDistance = screenDistance(orderedSeats, layout);
         int groupCount = countGroups(orderedSeats);
-        int score = calculateScore(centerDistance, screenDistance, preferCoupleSeat, couplePairCount, exact, groupCount);
+        int score = preferCoupleSeat
+                ? calculateCoupleScore(orderedSeats, screenDistance, couplePairCount, exact, groupCount)
+                : calculateScore(centerDistance, screenDistance, preferCoupleSeat, couplePairCount, exact, groupCount);
 
         return SeatSuggestionCandidateResponse.builder()
                 .seatCodes(seatCodes)
@@ -498,9 +508,6 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
                                boolean exact,
                                int groupCount) {
         int score = 100_000;
-        if (preferCoupleSeat) {
-            score += couplePairCount * 60_000;
-        }
         score -= (int) Math.round(centerDistance * 10_000);
         score += (int) Math.round(screenDistance * 500);
         if (preferCoupleSeat && couplePairCount > 0) {
@@ -510,6 +517,28 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
             score += 10_000;
         }
         score -= Math.max(0, groupCount - 1) * 2_500;
+        return score;
+    }
+
+    private int calculateCoupleScore(List<SeatNode> seats,
+                                     double screenDistance,
+                                     int couplePairCount,
+                                     boolean exact,
+                                     int groupCount) {
+        int score = 0;
+        if (couplePairCount > 0) {
+            score += couplePairCount * 1_000_000;
+        } else {
+            score -= 1_000_000;
+        }
+        score += rightEdge(seats) * 100;
+        score += rightEdgeOfSingles(seats) * 50;
+        score += (int) Math.round(screenDistance * 250);
+        score -= coupleFallbackPenalty(seats);
+        score -= Math.max(0, coupleGroupCount(seats) - 1) * 100_000;
+        if (couplePairCount > 0) {
+            score += 5_000;
+        }
         return score;
     }
 
@@ -639,22 +668,122 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
 
     private Comparator<SeatNode> singleSeatComparator(List<SeatNode> chosenCoupleSeats,
                                                       SeatGrpcClient.LayoutBundle layout) {
+        if (chosenCoupleSeats == null || chosenCoupleSeats.isEmpty()) {
+            return Comparator.comparingDouble((SeatNode seat) -> -screenDistance(List.of(seat), layout))
+                    .thenComparing(Comparator.comparingInt(SeatNode::col).reversed())
+                    .thenComparing(SeatNode::seatCode);
+        }
+
         return Comparator.comparingDouble((SeatNode seat) -> distanceToChosenCouples(seat, chosenCoupleSeats))
-                .thenComparingDouble(seat -> centerDistance(List.of(seat), layout))
                 .thenComparing(Comparator.comparingDouble((SeatNode seat) -> -screenDistance(List.of(seat), layout)))
+                .thenComparing(Comparator.comparingInt(SeatNode::col).reversed())
                 .thenComparing(SeatNode::seatCode);
     }
 
     private double distanceToChosenCouples(SeatNode seat, List<SeatNode> chosenCoupleSeats) {
         if (chosenCoupleSeats == null || chosenCoupleSeats.isEmpty()) {
-            return 0.0;
+            return Double.MAX_VALUE;
         }
-        double minDistance = Double.MAX_VALUE;
-        for (SeatNode chosen : chosenCoupleSeats) {
-            double distance = Math.abs(seat.row() - chosen.row()) + Math.abs(seat.col() - chosen.col());
-            minDistance = Math.min(minDistance, distance);
+        if (coupleGroupCount(chosenCoupleSeats) > 1) {
+            SeatNode anchorSeat = chosenCoupleSeats.stream()
+                    .max(Comparator.comparingInt(SeatNode::row).thenComparingInt(SeatNode::col))
+                    .orElse(null);
+            if (anchorSeat == null) {
+                return Double.MAX_VALUE;
+            }
+            return Math.abs(seat.row() - anchorSeat.row()) * 10.0
+                    + Math.abs(seat.col() - anchorSeat.col());
         }
-        return minDistance;
+        double centerRow = chosenCoupleSeats.stream()
+                .mapToInt(SeatNode::row)
+                .average()
+                .orElse(Double.NaN);
+        double centerCol = chosenCoupleSeats.stream()
+                .mapToInt(SeatNode::col)
+                .average()
+                .orElse(Double.NaN);
+        if (Double.isNaN(centerRow) || Double.isNaN(centerCol)) {
+            return Double.MAX_VALUE;
+        }
+        return Math.abs(seat.row() - centerRow) + Math.abs(seat.col() - centerCol);
+    }
+
+    private int coupleFallbackPenalty(List<SeatNode> seats) {
+        if (seats == null || seats.isEmpty()) {
+            return 0;
+        }
+        List<SeatNode> coupleSeats = seats.stream()
+                .filter(this::isCoupleSeat)
+                .toList();
+        if (coupleSeats.isEmpty()) {
+            return 0;
+        }
+
+        double penalty = 0.0;
+        for (SeatNode seat : seats) {
+            if (isCoupleSeat(seat)) {
+                continue;
+            }
+            penalty += distanceToChosenCouples(seat, coupleSeats);
+        }
+        return (int) Math.round(penalty * 10_000);
+    }
+
+    private int rightEdge(List<SeatNode> seats) {
+        if (seats == null || seats.isEmpty()) {
+            return 0;
+        }
+        return seats.stream()
+                .mapToInt(SeatNode::col)
+                .max()
+                .orElse(0);
+    }
+
+    private int rightEdgeOfSingles(List<SeatNode> seats) {
+        if (seats == null || seats.isEmpty()) {
+            return 0;
+        }
+        return seats.stream()
+                .filter(seat -> !isCoupleSeat(seat))
+                .mapToInt(SeatNode::col)
+                .max()
+                .orElse(0);
+    }
+
+    private int rowSpread(List<SeatNode> seats) {
+        if (seats == null || seats.isEmpty()) {
+            return 0;
+        }
+        int minRow = Integer.MAX_VALUE;
+        int maxRow = Integer.MIN_VALUE;
+        for (SeatNode seat : seats) {
+            minRow = Math.min(minRow, seat.row());
+            maxRow = Math.max(maxRow, seat.row());
+        }
+        return maxRow - minRow;
+    }
+
+    private int coupleGroupCount(List<SeatNode> seats) {
+        if (seats == null || seats.isEmpty()) {
+            return 0;
+        }
+        List<SeatNode> coupleSeats = seats.stream()
+                .filter(this::isCoupleSeat)
+                .sorted(Comparator.comparingInt(SeatNode::row).thenComparingInt(SeatNode::col))
+                .toList();
+        if (coupleSeats.isEmpty()) {
+            return 0;
+        }
+
+        int groups = 1;
+        for (int index = 1; index < coupleSeats.size(); index++) {
+            SeatNode previous = coupleSeats.get(index - 1);
+            SeatNode current = coupleSeats.get(index);
+            if (previous.row() != current.row() || current.col() != previous.col() + 1) {
+                groups++;
+            }
+        }
+        return groups;
     }
 
     private boolean isCoupleSeat(SeatNode seat) {
@@ -790,6 +919,22 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
                     .map(SeatNode::seatCode)
                     .sorted()
                     .collect(Collectors.joining(","));
+        }
+
+        int rowSpan() {
+            if (seats.isEmpty()) {
+                return 0;
+            }
+            int minRow = seats.stream().mapToInt(SeatNode::row).min().orElse(0);
+            int maxRow = seats.stream().mapToInt(SeatNode::row).max().orElse(0);
+            return maxRow - minRow;
+        }
+
+        int maxCol() {
+            return seats.stream()
+                    .mapToInt(SeatNode::col)
+                    .max()
+                    .orElse(0);
         }
     }
 }

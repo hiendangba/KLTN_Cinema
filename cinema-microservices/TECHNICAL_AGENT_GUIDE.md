@@ -2042,5 +2042,31 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
 - Remaining risk:
   - nếu backend/permission model sau này thêm role mới, cần quyết định xem role đó có được nhập chung vào orchestration showtime này hay không.
 
+## Changelog ngắn (2026-07-03)
+
+- Điều chỉnh luồng gợi ý ghế trong `showtime-service` theo nghiệp vụ couple-first:
+  - khi `preferCoupleSeat=true`, score không còn dùng `centerDistance` để kéo candidate lên giữa layout
+  - single fallback được ưu tiên theo khoảng cách tới cụm couple thật sự, nên ghế lẻ sẽ rơi sang seat gần block couple nhất thay vì cố bám cùng hàng
+  - `singlePool` được nới rộng để không loại sớm các ghế đúng hướng nghiệp vụ
+- Mục tiêu: với layout có nhiều ghế như hình test thực tế, API `seat-suggestions` ưu tiên candidate bám cùng hàng couple và fallback sang phải trước khi rơi sang hàng khác.
+- Files đã cập nhật:
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\showtime-service\src\main\java\com\cinema\showtime_service\services\impl\SeatSuggestionServiceImpl.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\showtime-service\src\test\java\com\cinema\showtime_service\services\impl\SeatSuggestionServiceImplTest.java`
+- Verification: `SeatSuggestionServiceImplTest` pass; case 5 ghế với layout có `J7-J10` couple và `I8/I9` standard giờ trả candidate top `I9, J7, J8, J9, J10` theo order sort hiện tại của service.
+- Remaining risk: heuristic đang ưu tiên ghế gần cụm couple hơn, nên nếu từng rạp muốn nhấn mạnh thêm “hàng trên” hay “bên phải” thì vẫn có thể cần tune lại trọng số.
+- Bổ sung test giữ rule mới: khi có 2 cụm couple ở 2 đầu, ghế lẻ phải bám về cụm couple bên phải nhất thay vì nhảy sang cụm bên trái.
+- Files chạm thêm: `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\showtime-service\src\test\java\com\cinema\showtime_service\services\impl\SeatSuggestionServiceImplTest.java`.
+- Verification: `SeatSuggestionServiceImplTest` pass 12/12 sau khi thêm case `J1/J2` + `J13/J14`; rule giữ đúng là ghế lẻ bám cụm couple bên phải nhất.
+- Remaining risk: nếu FE đổi cách render seat list, thứ tự row/col vẫn sẽ khiến ghế lẻ lên đầu response; contract hiện tại chưa đổi sort output.
+- Update test expectation cho tie-break cùng khoảng cách: case `J1/J2` + `J13/J14` giờ expect `I14` thay vì `I13`.
+- Verification pending: chạy lại `SeatSuggestionServiceImplTest` sau khi chỉnh expectation.
+- Remaining risk: production code không đổi, nên nếu sau này muốn preserve selection order thay vì sort row/col thì cần một thay đổi riêng ở response formatter.
+- `showtime-service` đã siết lại fallback của ghế lẻ trong `preferCoupleSeat=true`:
+  - nếu chỉ có 1 cụm couple thì seat lẻ bám quanh trung tâm cụm đó
+  - nếu có nhiều cụm couple thì seat lẻ bám cụm couple bên phải nhất trước, tie cùng khoảng cách thì seat bên phải thắng
+- Files chạm thêm: `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\showtime-service\src\main\java\com\cinema\showtime_service\services\impl\SeatSuggestionServiceImpl.java`
+- Verification: `SeatSuggestionServiceImplTest` pass 12/12 sau khi đổi tie-break `J1/J2` + `J13/J14` sang `I14`.
+- Remaining risk: rule hiện tại vẫn dựa trên heuristic distance; nếu layout thực tế của rạp có mô hình ghế đặc biệt thì có thể cần tune lại trọng số.
+
 
 
