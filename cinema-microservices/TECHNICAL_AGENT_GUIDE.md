@@ -2107,6 +2107,7 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
   - `payment-service` thêm snapshot `loyaltyPointsUsed`/`loyaltyPointsEarned` vào `payment_transaction`, kiểm tra số dư trước khi cho áp điểm ở checkout/preview, và sync điểm sau khi payment confirm
   - báo cáo doanh thu cinema trong `payment-service` tách thêm cột `loyaltyPointsDiscountAmount` để tổng hợp số tiền giảm từ điểm, đồng thời export Excel có thêm cột `Tiền giảm từ điểm`
   - thêm `UserGrpcClient` cho payment-service để đọc balance và gọi gRPC cộng/trừ điểm
+  - cập nhật rule update profile ở `user-service` không đụng tới `loyalty_points`; điểm chỉ thay đổi qua flow cộng/trừ nội bộ và test regression đã khóa hành vi này
 - Files chạm thêm:
   - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\proto\user_internal.proto`
   - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\java\com\cinema\exception\ErrorCode.java`

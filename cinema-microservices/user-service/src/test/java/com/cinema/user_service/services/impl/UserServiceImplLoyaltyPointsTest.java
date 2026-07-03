@@ -1,6 +1,7 @@
 package com.cinema.user_service.services.impl;
 
 import com.cinema.Enum.UserEnum;
+import com.cinema.user_service.dto.request.UpdateCustomerRequest;
 import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.entity.User;
 import com.cinema.user_service.grpc.CinemaGrpcClient;
@@ -96,6 +97,22 @@ class UserServiceImplLoyaltyPointsTest {
 
         assertThat(exception.getErrorCode()).isEqualTo(com.cinema.exception.ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
         verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateUserCustomer_shouldKeepLoyaltyPointsUnchanged() {
+        User user = buildUser(UUID.randomUUID(), 2500L);
+        UpdateCustomerRequest request = UpdateCustomerRequest.builder()
+                .name("Customer Updated")
+                .email("customer.updated@example.com")
+                .dob(LocalDate.of(1991, 2, 2))
+                .gender(UserEnum.Gender.FEMALE)
+                .phone("0911111111")
+                .build();
+
+        userMapper.updateUserCustomer(user, request);
+
+        assertThat(user.getLoyaltyPoints()).isEqualTo(2500L);
     }
 
     private User buildUser(UUID id, long loyaltyPoints) {
