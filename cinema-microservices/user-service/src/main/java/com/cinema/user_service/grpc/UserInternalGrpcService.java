@@ -23,7 +23,6 @@ import com.cinema.user_service.dto.request.RegisterStaffRequest;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.services.UserService;
-import io.grpc.BindableService;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,8 +34,7 @@ import java.util.UUID;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInternalServiceImplBase
-        implements BindableService {
+public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInternalServiceImplBase {
 
     private final UserService userService;
 
@@ -223,7 +221,7 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
 
     @Override
     public void getUserBasicById(GetUserBasicByIdRequest request,
-                                 StreamObserver<GetUserBasicByIdReply> responseObserver) {
+            StreamObserver<GetUserBasicByIdReply> responseObserver) {
         try {
             UserResponse user = userService.getUserById(UUID.fromString(request.getUserId()));
             responseObserver.onNext(GetUserBasicByIdReply.newBuilder()
@@ -273,7 +271,8 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                     : userService.deductLoyaltyPoints(userId, loyaltyPoints);
             responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
                     .setSuccess(true)
-                    .setMessage(isAddition ? "Loyalty points added successfully" : "Loyalty points deducted successfully")
+                    .setMessage(
+                            isAddition ? "Loyalty points added successfully" : "Loyalty points deducted successfully")
                     .setLoyaltyPoints(nextPoints)
                     .build());
             responseObserver.onCompleted();

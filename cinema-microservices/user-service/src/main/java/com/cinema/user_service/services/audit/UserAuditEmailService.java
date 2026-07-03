@@ -3,9 +3,7 @@ package com.cinema.user_service.services.audit;
 import com.cinema.dto.request.SendEmailRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.HtmlUtils;
-
 import java.util.List;
-import java.util.StringJoiner;
 
 @Service
 public class UserAuditEmailService {
