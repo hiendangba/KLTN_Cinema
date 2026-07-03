@@ -9,5 +9,6 @@ import java.util.UUID;
 public class PromotionPreviewRequest {
     private UUID bookingId;
     private BigDecimal orderAmount;
+    private UUID promotionId;
     private String promotionCode;
 }

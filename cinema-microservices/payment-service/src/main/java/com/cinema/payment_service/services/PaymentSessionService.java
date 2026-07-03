@@ -8,6 +8,7 @@ import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
 import com.cinema.payment_service.dto.request.RefundPaymentRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.payment_service.dto.response.FilmRevenueReportResponse;
+import com.cinema.payment_service.dto.response.PromotionSelectionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
@@ -44,6 +45,8 @@ public interface PaymentSessionService {
     byte[] exportFilmRevenueReport(FilmRevenueReportRequest request, HttpServletRequest httpRequest);
 
     PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId);
+
+    PromotionSelectionResponse listSelectablePromotions(UUID bookingId, UUID requesterUserId);
 
     WebhookProcessingResult handleMomoReturn(MomoIpnRequest request);
 

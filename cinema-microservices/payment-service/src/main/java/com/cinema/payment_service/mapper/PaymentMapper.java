@@ -1,6 +1,8 @@
 package com.cinema.payment_service.mapper;
 
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
+import com.cinema.payment_service.dto.response.PromotionSelectionItemResponse;
+import com.cinema.payment_service.dto.response.PromotionSelectionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PromotionResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
@@ -47,11 +49,50 @@ public interface PaymentMapper {
             String qrCodeUrl);
 
     @Mapping(target = "promotionCode", source = "quote.promotionCode")
+    @Mapping(target = "promotionId", source = "quote.promotionId")
+    @Mapping(target = "promotionName", source = "quote.promotionName")
     @Mapping(target = "discountAmount", source = "quote.discountAmount", qualifiedByName = "normalizeAmount")
     @Mapping(target = "note", source = "quote.note")
     @Mapping(target = "originalAmount", source = "originalAmount", qualifiedByName = "normalizeAmount")
     @Mapping(target = "finalAmount", expression = "java(normalizeAmount(originalAmount).subtract(normalizeAmount(quote.discountAmount())))")
     PromotionPreviewResponse toPromotionPreviewResponse(PromotionQuote quote, BigDecimal originalAmount);
+
+    default PromotionSelectionItemResponse toPromotionSelectionItemResponse(PromotionQuote quote,
+                                                                            boolean applicable,
+                                                                            BigDecimal originalAmount) {
+        if (quote == null) {
+            return PromotionSelectionItemResponse.builder()
+                    .promotionId(null)
+                    .promotionCode("")
+                    .promotionName("")
+                    .discountAmount(normalizeAmount(BigDecimal.ZERO))
+                    .finalAmount(normalizeAmount(originalAmount))
+                    .applicable(false)
+                    .note("")
+                    .build();
+        }
+        BigDecimal normalizedOriginalAmount = normalizeAmount(originalAmount);
+        BigDecimal discountAmount = normalizeAmount(quote.discountAmount());
+        return PromotionSelectionItemResponse.builder()
+                .promotionId(quote.promotionId())
+                .promotionCode(quote.promotionCode())
+                .promotionName(quote.promotionName())
+                .discountAmount(discountAmount)
+                .finalAmount(normalizedOriginalAmount.subtract(discountAmount))
+                .applicable(applicable)
+                .note(quote.note())
+                .build();
+    }
+
+    default PromotionSelectionResponse toPromotionSelectionResponse(UUID bookingId,
+                                                                    BigDecimal originalAmount,
+                                                                    List<PromotionSelectionItemResponse> promotions) {
+        return PromotionSelectionResponse.builder()
+                .bookingId(bookingId)
+                .originalAmount(normalizeAmount(originalAmount))
+                .promotions(promotions == null ? List.of() : promotions)
+                .build();
+    }
 
     default List<UUID> normalizeUuidList(Collection<UUID> values) {
         if (values == null || values.isEmpty()) {

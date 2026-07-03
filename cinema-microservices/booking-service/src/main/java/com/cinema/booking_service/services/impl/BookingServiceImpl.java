@@ -163,7 +163,7 @@ public class BookingServiceImpl implements BookingService {
                 request.getShowtimeId(),
                 normalizedSeatCodes,
                 EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED))) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.SEAT_ALREADY_LOCKED);
         }
 
         Booking booking = bookingMapper.toEntity(request);
@@ -208,7 +208,7 @@ public class BookingServiceImpl implements BookingService {
         Duration ttl = Duration.ofMinutes(seatLockMinutes);
         boolean locked = seatLockService.tryLockSeats(request.getShowtimeId(), normalizedSeatCodes, booking.getId(), ttl);
         if (!locked) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.SEAT_ALREADY_LOCKED);
         }
 
         try {

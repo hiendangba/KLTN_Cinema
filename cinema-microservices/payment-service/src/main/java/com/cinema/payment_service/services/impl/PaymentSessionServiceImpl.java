@@ -20,6 +20,7 @@ import com.cinema.payment_service.dto.response.FilmRevenueItemResponse;
 import com.cinema.payment_service.dto.response.FilmRevenueReportResponse;
 import com.cinema.payment_service.dto.response.FilmRevenueSummaryResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
+import com.cinema.payment_service.dto.response.PromotionSelectionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.DateRange;
@@ -29,6 +30,7 @@ import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.PageResponse;
 import com.cinema.excel.ExcelExportUtils;
 import com.cinema.payment_service.entity.PaymentTransaction;
+import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.entity.PaymentTransactionPromotion;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
@@ -38,6 +40,7 @@ import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
+import com.cinema.payment_service.repository.PromotionRepository;
 import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
@@ -85,6 +88,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final CinemaGrpcClient cinemaGrpcClient;
     private final FilmGrpcClient filmGrpcClient;
     private final PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
+    private final PromotionRepository promotionRepository;
     private final MomoGatewayProperties momoGatewayProperties;
     private final MomoPaymentGatewayClient momoPaymentGatewayClient;
     private final PromotionEngine promotionEngine;
@@ -102,6 +106,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         UUID bookingId = request.getBookingId();
         String requestedPromotionCode = normalizePromotionCode(request.getPromotionCode());
+        UUID requestedPromotionId = request.getPromotionId();
         BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
         ensureRequesterCanCreateSessionForBooking(requesterUserId, requesterRole, bookingContext);
         ensureBookable(bookingContext);
@@ -121,7 +126,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             if (requiresTransactionOwnershipCheck(requesterRole)) {
                 ensureRequesterOwnsTransaction(latest, requesterUserId);
             }
-            if (isReusable(latest, bookingContext) && canReuseLatestTransaction(latest, requestedPromotionCode)) {
+            if (isReusable(latest, bookingContext)
+                    && canReuseLatestTransaction(latest, requestedPromotionId, requestedPromotionCode)) {
                 syncBookingPromotionSnapshot(bookingContext, latest, null);
                 return ActionMessageResponse.builder()
                         .message(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage())
@@ -146,6 +152,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         List<PromotionQuote> appliedPromotions = applyPromotionIfNeeded(
                 transaction,
+                requestedPromotionId,
                 requestedPromotionCode,
                 bookingContext,
                 requesterUserId);
@@ -518,6 +525,17 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     @Transactional(readOnly = true)
     public PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId) {
         return promotionEngine.previewPromotion(request, requesterUserId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PromotionSelectionResponse listSelectablePromotions(UUID bookingId, UUID requesterUserId) {
+        if (bookingId == null || requesterUserId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
+        ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
+        return promotionEngine.listSelectablePromotions(bookingId, requesterUserId);
     }
 
     @Override
@@ -951,19 +969,41 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 && bookingContext.reservedUntil().isAfter(LocalDateTime.now());
     }
 
-    private boolean canReuseLatestTransaction(PaymentTransaction latest, String requestedPromotionCode) {
+    private boolean canReuseLatestTransaction(PaymentTransaction latest,
+                                              UUID requestedPromotionId,
+                                              String requestedPromotionCode) {
         String latestPromotionCode = normalizePromotionCode(latest.getPromotionCode());
-        if (!StringUtils.hasText(requestedPromotionCode)) {
+        String normalizedRequestedPromotionCode = normalizePromotionCode(requestedPromotionCode);
+        if (requestedPromotionId != null) {
+            UUID latestPromotionId = paymentTransactionPromotionRepository
+                    .findAllByPaymentTransactionIdOrderByApplyOrderAsc(latest.getId())
+                    .stream()
+                    .map(PaymentTransactionPromotion::getPromotionId)
+                    .filter(java.util.Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+            if (latestPromotionId != null) {
+                return requestedPromotionId.equals(latestPromotionId);
+            }
+            return promotionRepository.findById(requestedPromotionId)
+                    .filter(promotion -> !Boolean.TRUE.equals(promotion.getIsDeleted()))
+                    .map(Promotion::getCode)
+                    .map(this::normalizePromotionCode)
+                    .map(latestPromotionCode::equals)
+                    .orElse(false);
+        }
+        if (!StringUtils.hasText(normalizedRequestedPromotionCode)) {
             return true;
         }
-        return requestedPromotionCode.equals(latestPromotionCode);
+        return normalizedRequestedPromotionCode.equals(latestPromotionCode);
     }
 
     private List<PromotionQuote> applyPromotionIfNeeded(PaymentTransaction transaction,
+                                                        UUID requestedPromotionId,
                                                         String requestedPromotionCode,
                                                         BookingGrpcClient.BookingPaymentContext bookingContext,
                                                         UUID requesterUserId) {
-        if (!StringUtils.hasText(requestedPromotionCode)) {
+        if (requestedPromotionId == null && !StringUtils.hasText(requestedPromotionCode)) {
             transaction.setPromotionCode(null);
             transaction.setPromotionName(null);
             transaction.setPromotionDiscountAmount(ZERO);
@@ -972,6 +1012,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         BigDecimal baseAmount = normalizeAmount(bookingContext.finalAmount());
         PromotionQuote quote = promotionEngine.resolvePromotionForCheckout(
+                requestedPromotionId,
                 requestedPromotionCode,
                 baseAmount,
                 bookingContext,

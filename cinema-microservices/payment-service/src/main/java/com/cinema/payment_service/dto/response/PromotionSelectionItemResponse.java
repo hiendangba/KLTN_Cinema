@@ -6,12 +6,12 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Builder
-public record PromotionPreviewResponse(
+public record PromotionSelectionItemResponse(
         UUID promotionId,
         String promotionCode,
         String promotionName,
-        BigDecimal originalAmount,
         BigDecimal discountAmount,
         BigDecimal finalAmount,
+        boolean applicable,
         String note) {
 }

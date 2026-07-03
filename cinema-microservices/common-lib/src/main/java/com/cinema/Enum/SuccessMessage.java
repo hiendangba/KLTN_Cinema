@@ -56,6 +56,7 @@ public enum SuccessMessage {
     PROMOTION_DELETED("Xóa khuyến mãi thành công"),
     PROMOTION_FETCHED("Lấy khuyến mãi thành công"),
     PROMOTIONS_SEARCHED("Tìm kiếm khuyến mãi thành công"),
+    PROMOTION_OPTIONS_FETCHED("Lấy danh sách khuyến mãi khả dụng thành công"),
     PRICING_POLICY_CREATED("Tạo chính sách giá thành công"),
     PRICING_POLICY_UPDATED("Cập nhật chính sách giá thành công"),
     PRICING_POLICY_DELETED("Xóa chính sách giá thành công"),

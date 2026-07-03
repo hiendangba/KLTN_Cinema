@@ -14,11 +14,16 @@ import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
+import com.cinema.payment_service.entity.PaymentTransactionPromotion;
+import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.enums.PaymentTransactionStatus;
+import com.cinema.payment_service.enums.PromotionDiscountType;
+import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.grpc.FilmGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
+import com.cinema.payment_service.repository.PromotionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
@@ -79,6 +84,9 @@ class PaymentSessionServiceImplTest {
 
     @Mock
     private PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
+
+    @Mock
+    private PromotionRepository promotionRepository;
 
     @Mock
     private BookingGrpcClient bookingGrpcClient;
@@ -205,10 +213,11 @@ class PaymentSessionServiceImplTest {
         stubSuccessfulCheckout();
         UUID promotionId = UUID.randomUUID();
         when(promotionEngine.resolvePromotionForCheckout(
-                "CINEMASTAR10",
-                BigDecimal.valueOf(180000),
-                bookingContext,
-                userId))
+                isNull(),
+                eq("CINEMASTAR10"),
+                eq(BigDecimal.valueOf(180000)),
+                eq(bookingContext),
+                eq(userId)))
                 .thenReturn(new PromotionQuote(
                         "CINEMASTAR10",
                         "CinemaStar 10%",
@@ -245,6 +254,106 @@ class PaymentSessionServiceImplTest {
                 "CinemaStar 10%",
                 BigDecimal.valueOf(18000).setScale(0),
                 BigDecimal.valueOf(162000).setScale(0));
+    }
+
+    @Test
+    void createSession_shouldApplyPromotionSnapshotWhenPromotionIdIsProvided() {
+        UUID bookingId = UUID.randomUUID();
+        UUID showtimeId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID promotionId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = new BookingGrpcClient.BookingPaymentContext(
+                bookingId,
+                showtimeId,
+                cinemaId,
+                filmId,
+                userId,
+                BigDecimal.valueOf(180000),
+                LocalDateTime.now().plusMinutes(30),
+                "PENDING",
+                "UNPAID",
+                BigDecimal.valueOf(150000),
+                BigDecimal.valueOf(30000),
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(180000));
+
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.empty());
+        stubSuccessfulCheckout();
+        when(promotionEngine.resolvePromotionForCheckout(
+                eq(promotionId),
+                eq(""),
+                eq(BigDecimal.valueOf(180000)),
+                eq(bookingContext),
+                eq(userId)))
+                .thenReturn(new PromotionQuote(
+                        "CINEMASTAR10",
+                        "CinemaStar 10%",
+                        BigDecimal.valueOf(18000),
+                        "Applied 10% discount",
+                        promotionId));
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+        request.setPromotionId(promotionId);
+
+        ActionMessageResponse response = paymentSessionService.createSession(request, userId, HeaderNames.ROLE_CUSTOMER);
+
+        ArgumentCaptor<PaymentTransaction> transactionCaptor = ArgumentCaptor.forClass(PaymentTransaction.class);
+        verify(paymentTransactionRepository).save(transactionCaptor.capture());
+        verify(paymentTransactionRepository).saveAndFlush(any(PaymentTransaction.class));
+        PaymentTransaction saved = transactionCaptor.getValue();
+        assertNotNull(response);
+        assertEquals("CINEMASTAR10", saved.getPromotionCode());
+        assertEquals(BigDecimal.valueOf(18000), saved.getPromotionDiscountAmount());
+        verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
+                bookingId,
+                promotionId,
+                "CINEMASTAR10",
+                "CinemaStar 10%",
+                BigDecimal.valueOf(18000).setScale(0),
+                BigDecimal.valueOf(162000).setScale(0));
+    }
+
+    @Test
+    void createSession_shouldReuseLatestTransactionByPromotionIdSnapshotEvenWhenCodeChanges() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = ownerId;
+        UUID promotionId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = buildBookingContext(
+                bookingId,
+                cinemaId,
+                ownerId,
+                "PENDING",
+                "UNPAID");
+        PaymentTransaction latest = buildReusableTransaction(bookingId, ownerId);
+
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(latest));
+        when(paymentTransactionPromotionRepository.findAllByPaymentTransactionIdOrderByApplyOrderAsc(latest.getId()))
+                .thenReturn(List.of(buildTransactionPromotion(latest.getId(), promotionId, "OLD-CODE")));
+
+        CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
+        request.setBookingId(bookingId);
+        request.setPromotionId(promotionId);
+
+        ActionMessageResponse response = paymentSessionService.createSession(request, requesterId, HeaderNames.ROLE_CUSTOMER);
+
+        assertNotNull(response);
+        assertEquals(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage(), response.getMessage());
+        verify(paymentTransactionRepository, times(0)).saveAndFlush(any(PaymentTransaction.class));
+        verifyNoInteractions(momoPaymentGatewayClient, promotionEngine);
     }
 
     @Test
@@ -1146,5 +1255,30 @@ class PaymentSessionServiceImplTest {
         transaction.setExpiresAt(LocalDateTime.now().plusMinutes(15));
         transaction.setCheckoutPayloadJson("{}");
         return transaction;
+    }
+
+    private Promotion buildPromotion(UUID promotionId, String code) {
+        Promotion promotion = new Promotion();
+        promotion.setId(promotionId);
+        promotion.setCode(code);
+        promotion.setName("CinemaStar 10%");
+        promotion.setDiscountType(PromotionDiscountType.PERCENT);
+        promotion.setDiscountValue(BigDecimal.TEN);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setIsDeleted(false);
+        return promotion;
+    }
+
+    private PaymentTransactionPromotion buildTransactionPromotion(UUID paymentTransactionId,
+                                                                   UUID promotionId,
+                                                                   String promotionCode) {
+        PaymentTransactionPromotion snapshot = new PaymentTransactionPromotion();
+        snapshot.setPaymentTransactionId(paymentTransactionId);
+        snapshot.setPromotionId(promotionId);
+        snapshot.setPromotionCode(promotionCode);
+        snapshot.setPromotionName("CinemaStar 10%");
+        snapshot.setDiscountAmount(BigDecimal.valueOf(18000).setScale(0));
+        snapshot.setApplyOrder(1);
+        return snapshot;
     }
 }

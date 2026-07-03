@@ -75,6 +75,9 @@ public enum ErrorCode {
         HALL_LAYOUT_IN_USE("4308", "Phòng chiếu đang có suất chiếu được đặt vé, không thể sửa sơ đồ ghế",
                         HttpStatus.CONFLICT),
         HALL_IMAGE_URL_ALREADY_EXISTS("4309", "URL hình ảnh đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
+        SEAT_ALREADY_LOCKED("4400", "Ghế bạn chọn đã được giữ hoặc đã có người đặt. Vui lòng chọn ghế khác.",
+                        HttpStatus.CONFLICT),
+
 
         EMAIL_SEND_FAILED("9100", "Gửi email thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
         FILM_SERVICE_ERROR("9101", "Lỗi khi gọi Film Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),

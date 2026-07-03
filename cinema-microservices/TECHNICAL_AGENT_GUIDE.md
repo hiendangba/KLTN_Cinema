@@ -14,6 +14,28 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-07-03)
+
+- `booking-service` đã tách lỗi “ghế đã được giữ / đã có người đặt” ra khỏi `BAD_REQUEST` chung bằng `ErrorCode.SEAT_ALREADY_LOCKED`, để FE hiển thị message rõ ràng hơn khi khách chọn trùng ghế.
+- Files chạm: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `booking-service/src/main/java/com/cinema/booking_service/services/impl/BookingServiceImpl.java`, `booking-service/src/test/java/com/cinema/booking_service/services/impl/BookingServiceImplTest.java`.
+- Reason: case ghế đang bị giữ là xung đột nghiệp vụ, không phải lỗi input chung; nếu trả `9005` thì người dùng chỉ thấy "Bad request" và không biết phải chọn ghế khác.
+- Verification: logic đã đổi và test mới được thêm, nhưng full `booking-service` build hiện đang bị chặn bởi lỗi generated mapper có sẵn trong module (`BookingSeatItemMapperImpl.java` trong `target/generated-sources`), nên chưa chốt được green run ở module này trong phiên hiện tại.
+- Remaining risk: cần dọn/xử lý lỗi mapper sinh code ở `booking-service` trước khi có thể xác nhận test đầy đủ; bản thân nhánh đổi message cho ghế đã rõ ràng hơn và không ảnh hưởng các case `BAD_REQUEST` khác.
+
+- `payment-service` đã thêm cache TTL 15 giây cho `GET /api/payments/bookings/{bookingId}/promotions` ngay trong `PromotionEngine`, dùng key theo `bookingId + requesterUserId` để FE mở lại danh sách nhiều lần không phải gọi lại gRPC và không phải duyệt lại toàn bộ promotion list.
+- Files chạm: `payment-service/src/main/java/com/cinema/payment_service/support/PromotionEngine.java`, `payment-service/src/test/java/com/cinema/payment_service/support/PromotionEngineTest.java`.
+- Reason: danh sách khuyến mãi khả dụng thường được mở lặp lại trong cùng một booking; cache ngắn giúp giảm tải mà vẫn chấp nhận được rủi ro stale rất nhỏ.
+- Verification: test cache mới pass và full `payment-service` pass `35 tests, 0 failures, 0 errors`.
+- Remaining risk: nếu booking thay đổi trong đúng 15 giây TTL thì response cache có thể hơi cũ; trade-off này được chấp nhận để đổi lấy tốc độ và giảm call lặp.
+
+## Changelog ngắn (2026-07-03)
+
+- `payment-service` đã sửa nhánh reuse checkout trong `PaymentSessionServiceImpl` để so `promotionId` từ snapshot `payment_transaction_promotion` thay vì suy ra từ `promotionCode` của transaction chính.
+- Files chạm: `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImplTest.java`.
+- Reason: `promotionCode` chỉ là snapshot hiển thị, còn nghiệp vụ chọn khuyến mãi giờ dựa trên ID; nếu code đổi sau này thì so theo code sẽ dễ lệch hành vi reuse.
+- Verification: test đơn lẻ cho case reuse theo snapshot ID pass, và full `payment-service` cũng pass `34 tests, 0 failures, 0 errors`.
+- Remaining risk: các transaction lịch sử chưa có snapshot `promotionId` vẫn có thể rơi về fallback theo code cũ, nhưng nhánh mới đã ưu tiên ID khi dữ liệu tồn tại.
+
 ## Changelog ngắn (2026-07-02)
 
 - `booking-service` đổi booking report từ ngữ nghĩa doanh thu sang hiệu suất vận hành: response bỏ các field tiền, thêm `expiredCount` và `conversionRate`, export Excel có title `BÁO CÁO HIỆU SUẤT BOOKING THEO RẠP`.
@@ -2078,6 +2100,19 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - preferCouple=true trên layout có couple trả `I9, J7, J8, J9, J10`
   - preferCouple=false trên layout không có couple trả `H7, I7, I8, I9, I10`
 - Verification mới nhất: `SeatSuggestionServiceImplTest` pass 16/16 sau khi khóa cả 2 output 5 ghế này.
+- Tie-break normal mode đã đổi sang rightmost-wins theo block:
+  - khi 2 candidate normal có cùng score thì block có cột lớn hơn sẽ thắng
+  - case `F6/F7/F8` vs `F7/F8/F9` giờ trả `F7, F8, F9`
+- Verification cuối: `SeatSuggestionServiceImplTest` pass 17/17 sau khi thêm test normal tie-break rightmost.
+- Đổi luồng khuyến mãi checkout ở `payment-service` sang chọn theo `promotionId`:
+  - `CreatePaymentSessionRequest` và `PromotionPreviewRequest` nhận thêm `promotionId`, payment flow ưu tiên resolve theo ID rồi mới tới code fallback để rollout an toàn
+  - `PromotionEngine` có thêm API lấy danh sách khuyến mãi khả dụng cho booking, trả về item có `promotionId`, `code`, `name`, `discountAmount`, `finalAmount`, `applicable`, `note`
+  - `PaymentController` có thêm endpoint customer-facing để FE lấy danh sách khuyến mãi chọn được theo booking
+- Files chạm thêm:
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\support\PromotionEngine.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\services\impl\PaymentSessionServiceImpl.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\controller\PaymentController.java`
+- Verification: toàn bộ `payment-service` test pass 33/33 sau khi đổi checkout/preview sang `promotionId` và thêm API danh sách khuyến mãi chọn được; `common-lib` đã được reinstall để payment-service nhận enum success message mới.
 - Verification: `SeatSuggestionServiceImplTest` pass 12/12 sau khi đổi tie-break `J1/J2` + `J13/J14` sang `I14`.
 - Remaining risk: rule hiện tại vẫn dựa trên heuristic distance; nếu layout thực tế của rạp có mô hình ghế đặc biệt thì có thể cần tune lại trọng số.
 

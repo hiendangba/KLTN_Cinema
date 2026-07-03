@@ -1128,6 +1128,52 @@ class BookingServiceImplTest {
         }
 
         @Test
+        void createBooking_shouldReturnSeatAlreadyLockedWhenSeatWasHeldByAnotherBooking() {
+                UUID userId = UUID.randomUUID();
+                UUID showtimeId = UUID.randomUUID();
+                UUID cinemaId = UUID.randomUUID();
+                UUID hallId = UUID.randomUUID();
+                UUID filmId = UUID.randomUUID();
+                UUID seatId = UUID.randomUUID();
+
+                CreateBookingRequest request = new CreateBookingRequest();
+                request.setShowtimeId(showtimeId);
+                request.setCinemaId(cinemaId);
+
+                CreateBookingRequest.CustomerInfo customerInfo = new CreateBookingRequest.CustomerInfo();
+                customerInfo.setFullName("Test User");
+                customerInfo.setEmail("test@example.com");
+                customerInfo.setPhone("0123456789");
+                request.setCustomerInfo(customerInfo);
+
+                CreateBookingRequest.SeatItem seatItem = new CreateBookingRequest.SeatItem();
+                seatItem.setSeatCode("A1");
+                seatItem.setSeatType(com.cinema.Enum.HallEnum.SeatType.STANDARD);
+                seatItem.setSeatPriceSnapshot(BigDecimal.valueOf(70000));
+                request.setSeatItems(List.of(seatItem));
+                request.setProductItems(List.of());
+
+                when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+                when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+                when(showtimeGrpcClient.getShowtimeById(showtimeId))
+                                .thenReturn(showtimeSummary(showtimeId, hallId, cinemaId, filmId));
+                when(filmGrpcClient.getFilmById(filmId)).thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                .id(filmId)
+                                .title("Film A")
+                                .build());
+                when(seatGrpcClient.getSeatSnapshotsByCodes(hallId, List.of("A1")))
+                                .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
+                                                com.cinema.Enum.HallEnum.SeatType.STANDARD)));
+                when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                .thenReturn(true);
+
+                BusinessException ex = assertThrows(BusinessException.class,
+                                () -> bookingService.createBooking(request, httpRequest));
+                assertEquals(ErrorCode.SEAT_ALREADY_LOCKED, ex.getErrorCode());
+        }
+
+        @Test
         void createStaffBooking_shouldCreateCustomerAndBookingWhenCustomerIdIsNull() {
                 UUID showtimeId = UUID.randomUUID();
                 UUID cinemaId = UUID.randomUUID();

@@ -361,6 +361,39 @@ class SeatSuggestionServiceImplTest {
     }
 
     @Test
+    void suggestSeatSuggestions_shouldPreferRightmostBlockWhenNormalTieOccurs() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                1,
+                14,
+                "TOP",
+                seat("F6", 6, 6, "STANDARD"),
+                seat("F7", 6, 7, "STANDARD"),
+                seat("F8", 6, 8, "STANDARD"),
+                seat("F9", 6, 9, "STANDARD")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse response = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(3)
+                        .preferCoupleSeat(false)
+                        .build());
+
+        assertEquals(List.of("F7", "F8", "F9"), response.getCandidates().get(0).getSeatCodes());
+    }
+
+    @Test
     void suggestSeatSuggestions_shouldReturnCenterishStandardBlocksForFiveSeatsWhenNoCoupleIsPreferred() {
         UUID showtimeId = UUID.randomUUID();
         UUID hallId = UUID.randomUUID();

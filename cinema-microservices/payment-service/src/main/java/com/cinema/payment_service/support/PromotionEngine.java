@@ -3,6 +3,8 @@ package com.cinema.payment_service.support;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.dto.request.PromotionPreviewRequest;
+import com.cinema.payment_service.dto.response.PromotionSelectionItemResponse;
+import com.cinema.payment_service.dto.response.PromotionSelectionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.entity.PromotionCinema;
@@ -21,11 +23,16 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Comparator;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @RequiredArgsConstructor
@@ -33,12 +40,14 @@ public class PromotionEngine {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(0, RoundingMode.HALF_UP);
     private static final BigDecimal HUNDRED = new BigDecimal("100");
+    private static final Duration PROMOTION_SELECTION_CACHE_TTL = Duration.ofSeconds(15);
 
     private final PromotionRepository promotionRepository;
     private final PromotionCinemaRepository promotionCinemaRepository;
     private final PromotionFilmRepository promotionFilmRepository;
     private final BookingGrpcClient bookingGrpcClient;
     private final PaymentMapper paymentMapper;
+    private final ConcurrentHashMap<PromotionSelectionCacheKey, CachedPromotionSelection> selectionCache = new ConcurrentHashMap<>();
 
     public PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId) {
         if (request == null || requesterUserId == null) {
@@ -60,6 +69,7 @@ public class PromotionEngine {
         }
 
         PromotionQuote quote = resolvePromotion(
+                request.getPromotionId(),
                 normalizePromotionCode(request.getPromotionCode()),
                 baseAmount,
                 bookingContext,
@@ -69,12 +79,45 @@ public class PromotionEngine {
         return paymentMapper.toPromotionPreviewResponse(quote, baseAmount);
     }
 
+    public PromotionSelectionResponse listSelectablePromotions(UUID bookingId, UUID requesterUserId) {
+        if (bookingId == null || requesterUserId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        PromotionSelectionCacheKey cacheKey = PromotionSelectionCacheKey.of(bookingId, requesterUserId);
+        PromotionSelectionResponse cachedResponse = getCachedSelection(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+        BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
+        ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
+        BigDecimal baseAmount = normalizeAmount(bookingContext.finalAmount());
+        List<PromotionSelectionItemResponse> promotions = promotionRepository.findAllByIsDeletedFalse().stream()
+                .map(promotion -> {
+                    PromotionQuote quote = evaluatePromotion(promotion, baseAmount, bookingContext, requesterUserId);
+                    boolean applicable = quote.discountAmount().compareTo(ZERO) > 0;
+                    return paymentMapper.toPromotionSelectionItemResponse(quote, applicable, baseAmount);
+                })
+                .sorted(Comparator
+                        .comparing(PromotionSelectionItemResponse::applicable).reversed()
+                        .thenComparing(PromotionSelectionItemResponse::discountAmount, Comparator.reverseOrder())
+                .thenComparing(PromotionSelectionItemResponse::promotionCode, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        PromotionSelectionResponse response = paymentMapper.toPromotionSelectionResponse(bookingId, baseAmount, promotions);
+        selectionCache.put(cacheKey, new CachedPromotionSelection(response, Instant.now().plus(PROMOTION_SELECTION_CACHE_TTL)));
+        cleanupExpiredSelectionCache();
+        return response;
+    }
+
     public PromotionQuote resolvePromotionForCheckout(
+            UUID promotionId,
             String promotionCode,
             BigDecimal baseAmount,
             BookingGrpcClient.BookingPaymentContext bookingContext,
             UUID requesterUserId) {
         return resolvePromotion(
+                promotionId,
                 normalizePromotionCode(promotionCode),
                 normalizeAmount(baseAmount),
                 bookingContext,
@@ -82,29 +125,53 @@ public class PromotionEngine {
                 true);
     }
 
+    public PromotionQuote resolvePromotionForCheckout(
+            String promotionCode,
+            BigDecimal baseAmount,
+            BookingGrpcClient.BookingPaymentContext bookingContext,
+            UUID requesterUserId) {
+        return resolvePromotionForCheckout(null, promotionCode, baseAmount, bookingContext, requesterUserId);
+    }
+
     private PromotionQuote resolvePromotion(
+            UUID promotionId,
             String promotionCode,
             BigDecimal baseAmount,
             BookingGrpcClient.BookingPaymentContext bookingContext,
             UUID requesterUserId,
             boolean strict) {
-        if (!StringUtils.hasText(promotionCode)) {
+        if (promotionId == null && !StringUtils.hasText(promotionCode)) {
             return new PromotionQuote("", "", ZERO, "No promotion code", null);
         }
 
-        Promotion promotion = promotionRepository.findByCodeIgnoreCaseAndIsDeletedFalse(promotionCode)
+        Promotion promotion = resolvePromotionEntity(promotionId, promotionCode)
                 .orElse(null);
         if (promotion == null) {
             if (strict) {
                 throw new BusinessException(ErrorCode.NOT_FOUND);
             }
-            return new PromotionQuote(promotionCode, "", ZERO, "Promotion code is not supported", null);
+            String fallbackCode = StringUtils.hasText(promotionCode) ? promotionCode : "";
+            return new PromotionQuote(fallbackCode, "", ZERO, "Promotion code is not supported", null);
         }
 
-        if (!isPromotionActiveNow(promotion)) {
+        PromotionQuote quote = evaluatePromotion(promotion, baseAmount, bookingContext, requesterUserId);
+        if (quote.discountAmount().compareTo(ZERO) <= 0) {
             if (strict) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                throw resolveStrictPromotionException(promotion, quote);
             }
+            return quote;
+        }
+        return quote;
+    }
+
+    private PromotionQuote evaluatePromotion(Promotion promotion,
+                                             BigDecimal baseAmount,
+                                             BookingGrpcClient.BookingPaymentContext bookingContext,
+                                             UUID requesterUserId) {
+        if (promotion == null) {
+            return new PromotionQuote("", "", ZERO, "Promotion code is not supported", null);
+        }
+        if (!isPromotionActiveNow(promotion)) {
             return new PromotionQuote(
                     promotion.getCode(),
                     promotion.getName(),
@@ -116,9 +183,6 @@ public class PromotionEngine {
         if (bookingContext != null) {
             ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
             if (!matchesScope(promotion, bookingContext.cinemaId(), bookingContext.filmId())) {
-                if (strict) {
-                    throw new BusinessException(ErrorCode.BAD_REQUEST);
-                }
                 return new PromotionQuote(
                         promotion.getCode(),
                         promotion.getName(),
@@ -127,9 +191,6 @@ public class PromotionEngine {
                         promotion.getId());
             }
         } else if (hasCinemaOrFilmScope(promotion)) {
-            if (strict) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
-            }
             return new PromotionQuote(
                     promotion.getCode(),
                     promotion.getName(),
@@ -140,9 +201,6 @@ public class PromotionEngine {
 
         if (promotion.getMinOrderAmount() != null
                 && normalizeAmount(baseAmount).compareTo(normalizeAmount(promotion.getMinOrderAmount())) < 0) {
-            if (strict) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
-            }
             return new PromotionQuote(
                     promotion.getCode(),
                     promotion.getName(),
@@ -153,9 +211,6 @@ public class PromotionEngine {
 
         BigDecimal discount = calculateDiscount(promotion, baseAmount);
         if (discount.compareTo(ZERO) <= 0) {
-            if (strict) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
-            }
             return new PromotionQuote(
                     promotion.getCode(),
                     promotion.getName(),
@@ -170,6 +225,24 @@ public class PromotionEngine {
                 discount,
                 buildSuccessNote(promotion),
                 promotion.getId());
+    }
+
+    private RuntimeException resolveStrictPromotionException(Promotion promotion, PromotionQuote quote) {
+        if (promotion == null) {
+            return new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        return new BusinessException(ErrorCode.BAD_REQUEST);
+    }
+
+    private java.util.Optional<Promotion> resolvePromotionEntity(UUID promotionId, String promotionCode) {
+        if (promotionId != null) {
+            return promotionRepository.findById(promotionId)
+                    .filter(promotion -> !Boolean.TRUE.equals(promotion.getIsDeleted()));
+        }
+        if (!StringUtils.hasText(promotionCode)) {
+            return java.util.Optional.empty();
+        }
+        return promotionRepository.findByCodeIgnoreCaseAndIsDeletedFalse(promotionCode);
     }
 
     private boolean matchesScope(Promotion promotion, UUID cinemaId, UUID filmId) {
@@ -276,6 +349,23 @@ public class PromotionEngine {
         return code.trim().toUpperCase(Locale.ROOT);
     }
 
+    private PromotionSelectionResponse getCachedSelection(PromotionSelectionCacheKey cacheKey) {
+        CachedPromotionSelection cached = selectionCache.get(cacheKey);
+        if (cached == null) {
+            return null;
+        }
+        if (cached.expiresAt().isBefore(Instant.now())) {
+            selectionCache.remove(cacheKey);
+            return null;
+        }
+        return cached.response();
+    }
+
+    private void cleanupExpiredSelectionCache() {
+        Instant now = Instant.now();
+        selectionCache.entrySet().removeIf(entry -> entry.getValue() == null || entry.getValue().expiresAt().isBefore(now));
+    }
+
     private BigDecimal normalizeAmount(BigDecimal amount) {
         if (amount == null) {
             return ZERO;
@@ -290,5 +380,18 @@ public class PromotionEngine {
         if (!requesterUserId.equals(bookingUserId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
+    }
+
+    private record PromotionSelectionCacheKey(
+            UUID bookingId,
+            UUID requesterUserId) {
+        private static PromotionSelectionCacheKey of(UUID bookingId, UUID requesterUserId) {
+            return new PromotionSelectionCacheKey(bookingId, requesterUserId);
+        }
+    }
+
+    private record CachedPromotionSelection(
+            PromotionSelectionResponse response,
+            Instant expiresAt) {
     }
 }

@@ -10,6 +10,7 @@ import com.cinema.payment_service.dto.request.RefundPaymentRequest;
 import com.cinema.payment_service.dto.momo.MomoIpnRequest;
 import com.cinema.payment_service.dto.response.CinemaRevenueReportResponse;
 import com.cinema.payment_service.dto.response.FilmRevenueReportResponse;
+import com.cinema.payment_service.dto.response.PromotionSelectionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
 import com.cinema.payment_service.dto.response.VietQrBankResponse;
@@ -156,6 +157,15 @@ public class PaymentController extends BaseController {
         UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
         return ok(SuccessMessage.PROMOTION_PREVIEW_FETCHED,
                 paymentSessionService.previewPromotion(request, requesterUserId));
+    }
+
+    @GetMapping("/bookings/{bookingId}/promotions")
+    public ResponseEntity<APIResponse<PromotionSelectionResponse>> listSelectablePromotions(
+            HttpServletRequest servletRequest,
+            @PathVariable UUID bookingId) {
+        UUID requesterUserId = RequestAuthUtils.requireUserId(servletRequest);
+        return ok(SuccessMessage.PROMOTION_OPTIONS_FETCHED,
+                paymentSessionService.listSelectablePromotions(bookingId, requesterUserId));
     }
 
     @PostMapping("/webhooks/momo")

@@ -870,6 +870,12 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
 
     private Comparator<SeatSuggestionCandidateResponse> candidateComparator() {
         return Comparator.comparingInt(SeatSuggestionCandidateResponse::getScore).reversed()
+                .thenComparing(Comparator.comparingInt((SeatSuggestionCandidateResponse candidate) ->
+                                candidate.getSeatCodes().stream()
+                                        .map(this::extractSeatCol)
+                                        .max(Integer::compareTo)
+                                        .orElse(0))
+                        .reversed())
                 .thenComparing(candidate -> canonicalKey(candidate.getSeatCodes()));
     }
 
@@ -896,6 +902,24 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
 
     private String normalizeSeatCode(String seatCode) {
         return seatCode == null ? "" : seatCode.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private int extractSeatCol(String seatCode) {
+        if (seatCode == null || seatCode.isBlank()) {
+            return 0;
+        }
+        int index = seatCode.length() - 1;
+        while (index >= 0 && Character.isDigit(seatCode.charAt(index))) {
+            index--;
+        }
+        if (index == seatCode.length() - 1) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(seatCode.substring(index + 1));
+        } catch (NumberFormatException ex) {
+            return 0;
+        }
     }
 
     private record SeatNode(String seatCode, int row, int col, String seatType, long price) {
