@@ -251,7 +251,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         ensureRequesterCanCompleteSession(transaction, requesterUserId, requesterRole);
 
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
-            settleLoyaltyPoints(transaction);
+            settleLoyaltyPoints(transaction, "completeSession:alreadyPaid");
             return ActionMessageResponse.builder()
                     .message(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage())
                     .build();
@@ -296,7 +296,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
 
-        settleLoyaltyPoints(transaction);
+        settleLoyaltyPoints(transaction, "completeSession");
 
         log.info(
                 "PAYMENT_COMPLETE_CONFIRMED transactionId={} bookingId={} requesterUserId={} requesterRole={} status={}",
@@ -712,7 +712,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             String webhookEventKey,
             String logPrefix) {
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
-            settleLoyaltyPoints(transaction);
+            settleLoyaltyPoints(transaction, "webhook:alreadyPaid");
             markWebhookMeta(transaction, webhookEventKey);
             paymentTransactionRepository.save(transaction);
             return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
@@ -809,7 +809,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "booking_error", ex.getErrorCode().name()));
         }
 
-        settleLoyaltyPoints(transaction);
+        settleLoyaltyPoints(transaction, "webhook");
 
         log.info(
                 "{}_CONFIRMED orderId={} requestId={} transactionId={} bookingId={} status={}",
@@ -1075,12 +1075,30 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setLoyaltyPointsEarned(calculateEarnedLoyaltyPoints(payableAmount));
     }
 
-    private void settleLoyaltyPoints(PaymentTransaction transaction) {
+    private void settleLoyaltyPoints(PaymentTransaction transaction, String source) {
         if (transaction == null || transaction.getUserId() == null) {
             return;
         }
 
+        log.info(
+                "LOYALTY_POINTS_SETTLE_START source={} transactionId={} bookingId={} userId={} status={} used={} earned={} settledAt={}",
+                source,
+                transaction.getId(),
+                transaction.getBookingId(),
+                transaction.getUserId(),
+                transaction.getStatus(),
+                normalizeLongValue(transaction.getLoyaltyPointsUsed()),
+                normalizeLongValue(transaction.getLoyaltyPointsEarned()),
+                transaction.getLoyaltyPointsSettledAt());
+
         if (transaction.getLoyaltyPointsSettledAt() != null) {
+            log.info(
+                    "LOYALTY_POINTS_SETTLE_SKIP source={} transactionId={} bookingId={} userId={} reason=already_settled settledAt={}",
+                    source,
+                    transaction.getId(),
+                    transaction.getBookingId(),
+                    transaction.getUserId(),
+                    transaction.getLoyaltyPointsSettledAt());
             return;
         }
 
@@ -1089,6 +1107,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         if (loyaltyPointsUsed <= 0 && loyaltyPointsEarned <= 0) {
             transaction.setLoyaltyPointsSettledAt(LocalDateTime.now());
             paymentTransactionRepository.save(transaction);
+            log.info(
+                    "LOYALTY_POINTS_SETTLE_NOOP source={} transactionId={} bookingId={} userId={} reason=no_points",
+                    source,
+                    transaction.getId(),
+                    transaction.getBookingId(),
+                    transaction.getUserId());
             return;
         }
 
@@ -1103,9 +1127,19 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             }
             transaction.setLoyaltyPointsSettledAt(LocalDateTime.now());
             paymentTransactionRepository.save(transaction);
+            log.info(
+                    "LOYALTY_POINTS_SETTLE_SUCCESS source={} transactionId={} bookingId={} userId={} used={} earned={} settledAt={}",
+                    source,
+                    transaction.getId(),
+                    transaction.getBookingId(),
+                    transaction.getUserId(),
+                    loyaltyPointsUsed,
+                    loyaltyPointsEarned,
+                    transaction.getLoyaltyPointsSettledAt());
         } catch (BusinessException ex) {
             log.warn(
-                    "LOYALTY_POINTS_SYNC_FAILED transactionId={} bookingId={} userId={} used={} earned={} errorCode={}",
+                    "LOYALTY_POINTS_SYNC_FAILED source={} transactionId={} bookingId={} userId={} used={} earned={} errorCode={}",
+                    source,
                     transaction.getId(),
                     transaction.getBookingId(),
                     transaction.getUserId(),
@@ -1116,14 +1150,16 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 try {
                     userGrpcClient.addUserLoyaltyPoints(transaction.getUserId(), loyaltyPointsUsed);
                     log.info(
-                            "LOYALTY_POINTS_ROLLBACK_SUCCESS transactionId={} bookingId={} userId={} restored={}",
+                            "LOYALTY_POINTS_ROLLBACK_SUCCESS source={} transactionId={} bookingId={} userId={} restored={}",
+                            source,
                             transaction.getId(),
                             transaction.getBookingId(),
                             transaction.getUserId(),
                             loyaltyPointsUsed);
                 } catch (BusinessException rollbackEx) {
                     log.error(
-                            "LOYALTY_POINTS_ROLLBACK_FAILED transactionId={} bookingId={} userId={} restored={} errorCode={}",
+                            "LOYALTY_POINTS_ROLLBACK_FAILED source={} transactionId={} bookingId={} userId={} restored={} errorCode={}",
+                            source,
                             transaction.getId(),
                             transaction.getBookingId(),
                             transaction.getUserId(),

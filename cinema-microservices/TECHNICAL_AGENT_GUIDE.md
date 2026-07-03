@@ -2109,6 +2109,7 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
   - `payment-service` dùng `loyaltyPointsUsed` theo tỷ lệ 1:1 khi trừ vào hóa đơn; điểm dùng không còn bị cap theo `amount / 1000`, chỉ điểm thưởng mới theo quy đổi 1000đ/1 điểm
   - luồng settle loyalty points giờ đi qua cả webhook lẫn API fallback `completeSession`, và được khóa idempotent bằng `loyalty_points_settled_at` để tránh cộng/trừ 2 lần nếu webhook tới sau fallback
   - payment-service trước đó thiếu channel `user` trong gRPC config nên call loyalty points có thể rơi về đích sai; đã bổ sung `USER_GRPC_HOST/USER_GRPC_PORT` cho `payment-service` và channel `user` trong `application.yaml`
+  - đã thêm log chi tiết cho `UserGrpcClient` và `settleLoyaltyPoints`: in `userId`, `loyaltyPointsUsed`, `loyaltyPointsEarned`, `settledAt`, `grpcCode`, và `errorKey` để trace chính xác call nào fail
   - báo cáo doanh thu cinema trong `payment-service` tách thêm cột `loyaltyPointsDiscountAmount` để tổng hợp số điểm đã dùng theo tỷ lệ 1:1, đồng thời export Excel có thêm cột `Tiền giảm từ điểm`
   - thêm `UserGrpcClient` cho payment-service để đọc balance và gọi gRPC cộng/trừ điểm
   - cập nhật rule update profile ở `user-service` không đụng tới `loyalty_points`; điểm chỉ thay đổi qua flow cộng/trừ nội bộ và test regression đã khóa hành vi này
