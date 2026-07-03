@@ -238,6 +238,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/payment_db
       DB_USERNAME: payment_user
       DB_PASSWORD: payment_pass
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
       BOOKING_GRPC_HOST: booking-service
       BOOKING_GRPC_PORT: 9195
       CINEMA_GRPC_HOST: cinema-service

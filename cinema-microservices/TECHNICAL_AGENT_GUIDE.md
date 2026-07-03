@@ -2105,9 +2105,10 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
 - Thêm loyalty points v1 theo hướng balance ở `user-service`, snapshot ở `payment-service`:
   - `user-service` thêm cột `loyalty_points`, expose trong `UserResponse` và `GetUserBasicById`, đồng thời có 2 RPC nội bộ `AddUserLoyaltyPoints` và `DeductUserLoyaltyPoints`
   - `payment-service` thêm snapshot `loyaltyPointsUsed`/`loyaltyPointsEarned` vào `payment_transaction`, kiểm tra số dư trước khi cho áp điểm ở checkout/preview, và sync điểm sau khi payment confirm
-- `payment-service` quy đổi điểm thưởng theo `1000đ = 1 điểm` và làm tròn lên khi amount còn dư lẻ; report revenue vẫn giữ cột `loyaltyPointsDiscountAmount` theo raw point count `1:1`
-- `payment-service` dùng `loyaltyPointsUsed` theo tỷ lệ 1:1 khi trừ vào hóa đơn; điểm dùng không còn bị cap theo `amount / 1000`, chỉ điểm thưởng mới theo quy đổi 1000đ/1 điểm
+  - `payment-service` quy đổi điểm thưởng theo `1000đ = 1 điểm` và làm tròn lên khi amount còn dư lẻ; report revenue vẫn giữ cột `loyaltyPointsDiscountAmount` theo raw point count `1:1`
+  - `payment-service` dùng `loyaltyPointsUsed` theo tỷ lệ 1:1 khi trừ vào hóa đơn; điểm dùng không còn bị cap theo `amount / 1000`, chỉ điểm thưởng mới theo quy đổi 1000đ/1 điểm
   - luồng settle loyalty points giờ đi qua cả webhook lẫn API fallback `completeSession`, và được khóa idempotent bằng `loyalty_points_settled_at` để tránh cộng/trừ 2 lần nếu webhook tới sau fallback
+  - payment-service trước đó thiếu channel `user` trong gRPC config nên call loyalty points có thể rơi về đích sai; đã bổ sung `USER_GRPC_HOST/USER_GRPC_PORT` cho `payment-service` và channel `user` trong `application.yaml`
   - báo cáo doanh thu cinema trong `payment-service` tách thêm cột `loyaltyPointsDiscountAmount` để tổng hợp số điểm đã dùng theo tỷ lệ 1:1, đồng thời export Excel có thêm cột `Tiền giảm từ điểm`
   - thêm `UserGrpcClient` cho payment-service để đọc balance và gọi gRPC cộng/trừ điểm
   - cập nhật rule update profile ở `user-service` không đụng tới `loyalty_points`; điểm chỉ thay đổi qua flow cộng/trừ nội bộ và test regression đã khóa hành vi này
