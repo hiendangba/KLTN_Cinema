@@ -3,6 +3,7 @@ package com.cinema.film_service.dto.request;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.DateRange;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.Valid;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -23,4 +24,6 @@ public class FilmCursorPageRequest extends CursorPageRequest<FilmField> {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate showtimeDate;
     private UUID cinemaId;
+    @JsonAlias("type")
+    private String genre;
 }

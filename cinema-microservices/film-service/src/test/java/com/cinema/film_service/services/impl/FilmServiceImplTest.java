@@ -15,6 +15,7 @@ import com.cinema.film_service.grpc.ShowtimeGrpcClient;
 import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.FilmRepository;
 import com.cinema.film_service.repository.FilmRepositoryImpl;
+import com.cinema.film_service.services.FilmCatalogSyncService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -54,6 +55,9 @@ class FilmServiceImplTest {
 
     @Mock
     private FilmMapper filmMapper;
+
+    @Mock
+    private FilmCatalogSyncService filmCatalogSyncService;
 
     @Mock
     private ShowtimeGrpcClient showtimeGrpcClient;
@@ -112,6 +116,68 @@ class FilmServiceImplTest {
                         && "IN".equals(filter.getOperator())
                         && new HashSet<>((List<String>) filter.getValue())
                         .equals(Set.of(film1Id.toString(), film2Id.toString()))));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchFilms_shouldAddGenreFilterWhenProvided() {
+        UUID filmId = UUID.randomUUID();
+        Film film = buildFilm(filmId, "Film 1", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setSize(1);
+        request.setGenre("Action");
+
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(film));
+        when(filmMapper.toResponse(film)).thenReturn(toResponse(film));
+
+        var response = filmService.searchFilms(request);
+
+        assertEquals(1, response.getSize());
+        ArgumentCaptor<List<FilterField<FilmField>>> filterCaptor = ArgumentCaptor.forClass(List.class);
+        verify(filmRepositoryImpl).searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), filterCaptor.capture());
+
+        List<FilterField<FilmField>> filters = filterCaptor.getValue();
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == FilmField.TYPE
+                        && "LIKE".equals(filter.getOperator())
+                        && "Action".equals(filter.getValue())));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void searchCustomerFilms_shouldAddGenreFilterAlongsideCustomerScope() {
+        UUID filmId = UUID.randomUUID();
+        Film film = buildFilm(filmId, "Film 1", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+
+        FilmCursorPageRequest request = new FilmCursorPageRequest();
+        request.setSize(1);
+        request.setGenre("Horror");
+
+        HttpServletRequest httpRequest = mockRequest("CUSTOMER");
+        when(showtimeGrpcClient.getActiveFilmIds()).thenReturn(Set.of(filmId));
+        when(filmRepositoryImpl.searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), anyList()))
+                .thenReturn(List.of(film));
+        when(filmMapper.toResponse(film)).thenReturn(toResponse(film));
+
+        var response = filmService.searchCustomerFilms(request, httpRequest);
+
+        assertEquals(1, response.getSize());
+        ArgumentCaptor<List<FilterField<FilmField>>> filterCaptor = ArgumentCaptor.forClass(List.class);
+        verify(filmRepositoryImpl).searchWithCursorAndSortAndFilter(any(), nullable(String.class), anyInt(), anyList(), filterCaptor.capture());
+
+        List<FilterField<FilmField>> filters = filterCaptor.getValue();
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == FilmField.TYPE
+                        && "LIKE".equals(filter.getOperator())
+                        && "Horror".equals(filter.getValue())));
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == FilmField.STATUS
+                        && "IN".equals(filter.getOperator())));
+        assertTrue(filters.stream().anyMatch(filter ->
+                filter.getField() == FilmField.ID
+                        && "IN".equals(filter.getOperator())));
     }
 
     @Test
@@ -389,7 +455,9 @@ class FilmServiceImplTest {
     private HttpServletRequest mockRequest(String role, UUID userId) {
         HttpServletRequest request = org.mockito.Mockito.mock(HttpServletRequest.class);
         when(request.getHeader("X-User-Role")).thenReturn(role);
-        when(request.getHeader("X-User-ID")).thenReturn(userId == null ? null : userId.toString());
+        if (userId != null) {
+            when(request.getHeader("X-User-ID")).thenReturn(userId.toString());
+        }
         return request;
     }
 

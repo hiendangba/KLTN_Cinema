@@ -24,6 +24,7 @@ import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.FilmRepository;
 import com.cinema.film_service.repository.FilmRepositoryImpl;
 import com.cinema.film_service.services.FilmService;
+import com.cinema.film_service.services.FilmCatalogSyncService;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,6 +53,7 @@ public class FilmServiceImpl implements FilmService {
     private final FilmRepository filmRepository;
     private final FilmRepositoryImpl filmRepositoryImpl;
     private final FilmMapper filmMapper;
+    private final FilmCatalogSyncService filmCatalogSyncService;
     private final ShowtimeGrpcClient showtimeGrpcClient;
     private final CinemaGrpcClient cinemaGrpcClient;
 
@@ -65,6 +67,9 @@ public class FilmServiceImpl implements FilmService {
         }
 
         Film film = filmMapper.toEntity(request);
+        film.setTypes(filmCatalogSyncService.resolveTypes(request.getTypeIds(), request.getType()));
+        film.setActors(filmCatalogSyncService.resolveActors(request.getActorIds(), request.getActor()));
+        filmCatalogSyncService.syncFilmDisplayFields(film);
         Film savedFilm = filmRepository.save(film);
         log.info("Film created successfully with ID: {}", savedFilm.getId());
         return ActionMessageResponse.builder()
@@ -84,6 +89,8 @@ public class FilmServiceImpl implements FilmService {
                 });
 
         filmMapper.updateEntityFromRequest(film, request);
+        film.setTypes(filmCatalogSyncService.resolveTypes(request.getTypeIds(), request.getType()));
+        film.setActors(filmCatalogSyncService.resolveActors(request.getActorIds(), request.getActor()));
 
         if (filmRepository.existsByTitleAndReleaseDateAndIdNotAndIsDeletedFalse(
                 request.getTitle(), request.getReleaseDate(), id)) {
@@ -91,6 +98,7 @@ public class FilmServiceImpl implements FilmService {
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
 
+        filmCatalogSyncService.syncFilmDisplayFields(film);
         filmRepository.save(film);
         log.info("Film updated successfully: {}", id);
         return ActionMessageResponse.builder()
@@ -198,6 +206,7 @@ public class FilmServiceImpl implements FilmService {
                 ? new ArrayList<>()
                 : new ArrayList<>(request.getFilterBy());
         appendReleaseDateRangeFilter(filterFields, request.getDateRange());
+        appendGenreFilter(filterFields, request == null ? null : request.getGenre());
 
         if (scopedFilmIds != null) {
             if (applyCustomerStatusScope) {
@@ -282,6 +291,18 @@ public class FilmServiceImpl implements FilmService {
                     .value(dateRange.getTo().toLocalDate())
                     .build());
         }
+    }
+
+    private void appendGenreFilter(List<FilterField<FilmField>> filterFields, String genre) {
+        if (!org.springframework.util.StringUtils.hasText(genre)) {
+            return;
+        }
+
+        filterFields.add(FilterField.<FilmField>builder()
+                .field(FilmField.TYPE)
+                .operator("LIKE")
+                .value(genre.trim())
+                .build());
     }
 
     private List<FilterField<FilmField>> scopeCustomerFilters(

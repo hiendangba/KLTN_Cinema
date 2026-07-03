@@ -49,6 +49,15 @@ spring:
     port: ${SPRING_RABBITMQ_PORT}
     username: ${SPRING_RABBITMQ_USERNAME}
     password: ${SPRING_RABBITMQ_PASSWORD}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 2000
+          max-attempts: 5
+          multiplier: 2.0
+          max-interval: 30000
   grpc:
     client:
       channels:

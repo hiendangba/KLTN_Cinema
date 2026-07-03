@@ -7,6 +7,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -25,6 +26,10 @@ public class FilmResponse {
     String actor;
 
     String type;
+
+    List<FilmTypeResponse> types;
+
+    List<ActorResponse> actors;
 
     @JsonFormat(pattern = "yyyy-MM-dd")
     LocalDate releaseDate;

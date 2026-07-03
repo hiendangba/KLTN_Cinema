@@ -6,6 +6,8 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -26,6 +28,10 @@ public class UpdateFilmRequest {
 
     @Size(max = 50, message = "Loại phim không vượt quá 50 ký tự")
     String type;
+
+    List<UUID> typeIds;
+
+    List<UUID> actorIds;
 
     @NotNull(message = "Ngày phát hành không được để trống")
     @PastOrPresent(message = "Ngày phát hành không được ở trong tương lai")

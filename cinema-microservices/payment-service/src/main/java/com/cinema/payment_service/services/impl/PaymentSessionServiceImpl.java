@@ -43,6 +43,7 @@ import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
 import com.cinema.payment_service.services.PaymentSessionService;
+import com.cinema.payment_service.services.PaymentLoyaltyOutboxService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
@@ -98,6 +99,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final RevenueReportSupport revenueReportSupport;
     private final PaymentMapper paymentMapper;
     private final ObjectMapper objectMapper;
+    private final PaymentLoyaltyOutboxService paymentLoyaltyOutboxService;
 
     @Override
     @Transactional
@@ -251,7 +253,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         ensureRequesterCanCompleteSession(transaction, requesterUserId, requesterRole);
 
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
-            settleLoyaltyPoints(transaction, "completeSession:alreadyPaid");
+            enqueueLoyaltySync(transaction, "completeSession:alreadyPaid");
             return ActionMessageResponse.builder()
                     .message(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage())
                     .build();
@@ -296,7 +298,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
 
-        settleLoyaltyPoints(transaction, "completeSession");
+        enqueueLoyaltySync(transaction, "completeSession");
 
         log.info(
                 "PAYMENT_COMPLETE_CONFIRMED transactionId={} bookingId={} requesterUserId={} requesterRole={} status={}",
@@ -712,7 +714,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             String webhookEventKey,
             String logPrefix) {
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
-            settleLoyaltyPoints(transaction, "webhook:alreadyPaid");
+            enqueueLoyaltySync(transaction, "webhook:alreadyPaid");
             markWebhookMeta(transaction, webhookEventKey);
             paymentTransactionRepository.save(transaction);
             return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
@@ -809,7 +811,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "booking_error", ex.getErrorCode().name()));
         }
 
-        settleLoyaltyPoints(transaction, "webhook");
+        enqueueLoyaltySync(transaction, "webhook");
 
         log.info(
                 "{}_CONFIRMED orderId={} requestId={} transactionId={} bookingId={} status={}",
@@ -1075,99 +1077,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setLoyaltyPointsEarned(calculateEarnedLoyaltyPoints(payableAmount));
     }
 
-    private void settleLoyaltyPoints(PaymentTransaction transaction, String source) {
-        if (transaction == null || transaction.getUserId() == null) {
+    private void enqueueLoyaltySync(PaymentTransaction transaction, String source) {
+        if (transaction == null) {
             return;
         }
 
-        log.info(
-                "LOYALTY_POINTS_SETTLE_START source={} transactionId={} bookingId={} userId={} status={} used={} earned={} settledAt={}",
-                source,
-                transaction.getId(),
-                transaction.getBookingId(),
-                transaction.getUserId(),
-                transaction.getStatus(),
-                normalizeLongValue(transaction.getLoyaltyPointsUsed()),
-                normalizeLongValue(transaction.getLoyaltyPointsEarned()),
-                transaction.getLoyaltyPointsSettledAt());
-
-        if (transaction.getLoyaltyPointsSettledAt() != null) {
-            log.info(
-                    "LOYALTY_POINTS_SETTLE_SKIP source={} transactionId={} bookingId={} userId={} reason=already_settled settledAt={}",
-                    source,
-                    transaction.getId(),
-                    transaction.getBookingId(),
-                    transaction.getUserId(),
-                    transaction.getLoyaltyPointsSettledAt());
-            return;
-        }
-
-        long loyaltyPointsUsed = normalizeLongValue(transaction.getLoyaltyPointsUsed());
-        long loyaltyPointsEarned = normalizeLongValue(transaction.getLoyaltyPointsEarned());
-        if (loyaltyPointsUsed <= 0 && loyaltyPointsEarned <= 0) {
-            transaction.setLoyaltyPointsSettledAt(LocalDateTime.now());
-            paymentTransactionRepository.save(transaction);
-            log.info(
-                    "LOYALTY_POINTS_SETTLE_NOOP source={} transactionId={} bookingId={} userId={} reason=no_points",
-                    source,
-                    transaction.getId(),
-                    transaction.getBookingId(),
-                    transaction.getUserId());
-            return;
-        }
-
-        boolean deducted = false;
-        try {
-            if (loyaltyPointsUsed > 0) {
-                userGrpcClient.deductUserLoyaltyPoints(transaction.getUserId(), loyaltyPointsUsed);
-                deducted = true;
-            }
-            if (loyaltyPointsEarned > 0) {
-                userGrpcClient.addUserLoyaltyPoints(transaction.getUserId(), loyaltyPointsEarned);
-            }
-            transaction.setLoyaltyPointsSettledAt(LocalDateTime.now());
-            paymentTransactionRepository.save(transaction);
-            log.info(
-                    "LOYALTY_POINTS_SETTLE_SUCCESS source={} transactionId={} bookingId={} userId={} used={} earned={} settledAt={}",
-                    source,
-                    transaction.getId(),
-                    transaction.getBookingId(),
-                    transaction.getUserId(),
-                    loyaltyPointsUsed,
-                    loyaltyPointsEarned,
-                    transaction.getLoyaltyPointsSettledAt());
-        } catch (BusinessException ex) {
-            log.warn(
-                    "LOYALTY_POINTS_SYNC_FAILED source={} transactionId={} bookingId={} userId={} used={} earned={} errorCode={}",
-                    source,
-                    transaction.getId(),
-                    transaction.getBookingId(),
-                    transaction.getUserId(),
-                    loyaltyPointsUsed,
-                    loyaltyPointsEarned,
-                    ex.getErrorCode().name());
-            if (deducted) {
-                try {
-                    userGrpcClient.addUserLoyaltyPoints(transaction.getUserId(), loyaltyPointsUsed);
-                    log.info(
-                            "LOYALTY_POINTS_ROLLBACK_SUCCESS source={} transactionId={} bookingId={} userId={} restored={}",
-                            source,
-                            transaction.getId(),
-                            transaction.getBookingId(),
-                            transaction.getUserId(),
-                            loyaltyPointsUsed);
-                } catch (BusinessException rollbackEx) {
-                    log.error(
-                            "LOYALTY_POINTS_ROLLBACK_FAILED source={} transactionId={} bookingId={} userId={} restored={} errorCode={}",
-                            source,
-                            transaction.getId(),
-                            transaction.getBookingId(),
-                            transaction.getUserId(),
-                            loyaltyPointsUsed,
-                            rollbackEx.getErrorCode().name());
-                }
-            }
-        }
+        paymentLoyaltyOutboxService.enqueueIfNeeded(transaction, source);
     }
 
     private void validateRequestedLoyaltyPoints(UUID userId, Long requestedLoyaltyPointsUsed) {

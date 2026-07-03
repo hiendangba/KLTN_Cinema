@@ -16,6 +16,12 @@
 
 ## Changelog ngắn (2026-07-03)
 
+- `film-service` đã chuẩn hóa lại validation message cho CRUD `type` và `actor` sang tiếng Việt có dấu.
+- Files chạm: `film-service/src/main/java/com/cinema/film_service/dto/request/CreateFilmTypeRequest.java`, `film-service/src/main/java/com/cinema/film_service/dto/request/UpdateFilmTypeRequest.java`, `film-service/src/main/java/com/cinema/film_service/dto/request/CreateActorRequest.java`, `film-service/src/main/java/com/cinema/film_service/dto/request/UpdateActorRequest.java`.
+- Reason: trước đó một số message vẫn là bản không dấu như `Ten the loai khong duoc de trong`, làm response validation kém nhất quán với phần film DTO đã dùng tiếng Việt có dấu.
+- Verification: đã sửa trực tiếp annotation message; đây là thay đổi chuỗi hiển thị nên không cần đổi logic hoặc schema.
+- Remaining risk: các message validation khác trong module khác nếu vẫn còn không dấu sẽ cần chuẩn hóa tiếp theo cùng một rule.
+
 - `booking-service` đã chặn luôn confirm thanh toán nếu booking đã quá `reservedUntil`, kể cả khi scheduler chưa kịp đổi trạng thái sang `EXPIRED`.
 - Files chạm: `booking-service/src/main/java/com/cinema/booking_service/grpc/BookingInternalGrpcService.java`, `booking-service/src/test/java/com/cinema/booking_service/grpc/BookingInternalGrpcServiceTest.java`.
 - Reason: nếu chỉ mở ghế lại ở seat-map mà không chặn confirm payment thì có thể xảy ra race condition, khách thanh toán trễ vẫn bị nhận vé.
@@ -2102,17 +2108,24 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
 - Verification cuối: `SeatSuggestionServiceImplTest` pass 13/13 sau khi khóa `seatCount=1` đi nhánh normal và giữ couple-first chỉ cho `seatCount>1`.
 - Case đã chốt trong test: `J7/J8` vẫn thắng ở layout 3 ghế, case `J1/J2` + `J13/J14` trả `I14`, và case 5 ghế với `J7-J10` couple trả `I9, J7, J8, J9, J10`.
 - Remaining risk: trọng số score đang khớp layout hiện tại; nếu hall khác có bố cục lệch mạnh thì có thể cần tune lại.
-- Thêm loyalty points v1 theo hướng balance ở `user-service`, snapshot ở `payment-service`:
-  - `user-service` thêm cột `loyalty_points`, expose trong `UserResponse` và `GetUserBasicById`, đồng thời có 2 RPC nội bộ `AddUserLoyaltyPoints` và `DeductUserLoyaltyPoints`
-  - `payment-service` thêm snapshot `loyaltyPointsUsed`/`loyaltyPointsEarned` vào `payment_transaction`, kiểm tra số dư trước khi cho áp điểm ở checkout/preview, và sync điểm sau khi payment confirm
-  - `payment-service` quy đổi điểm thưởng theo `1000đ = 1 điểm` và làm tròn lên khi amount còn dư lẻ; report revenue vẫn giữ cột `loyaltyPointsDiscountAmount` theo raw point count `1:1`
-  - `payment-service` dùng `loyaltyPointsUsed` theo tỷ lệ 1:1 khi trừ vào hóa đơn; điểm dùng không còn bị cap theo `amount / 1000`, chỉ điểm thưởng mới theo quy đổi 1000đ/1 điểm
-  - luồng settle loyalty points giờ đi qua cả webhook lẫn API fallback `completeSession`, và được khóa idempotent bằng `loyalty_points_settled_at` để tránh cộng/trừ 2 lần nếu webhook tới sau fallback
-  - payment-service trước đó thiếu channel `user` trong gRPC config nên call loyalty points có thể rơi về đích sai; đã bổ sung `USER_GRPC_HOST/USER_GRPC_PORT` cho `payment-service` và channel `user` trong `application.yaml`
-  - đã thêm log chi tiết cho `UserGrpcClient` và `settleLoyaltyPoints`: in `userId`, `loyaltyPointsUsed`, `loyaltyPointsEarned`, `settledAt`, `grpcCode`, và `errorKey` để trace chính xác call nào fail
-  - báo cáo doanh thu cinema trong `payment-service` tách thêm cột `loyaltyPointsDiscountAmount` để tổng hợp số điểm đã dùng theo tỷ lệ 1:1, đồng thời export Excel có thêm cột `Tiền giảm từ điểm`
-  - thêm `UserGrpcClient` cho payment-service để đọc balance và gọi gRPC cộng/trừ điểm
-  - cập nhật rule update profile ở `user-service` không đụng tới `loyalty_points`; điểm chỉ thay đổi qua flow cộng/trừ nội bộ và test regression đã khóa hành vi này
+- Loyalty points v1 đã chuyển sang mô hình async bền vững:
+  - `user-service` là nguồn sự thật cho `users.loyalty_points`, vẫn expose trong `UserResponse` và `GetUserBasicById`
+  - `payment-service` giữ snapshot `loyaltyPointsUsed`/`loyaltyPointsEarned` trên `payment_transaction`, nhưng không còn mutate điểm trực tiếp qua gRPC trong flow confirm/webhook
+  - payment success giờ ghi outbox local rồi publish RabbitMQ bất đồng bộ; nếu `user-service` hoặc RabbitMQ tạm lỗi thì API payment vẫn success và scheduler sẽ retry sau
+  - `user-service` consume event loyalty từ RabbitMQ, cập nhật balance trong transaction local và lưu `user_loyalty_ledger` để dedupe theo `paymentTransactionId`
+  - retry policy là hybrid: lỗi tạm thời retry/backoff, payload lỗi thật hoặc lỗi không phục hồi sẽ đi DLQ
+ - `payment-service` vẫn dùng gRPC read-only để check số dư trước checkout/preview; rule quy đổi giữ nguyên: `1000đ = 1 điểm` khi thưởng, còn report revenue vẫn tổng hợp `loyaltyPointsDiscountAmount` theo raw point count `1:1`
+ - `payment-service` thêm RabbitMQ outbox publisher, `user-service` thêm consumer/ledger, và `compose.prod.yaml` được bổ sung env RabbitMQ cho payment-service
+- Film catalog đã được chuẩn hóa sang bảng riêng cho `type` và `actor`:
+  - `film-service` thêm entity `film_types` và `actors`, film liên kết nhiều-nhiều nhưng vẫn giữ cột chuỗi legacy làm cache hiển thị/search để giảm rủi ro chuyển đổi
+  - `FilmResponse` giờ trả thêm `types` và `actors`, trong đó actor có `avatarUrl`, `birthYear`, `hometown`
+  - thêm `TypeController` và `ActorController` để CRUD dữ liệu catalog; FE lấy `avatarUrl` từ `upload-service` rồi gửi vào actor
+  - `FilmServiceImpl` tự sync lại chuỗi cache từ quan hệ mới để keyword/search cũ không bị gãy trong giai đoạn migrate
+- Film search APIs đã thêm filter theo thể loại:
+  - `film-service` nhận thêm field `genre` trong `FilmCursorPageRequest` và alias `type` để giữ tương thích ngược
+  - cả `POST /api/films/search` và `POST /api/films/customer/search` đều map `genre` sang filter `FilmField.TYPE LIKE genre`, nên chọn một thể loại con vẫn khớp phim có nhiều thể loại trong cùng chuỗi
+  - customer search vẫn giữ nguyên scope cinema/status hiện tại, chỉ bổ sung thêm điều kiện thể loại nếu FE truyền lên
+  - đã có regression test cho cả admin search và customer search khi lọc theo genre
 - Files chạm thêm:
   - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\proto\user_internal.proto`
   - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\java\com\cinema\exception\ErrorCode.java`

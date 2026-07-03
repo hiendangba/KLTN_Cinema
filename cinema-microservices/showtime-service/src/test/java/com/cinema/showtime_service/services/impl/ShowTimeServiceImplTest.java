@@ -145,23 +145,6 @@ class ShowTimeServiceImplTest {
             return st;
         });
         when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(pricingPolicyRepository.findAllById(any())).thenReturn(List.of(pricingPolicy));
-        when(pricingPolicyMapper.toResponse(pricingPolicy)).thenReturn(pricingPolicyResponse);
-        when(showTimeMapper.toResponse(any(ShowTime.class))).thenAnswer(invocation -> {
-            ShowTime st = invocation.getArgument(0);
-            return ShowTimeResponse.builder()
-                    .id(st.getId())
-                    .hallId(st.getHallId())
-                    .filmId(st.getFilmId())
-                    .pricingPolicyId(st.getPricingPolicyId())
-                    .startDateTime(st.getStartDateTime())
-                    .endDateTime(st.getEndDateTime())
-                    .status(st.getStatus())
-                    .isDeleted(Boolean.TRUE.equals(st.getIsDeleted()))
-                    .timeCreated(st.getTimeCreated())
-                    .timeUpdated(st.getTimeUpdated())
-                    .build();
-        });
 
         var result = showTimeService.createShowTime(createRequest, request);
 
@@ -252,23 +235,6 @@ class ShowTimeServiceImplTest {
             return st;
         });
         when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(pricingPolicyRepository.findAllById(any())).thenReturn(List.of(pricingPolicy));
-        when(pricingPolicyMapper.toResponse(pricingPolicy)).thenReturn(PricingPolicyResponse.builder().id(pricingPolicyId).build());
-        when(showTimeMapper.toResponse(any(ShowTime.class))).thenAnswer(invocation -> {
-            ShowTime st = invocation.getArgument(0);
-            return ShowTimeResponse.builder()
-                    .id(st.getId())
-                    .hallId(st.getHallId())
-                    .filmId(st.getFilmId())
-                    .pricingPolicyId(st.getPricingPolicyId())
-                    .startDateTime(st.getStartDateTime())
-                    .endDateTime(st.getEndDateTime())
-                    .status(st.getStatus())
-                    .isDeleted(Boolean.TRUE.equals(st.getIsDeleted()))
-                    .timeCreated(st.getTimeCreated())
-                    .timeUpdated(st.getTimeUpdated())
-                    .build();
-        });
 
         var result = showTimeService.createShowTime(createRequest, request);
 
@@ -365,23 +331,6 @@ class ShowTimeServiceImplTest {
             return st;
         });
         when(showTimeRepository.save(any(ShowTime.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(pricingPolicyRepository.findAllById(any())).thenReturn(List.of(pricingPolicy));
-        when(pricingPolicyMapper.toResponse(pricingPolicy)).thenReturn(pricingPolicyResponse);
-        when(showTimeMapper.toResponse(any(ShowTime.class))).thenAnswer(invocation -> {
-            ShowTime st = invocation.getArgument(0);
-            return ShowTimeResponse.builder()
-                    .id(st.getId())
-                    .hallId(st.getHallId())
-                    .filmId(st.getFilmId())
-                    .pricingPolicyId(st.getPricingPolicyId())
-                    .startDateTime(st.getStartDateTime())
-                    .endDateTime(st.getEndDateTime())
-                    .status(st.getStatus())
-                    .isDeleted(Boolean.TRUE.equals(st.getIsDeleted()))
-                    .timeCreated(st.getTimeCreated())
-                    .timeUpdated(st.getTimeUpdated())
-                    .build();
-        });
 
         var result = showTimeService.createShowTime(createRequest, request);
 

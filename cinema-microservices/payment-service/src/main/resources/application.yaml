@@ -26,6 +26,11 @@ spring:
           address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
         cinema:
           address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
 
 server:
   port: ${SERVER_PORT:8098}
@@ -51,3 +56,5 @@ momo:
 
 payment:
   expiration-scheduler-delay-ms: ${PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS:60000}
+  loyalty-outbox:
+    publisher-delay-ms: ${PAYMENT_LOYALTY_OUTBOX_PUBLISHER_DELAY_MS:15000}

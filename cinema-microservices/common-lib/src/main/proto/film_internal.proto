@@ -32,6 +32,25 @@ message FilmPayload {
   string status = 14;
   string time_created = 15;
   string time_updated = 16;
+  repeated FilmTypePayload types = 17;
+  repeated ActorPayload actors = 18;
+}
+
+message FilmTypePayload {
+  string id = 1;
+  string name = 2;
+  string time_created = 3;
+  string time_updated = 4;
+}
+
+message ActorPayload {
+  string id = 1;
+  string name = 2;
+  int32 birth_year = 3;
+  string hometown = 4;
+  string avatar_url = 5;
+  string time_created = 6;
+  string time_updated = 7;
 }
 
 message GetFilmByIdReply {

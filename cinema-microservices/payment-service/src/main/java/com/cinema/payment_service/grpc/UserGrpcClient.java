@@ -3,8 +3,6 @@ package com.cinema.payment_service.grpc;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.GrpcErrorUtils;
-import com.cinema.grpc.user.AdjustUserLoyaltyPointsReply;
-import com.cinema.grpc.user.AdjustUserLoyaltyPointsRequest;
 import com.cinema.grpc.user.GetUserBasicByIdReply;
 import com.cinema.grpc.user.GetUserBasicByIdRequest;
 import com.cinema.grpc.user.UserBasicPayload;
@@ -62,60 +60,6 @@ public class UserGrpcClient {
                     ex);
             throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
         }
-    }
-
-    public long addUserLoyaltyPoints(UUID userId, long loyaltyPoints) {
-        return adjustUserLoyaltyPoints(userId, loyaltyPoints, true);
-    }
-
-    public long deductUserLoyaltyPoints(UUID userId, long loyaltyPoints) {
-        return adjustUserLoyaltyPoints(userId, loyaltyPoints, false);
-    }
-
-    private long adjustUserLoyaltyPoints(UUID userId, long loyaltyPoints, boolean isAddition) {
-        try {
-            String action = isAddition ? "ADD" : "DEDUCT";
-            log.info(
-                    "USER_GRPC_LOYALTY_REQUEST action={} userId={} loyaltyPoints={}",
-                    action,
-                    userId,
-                    loyaltyPoints);
-            AdjustUserLoyaltyPointsReply reply = isAddition
-                    ? userBlockingStub.addUserLoyaltyPoints(buildLoyaltyPointsRequest(userId, loyaltyPoints))
-                    : userBlockingStub.deductUserLoyaltyPoints(buildLoyaltyPointsRequest(userId, loyaltyPoints));
-            if (!reply.getSuccess()) {
-                log.warn(
-                        "USER_GRPC_LOYALTY_RESPONSE action={} userId={} success=false errorKey={} message={}",
-                        action,
-                        userId,
-                        reply.getErrorKey(),
-                        reply.getMessage());
-                throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.EXTERNAL_SERVICE_ERROR));
-            }
-            log.info(
-                    "USER_GRPC_LOYALTY_RESPONSE action={} userId={} success=true nextPoints={}",
-                    action,
-                    userId,
-                    reply.getLoyaltyPoints());
-            return reply.getLoyaltyPoints();
-        } catch (StatusRuntimeException ex) {
-            log.warn(
-                    "USER_GRPC_LOYALTY_STATUS_ERROR action={} userId={} loyaltyPoints={} grpcCode={} description={}",
-                    isAddition ? "ADD" : "DEDUCT",
-                    userId,
-                    loyaltyPoints,
-                    ex.getStatus().getCode(),
-                    ex.getStatus().getDescription(),
-                    ex);
-            throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
-        }
-    }
-
-    private AdjustUserLoyaltyPointsRequest buildLoyaltyPointsRequest(UUID userId, long loyaltyPoints) {
-        return AdjustUserLoyaltyPointsRequest.newBuilder()
-                .setUserId(userId == null ? "" : userId.toString())
-                .setLoyaltyPoints(loyaltyPoints)
-                .build();
     }
 
     private UserBasicInfo toUserBasicInfo(UserBasicPayload payload) {

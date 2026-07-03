@@ -9,6 +9,8 @@ import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Entity
@@ -48,6 +50,22 @@ public class Film {
 
     @Column(length = 50)
     String type;
+
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "film_types_link",
+            joinColumns = @JoinColumn(name = "film_id"),
+            inverseJoinColumns = @JoinColumn(name = "film_type_id"))
+    Set<FilmType> types = new LinkedHashSet<>();
+
+    @Builder.Default
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "film_actors_link",
+            joinColumns = @JoinColumn(name = "film_id"),
+            inverseJoinColumns = @JoinColumn(name = "actor_id"))
+    Set<Actor> actors = new LinkedHashSet<>();
 
     @Column(name = "release_date", nullable = false)
     LocalDate releaseDate;

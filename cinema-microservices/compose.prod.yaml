@@ -244,6 +244,10 @@ services:
       BOOKING_GRPC_PORT: 9195
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
       VIETQR_BASE_URL: https://api.vietqr.io
       VIETQR_BANKS_PATH: /v2/banks
       VIETQR_API_KEY: ${VIETQR_API_KEY:?VIETQR_API_KEY is required}

@@ -29,6 +29,7 @@ import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.services.PaymentSessionService;
+import com.cinema.payment_service.services.PaymentLoyaltyOutboxService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
 import com.cinema.payment_service.support.PromotionQuote;
@@ -109,6 +110,9 @@ class PaymentSessionServiceImplTest {
 
     @Mock
     private PromotionEngine promotionEngine;
+
+    @Mock
+    private PaymentLoyaltyOutboxService paymentLoyaltyOutboxService;
 
     @Spy
     private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
@@ -737,15 +741,13 @@ class PaymentSessionServiceImplTest {
         assertEquals(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage(), response.getMessage());
         assertEquals(PaymentTransactionStatus.PAID, transaction.getStatus());
         assertNotNull(transaction.getPaidAt());
-        assertNotNull(transaction.getLoyaltyPointsSettledAt());
         verify(bookingGrpcClient).confirmBookingPayment(
                 bookingId,
                 transaction.getAmount(),
                 transaction.getPaymentMethod(),
                 null,
                 transaction.getOrderInvoiceNumber());
-        verify(userGrpcClient).deductUserLoyaltyPoints(ownerId, 20000L);
-        verify(userGrpcClient).addUserLoyaltyPoints(ownerId, 160L);
+        verify(paymentLoyaltyOutboxService).enqueueIfNeeded(transaction, "completeSession");
     }
 
     @Test
@@ -1301,9 +1303,7 @@ class PaymentSessionServiceImplTest {
                 transaction.getPaymentMethod(),
                 transaction.getProviderRef(),
                 transaction.getOrderInvoiceNumber());
-        verify(userGrpcClient).deductUserLoyaltyPoints(transaction.getUserId(), 20000L);
-        verify(userGrpcClient).addUserLoyaltyPoints(transaction.getUserId(), 180L);
-        assertNotNull(transaction.getLoyaltyPointsSettledAt());
+        verify(paymentLoyaltyOutboxService).enqueueIfNeeded(transaction, "webhook");
     }
 
     @Test
