@@ -82,6 +82,7 @@ import java.util.stream.Collectors;
 public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(0, RoundingMode.HALF_UP);
+    private static final BigDecimal LOYALTY_POINT_VALUE = BigDecimal.valueOf(1000L);
 
     private final PaymentTransactionRepository paymentTransactionRepository;
     private final PaymentTransactionRepositoryImpl paymentTransactionRepositoryImpl;
@@ -250,6 +251,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         ensureRequesterCanCompleteSession(transaction, requesterUserId, requesterRole);
 
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
+            settleLoyaltyPoints(transaction);
             return ActionMessageResponse.builder()
                     .message(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage())
                     .build();
@@ -709,8 +711,16 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             MomoIpnRequest request,
             String webhookEventKey,
             String logPrefix) {
-        if (transaction.getStatus() == PaymentTransactionStatus.PAID
-                || transaction.getStatus() == PaymentTransactionStatus.REFUND_PENDING
+        if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
+            settleLoyaltyPoints(transaction);
+            markWebhookMeta(transaction, webhookEventKey);
+            paymentTransactionRepository.save(transaction);
+            return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
+                    "success", true,
+                    "ignored", true,
+                    "message", "Transaction already processed"));
+        }
+        if (transaction.getStatus() == PaymentTransactionStatus.REFUND_PENDING
                 || transaction.getStatus() == PaymentTransactionStatus.REFUNDED) {
             markWebhookMeta(transaction, webhookEventKey);
             paymentTransactionRepository.save(transaction);
@@ -1042,7 +1052,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         BigDecimal normalizedAmount = normalizeAmount(transaction.getAmount());
         if (normalizedRequestedPoints <= 0) {
             transaction.setLoyaltyPointsUsed(0L);
-            transaction.setLoyaltyPointsEarned(normalizedAmount.longValueExact());
+            transaction.setLoyaltyPointsEarned(calculateEarnedLoyaltyPoints(normalizedAmount));
             return;
         }
 
@@ -1056,11 +1066,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             throw new BusinessException(ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
         }
 
-        long appliedPoints = Math.min(normalizedRequestedPoints, normalizedAmount.longValueExact());
-        BigDecimal payableAmount = normalizedAmount.subtract(BigDecimal.valueOf(appliedPoints));
+        long maxRedeemablePoints = normalizedAmount.longValueExact();
+        long appliedPoints = Math.min(normalizedRequestedPoints, maxRedeemablePoints);
+        BigDecimal payableAmount = normalizedAmount.subtract(
+                BigDecimal.valueOf(appliedPoints));
         transaction.setLoyaltyPointsUsed(appliedPoints);
         transaction.setAmount(normalizeAmount(payableAmount));
-        transaction.setLoyaltyPointsEarned(normalizeAmount(payableAmount).longValueExact());
+        transaction.setLoyaltyPointsEarned(calculateEarnedLoyaltyPoints(payableAmount));
     }
 
     private void settleLoyaltyPoints(PaymentTransaction transaction) {
@@ -1068,9 +1080,15 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return;
         }
 
+        if (transaction.getLoyaltyPointsSettledAt() != null) {
+            return;
+        }
+
         long loyaltyPointsUsed = normalizeLongValue(transaction.getLoyaltyPointsUsed());
         long loyaltyPointsEarned = normalizeLongValue(transaction.getLoyaltyPointsEarned());
         if (loyaltyPointsUsed <= 0 && loyaltyPointsEarned <= 0) {
+            transaction.setLoyaltyPointsSettledAt(LocalDateTime.now());
+            paymentTransactionRepository.save(transaction);
             return;
         }
 
@@ -1083,6 +1101,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             if (loyaltyPointsEarned > 0) {
                 userGrpcClient.addUserLoyaltyPoints(transaction.getUserId(), loyaltyPointsEarned);
             }
+            transaction.setLoyaltyPointsSettledAt(LocalDateTime.now());
+            paymentTransactionRepository.save(transaction);
         } catch (BusinessException ex) {
             log.warn(
                     "LOYALTY_POINTS_SYNC_FAILED transactionId={} bookingId={} userId={} used={} earned={} errorCode={}",
@@ -1129,6 +1149,11 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         if (normalizedRequestedPoints > availablePoints) {
             throw new BusinessException(ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
         }
+    }
+
+    private long calculateEarnedLoyaltyPoints(BigDecimal amount) {
+        BigDecimal normalizedAmount = normalizeAmount(amount);
+        return normalizedAmount.divide(LOYALTY_POINT_VALUE, 0, RoundingMode.CEILING).longValueExact();
     }
 
     private List<PromotionQuote> applyPromotionIfNeeded(PaymentTransaction transaction,

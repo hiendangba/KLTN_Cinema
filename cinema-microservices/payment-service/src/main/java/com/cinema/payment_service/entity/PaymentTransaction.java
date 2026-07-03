@@ -118,6 +118,9 @@ public class PaymentTransaction {
     @Column(name = "loyalty_points_earned")
     private Long loyaltyPointsEarned;
 
+    @Column(name = "loyalty_points_settled_at")
+    private LocalDateTime loyaltyPointsSettledAt;
+
     @Column(name = "webhook_event_key", length = 255)
     private String webhookEventKey;
 

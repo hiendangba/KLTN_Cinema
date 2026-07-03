@@ -165,8 +165,7 @@ public class RevenueReportSupport {
             accumulator.promotionDiscountAmount = accumulator.promotionDiscountAmount.add(
                     sumPromotionDiscountSnapshots(resolvedPromotionSnapshots));
             accumulator.loyaltyPointsDiscountAmount = accumulator.loyaltyPointsDiscountAmount.add(
-                    normalizeAmount(BigDecimal.valueOf(
-                            transaction.getLoyaltyPointsUsed() == null ? 0L : transaction.getLoyaltyPointsUsed())));
+                    normalizeAmount(BigDecimal.valueOf(normalizeLoyaltyPointsUsed(transaction.getLoyaltyPointsUsed()))));
             accumulator.grossAmount = accumulator.grossAmount.add(amount);
             accumulator.netAmount = accumulator.netAmount.add(amount);
             accumulator.ticketSubtotalAmount = accumulator.ticketSubtotalAmount.add(
@@ -254,6 +253,10 @@ public class RevenueReportSupport {
             return ZERO;
         }
         return amount.setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private long normalizeLoyaltyPointsUsed(Long loyaltyPointsUsed) {
+        return Math.max(0L, loyaltyPointsUsed == null ? 0L : loyaltyPointsUsed);
     }
 
     private String normalizeStringValue(String value) {
