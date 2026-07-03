@@ -64,26 +64,41 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
         List<SeatNode> availableSeats = loadAvailableSeats(showtimeId, layout, pricingPolicy);
         boolean preferCoupleSeat = Boolean.TRUE.equals(request.getPreferCoupleSeat());
         Map<String, String> couplePartnerBySeatCode = buildCouplePartnerBySeatCode(layout);
+        List<SeatNode> nonCoupleSeats = availableSeats.stream()
+                .filter(seat -> !isCoupleSeat(seat))
+                .toList();
 
-        if (availableSeats.size() < request.getSeatCount()) {
+        List<SeatNode> suggestionSeats;
+        if (preferCoupleSeat && request.getSeatCount() > 1) {
+            suggestionSeats = availableSeats;
+        } else if (nonCoupleSeats.size() >= request.getSeatCount()) {
+            suggestionSeats = nonCoupleSeats;
+        } else {
+            suggestionSeats = availableSeats;
+        }
+
+        if (suggestionSeats.size() < request.getSeatCount()) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_AVAILABLE_SEATS);
         }
 
-        List<SeatSuggestionCandidateResponse> candidates = preferCoupleSeat
-                ? buildCouplePreferredCandidates(
-                        availableSeats,
-                        layout,
-                        request.getSeatCount(),
-                        couplePartnerBySeatCode)
-                : buildExactCandidates(
-                availableSeats,
-                layout,
-                request.getSeatCount(),
-                false);
+        List<SeatSuggestionCandidateResponse> candidates;
+        if (preferCoupleSeat && request.getSeatCount() > 1) {
+            candidates = buildCouplePreferredCandidates(
+                    suggestionSeats,
+                    layout,
+                    request.getSeatCount(),
+                    couplePartnerBySeatCode);
+        } else {
+            candidates = buildExactCandidates(
+                    suggestionSeats,
+                    layout,
+                    request.getSeatCount(),
+                    false);
+        }
 
         if (candidates.isEmpty()) {
             candidates = buildFallbackCandidates(
-                    availableSeats,
+                    suggestionSeats,
                     layout,
                     request.getSeatCount(),
                     preferCoupleSeat,
@@ -421,8 +436,7 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
     private Comparator<BlockCandidate> blockComparator(SeatGrpcClient.LayoutBundle layout,
                                                        boolean preferCoupleSeat) {
         if (preferCoupleSeat) {
-            return Comparator.comparingInt((BlockCandidate block) -> -block.couplePairCount())
-                    .thenComparingInt(BlockCandidate::rowSpan)
+            return Comparator.comparingDouble((BlockCandidate block) -> centerDistance(block.seats(), layout))
                     .thenComparing(Comparator.comparingDouble((BlockCandidate block) -> -screenDistance(block.seats(), layout)))
                     .thenComparingInt((BlockCandidate block) -> -block.maxCol())
                     .thenComparingInt(BlockCandidate::groupCount)
@@ -485,10 +499,16 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
         int seatCount = orderedSeats.size();
         long totalPrice = orderedSeats.stream().mapToLong(SeatNode::price).sum();
         double centerDistance = centerDistance(orderedSeats, layout);
+        List<SeatNode> coupleSeats = orderedSeats.stream()
+                .filter(this::isCoupleSeat)
+                .toList();
+        double coupleCenterDistance = coupleSeats.isEmpty()
+                ? centerDistance
+                : centerDistance(coupleSeats, layout);
         double screenDistance = screenDistance(orderedSeats, layout);
         int groupCount = countGroups(orderedSeats);
         int score = preferCoupleSeat
-                ? calculateCoupleScore(orderedSeats, screenDistance, couplePairCount, exact, groupCount)
+                ? calculateCoupleScore(orderedSeats, coupleCenterDistance, screenDistance, couplePairCount, exact, groupCount)
                 : calculateScore(centerDistance, screenDistance, preferCoupleSeat, couplePairCount, exact, groupCount);
 
         return SeatSuggestionCandidateResponse.builder()
@@ -521,6 +541,7 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
     }
 
     private int calculateCoupleScore(List<SeatNode> seats,
+                                     double centerDistance,
                                      double screenDistance,
                                      int couplePairCount,
                                      boolean exact,
@@ -531,9 +552,9 @@ public class SeatSuggestionServiceImpl implements SeatSuggestionService {
         } else {
             score -= 1_000_000;
         }
+        score -= (int) Math.round(centerDistance * 100_000);
         score += rightEdge(seats) * 100;
-        score += rightEdgeOfSingles(seats) * 50;
-        score += (int) Math.round(screenDistance * 250);
+        score += rightEdgeOfSingles(seats);
         score -= coupleFallbackPenalty(seats);
         score -= Math.max(0, coupleGroupCount(seats) - 1) * 100_000;
         if (couplePairCount > 0) {

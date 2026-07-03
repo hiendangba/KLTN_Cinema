@@ -2065,6 +2065,19 @@ Cập nhật kỹ thuật gần nhất: 13/05/2026.
   - nếu chỉ có 1 cụm couple thì seat lẻ bám quanh trung tâm cụm đó
   - nếu có nhiều cụm couple thì seat lẻ bám cụm couple bên phải nhất trước, tie cùng khoảng cách thì seat bên phải thắng
 - Files chạm thêm: `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\showtime-service\src\main\java\com\cinema\showtime_service\services\impl\SeatSuggestionServiceImpl.java`
+- Verification cuối: `SeatSuggestionServiceImplTest` pass 13/13 sau khi khóa `seatCount=1` đi nhánh normal và giữ couple-first chỉ cho `seatCount>1`.
+- Case đã chốt trong test: `J7/J8` vẫn thắng ở layout 3 ghế, case `J1/J2` + `J13/J14` trả `I14`, và case 5 ghế với `J7-J10` couple trả `I9, J7, J8, J9, J10`.
+- Remaining risk: trọng số score đang khớp layout hiện tại; nếu hall khác có bố cục lệch mạnh thì có thể cần tune lại.
+- Normal mode đã được siết lại theo rule mới: ghế couple bị loại khỏi nhánh chuẩn nếu standard seats đã đủ, và chỉ mở rộng sang couple khi standard không đủ số lượng yêu cầu.
+- Verification mới nhất: `SeatSuggestionServiceImplTest` pass 14/14 sau khi thêm test `preferCoupleSeat=false` để khóa top 1 normal chỉ đi qua ghế standard khi còn đủ tiêu chuẩn.
+- VIP được nhập chung vào pool normal cùng STANDARD:
+  - normal mode xét `STANDARD + VIP` trước theo vị trí gần trung tâm
+  - COUPLE chỉ xuất hiện khi non-couple seats không đủ số lượng requested
+- Verification sau cùng: `SeatSuggestionServiceImplTest` pass 15/15 với case `A3` VIP thắng `COUPLE` trong normal mode, giữ nguyên couple-first cho mode riêng.
+- Bổ sung case 5 ghế để tách rõ 2 nhánh:
+  - preferCouple=true trên layout có couple trả `I9, J7, J8, J9, J10`
+  - preferCouple=false trên layout không có couple trả `H7, I7, I8, I9, I10`
+- Verification mới nhất: `SeatSuggestionServiceImplTest` pass 16/16 sau khi khóa cả 2 output 5 ghế này.
 - Verification: `SeatSuggestionServiceImplTest` pass 12/12 sau khi đổi tie-break `J1/J2` + `J13/J14` sang `I14`.
 - Remaining risk: rule hiện tại vẫn dựa trên heuristic distance; nếu layout thực tế của rạp có mô hình ghế đặc biệt thì có thể cần tune lại trọng số.
 

@@ -120,6 +120,51 @@ class SeatSuggestionServiceImplTest {
     }
 
     @Test
+    void suggestSeatSuggestions_shouldIgnoreCoupleBiasForSingleSeatRequests() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                1,
+                8,
+                "TOP",
+                seat("A1", 1, 1, "STANDARD"),
+                seat("A2", 1, 2, "STANDARD"),
+                seat("A3", 1, 3, "COUPLE"),
+                seat("A4", 1, 4, "COUPLE"),
+                seat("A5", 1, 5, "STANDARD"),
+                seat("A6", 1, 6, "STANDARD"),
+                seat("A7", 1, 7, "STANDARD"),
+                seat("A8", 1, 8, "STANDARD")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse normalResponse = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(1)
+                        .preferCoupleSeat(false)
+                        .build());
+
+        SeatSuggestionResponse preferCoupleResponse = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(1)
+                        .preferCoupleSeat(true)
+                        .build());
+
+        assertEquals(normalResponse.getCandidates().get(0).getSeatCodes(),
+                preferCoupleResponse.getCandidates().get(0).getSeatCodes());
+    }
+
+    @Test
     void suggestSeatSuggestions_shouldRejectWhenAvailableSeatsAreInsufficient() {
         UUID showtimeId = UUID.randomUUID();
         UUID hallId = UUID.randomUUID();
@@ -194,7 +239,7 @@ class SeatSuggestionServiceImplTest {
     }
 
     @Test
-    void suggestSeatSuggestions_shouldPreferOneCouplePairAndOneNearestSingleForThreeSeats() {
+    void suggestSeatSuggestions_shouldPreferCenterCouplePairAndRightTieBreakForThreeSeats() {
         UUID showtimeId = UUID.randomUUID();
         UUID hallId = UUID.randomUUID();
         UUID policyId = UUID.randomUUID();
@@ -202,16 +247,20 @@ class SeatSuggestionServiceImplTest {
         ShowTime showTime = showTime(showtimeId, hallId, policyId);
         PricingPolicy pricingPolicy = pricingPolicy(policyId);
         SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
-                1,
-                7,
+                2,
+                14,
                 "TOP",
-                seat("A1", 1, 1, "STANDARD"),
-                seat("A2", 1, 2, "STANDARD"),
-                seat("A3", 1, 3, "COUPLE"),
-                seat("A4", 1, 4, "COUPLE"),
-                seat("A5", 1, 5, "STANDARD"),
-                seat("A6", 1, 6, "STANDARD"),
-                seat("A7", 1, 7, "STANDARD")
+                seat("I7", 1, 7, "STANDARD"),
+                seat("I8", 1, 8, "STANDARD"),
+                seat("I9", 1, 9, "STANDARD"),
+                seat("J5", 2, 5, "COUPLE"),
+                seat("J6", 2, 6, "COUPLE"),
+                seat("J7", 2, 7, "COUPLE"),
+                seat("J8", 2, 8, "COUPLE"),
+                seat("J9", 2, 9, "COUPLE"),
+                seat("J10", 2, 10, "COUPLE"),
+                seat("J13", 2, 13, "STANDARD"),
+                seat("J14", 2, 14, "STANDARD")
         );
 
         when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
@@ -227,11 +276,127 @@ class SeatSuggestionServiceImplTest {
                         .build());
 
         assertTrue(response.getCandidates().get(0).getHasCoupleSeats());
-        assertTrue(response.getCandidates().get(0).getSeatCodes().containsAll(List.of("A3", "A4")));
+        assertEquals(List.of("I8", "J7", "J8"), response.getCandidates().get(0).getSeatCodes());
         assertEquals(3, response.getCandidates().get(0).getSeatCount());
-        assertTrue(
-                response.getCandidates().get(0).getSeatCodes().contains("A2")
-                        || response.getCandidates().get(0).getSeatCodes().contains("A5"));
+        assertFalse(response.getCandidates().get(0).getSeatCodes().containsAll(List.of("J5", "J6")));
+        assertFalse(response.getCandidates().get(0).getSeatCodes().containsAll(List.of("J9", "J10")));
+    }
+
+    @Test
+    void suggestSeatSuggestions_shouldExcludeCoupleSeatsWhenPreferCoupleDisabled() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                2,
+                14,
+                "TOP",
+                seat("I7", 1, 7, "STANDARD"),
+                seat("I8", 1, 8, "STANDARD"),
+                seat("I9", 1, 9, "STANDARD"),
+                seat("J5", 2, 5, "COUPLE"),
+                seat("J6", 2, 6, "COUPLE"),
+                seat("J7", 2, 7, "COUPLE"),
+                seat("J8", 2, 8, "COUPLE"),
+                seat("J9", 2, 9, "COUPLE"),
+                seat("J10", 2, 10, "COUPLE"),
+                seat("J13", 2, 13, "STANDARD"),
+                seat("J14", 2, 14, "STANDARD")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse response = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(3)
+                        .preferCoupleSeat(false)
+                        .build());
+
+        assertEquals(List.of("I7", "I8", "I9"), response.getCandidates().get(0).getSeatCodes());
+        assertFalse(response.getCandidates().get(0).getSeatCodes().stream().anyMatch(code -> code.startsWith("J")));
+    }
+
+    @Test
+    void suggestSeatSuggestions_shouldKeepVipAndStandardAheadOfCoupleInNormalMode() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                1,
+                7,
+                "TOP",
+                seat("A1", 1, 1, "STANDARD"),
+                seat("A2", 1, 2, "STANDARD"),
+                seat("A3", 1, 3, "VIP"),
+                seat("A4", 1, 4, "COUPLE"),
+                seat("A5", 1, 5, "COUPLE"),
+                seat("A6", 1, 6, "STANDARD"),
+                seat("A7", 1, 7, "STANDARD")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse response = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(1)
+                        .preferCoupleSeat(false)
+                        .build());
+
+        assertEquals(List.of("A3"), response.getCandidates().get(0).getSeatCodes());
+        assertFalse(response.getCandidates().get(0).getSeatCodes().contains("A4"));
+    }
+
+    @Test
+    void suggestSeatSuggestions_shouldReturnCenterishStandardBlocksForFiveSeatsWhenNoCoupleIsPreferred() {
+        UUID showtimeId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+
+        ShowTime showTime = showTime(showtimeId, hallId, policyId);
+        PricingPolicy pricingPolicy = pricingPolicy(policyId);
+        SeatGrpcClient.LayoutBundle layoutBundle = layoutBundle(
+                10,
+                14,
+                "TOP",
+                seat("H7", 8, 7, "STANDARD"),
+                seat("I7", 9, 7, "STANDARD"),
+                seat("I8", 9, 8, "STANDARD"),
+                seat("I9", 9, 9, "STANDARD"),
+                seat("I10", 9, 10, "STANDARD"),
+                seat("J11", 10, 11, "STANDARD"),
+                seat("J12", 10, 12, "STANDARD"),
+                seat("J13", 10, 13, "STANDARD"),
+                seat("J14", 10, 14, "STANDARD")
+        );
+
+        when(showTimeRepository.findById(showtimeId)).thenReturn(Optional.of(showTime));
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(pricingPolicy));
+        when(seatGrpcClient.getLayoutByHallId(hallId)).thenReturn(layoutBundle);
+        when(bookingGrpcClient.getSeatRuntimeStates(eq(showtimeId), anyList())).thenReturn(Map.of());
+
+        SeatSuggestionResponse response = service.suggestSeatSuggestions(
+                showtimeId,
+                SeatSuggestionRequest.builder()
+                        .seatCount(5)
+                        .preferCoupleSeat(false)
+                        .build());
+
+        assertEquals(List.of("H7", "I7", "I8", "I9", "I10"), response.getCandidates().get(0).getSeatCodes());
+        assertFalse(response.getCandidates().get(0).getSeatCodes().stream().anyMatch(code -> code.startsWith("J")));
     }
 
     @Test
