@@ -164,6 +164,9 @@ public class RevenueReportSupport {
             accumulator.appendPromotionSnapshots(resolvedPromotionSnapshots);
             accumulator.promotionDiscountAmount = accumulator.promotionDiscountAmount.add(
                     sumPromotionDiscountSnapshots(resolvedPromotionSnapshots));
+            accumulator.loyaltyPointsDiscountAmount = accumulator.loyaltyPointsDiscountAmount.add(
+                    normalizeAmount(BigDecimal.valueOf(
+                            transaction.getLoyaltyPointsUsed() == null ? 0L : transaction.getLoyaltyPointsUsed())));
             accumulator.grossAmount = accumulator.grossAmount.add(amount);
             accumulator.netAmount = accumulator.netAmount.add(amount);
             accumulator.ticketSubtotalAmount = accumulator.ticketSubtotalAmount.add(
@@ -294,6 +297,7 @@ public class RevenueReportSupport {
         private final List<String> promotionCodes = new ArrayList<>();
         private final List<String> promotionNames = new ArrayList<>();
         private BigDecimal promotionDiscountAmount = ZERO;
+        private BigDecimal loyaltyPointsDiscountAmount = ZERO;
         private BigDecimal paidAmount = ZERO;
         private BigDecimal refundedAmount = ZERO;
         private BigDecimal grossAmount = ZERO;
@@ -320,6 +324,7 @@ public class RevenueReportSupport {
                     .promotionCode(joinPromotionTokens(promotionCodes))
                     .promotionName(joinPromotionTokens(promotionNames))
                     .promotionDiscountAmount(promotionDiscountAmount)
+                    .loyaltyPointsDiscountAmount(loyaltyPointsDiscountAmount)
                     .paidAmount(paidAmount)
                     .refundedAmount(refundedAmount)
                     .grossAmount(grossAmount)

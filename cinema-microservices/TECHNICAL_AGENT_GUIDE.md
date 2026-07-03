@@ -2105,6 +2105,7 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
 - Thêm loyalty points v1 theo hướng balance ở `user-service`, snapshot ở `payment-service`:
   - `user-service` thêm cột `loyalty_points`, expose trong `UserResponse` và `GetUserBasicById`, đồng thời có 2 RPC nội bộ `AddUserLoyaltyPoints` và `DeductUserLoyaltyPoints`
   - `payment-service` thêm snapshot `loyaltyPointsUsed`/`loyaltyPointsEarned` vào `payment_transaction`, kiểm tra số dư trước khi cho áp điểm ở checkout/preview, và sync điểm sau khi payment confirm
+  - báo cáo doanh thu cinema trong `payment-service` tách thêm cột `loyaltyPointsDiscountAmount` để tổng hợp số tiền giảm từ điểm, đồng thời export Excel có thêm cột `Tiền giảm từ điểm`
   - thêm `UserGrpcClient` cho payment-service để đọc balance và gọi gRPC cộng/trừ điểm
 - Files chạm thêm:
   - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\proto\user_internal.proto`
@@ -2125,7 +2126,7 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
   - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\payment-service\src\main\java\com\cinema\payment_service\controller\PaymentController.java`
 - Verification:
   - `user-service` test mới `UserServiceImplLoyaltyPointsTest` pass 3/3
-  - `payment-service` test `PaymentSessionServiceImplTest` pass 25/25 khi chạy reactor `-pl payment-service -am`
+  - `payment-service` test `PaymentSessionServiceImplTest` pass 26/26, `RevenueReportSupportTest` pass 1/1 khi chạy reactor `-pl payment-service -am`
 - Normal mode đã được siết lại theo rule mới: ghế couple bị loại khỏi nhánh chuẩn nếu standard seats đã đủ, và chỉ mở rộng sang couple khi standard không đủ số lượng yêu cầu.
 - Verification mới nhất: `SeatSuggestionServiceImplTest` pass 14/14 sau khi thêm test `preferCoupleSeat=false` để khóa top 1 normal chỉ đi qua ghế standard khi còn đủ tiêu chuẩn.
 - VIP được nhập chung vào pool normal cùng STANDARD:

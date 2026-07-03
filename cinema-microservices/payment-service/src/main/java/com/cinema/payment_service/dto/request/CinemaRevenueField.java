@@ -24,6 +24,7 @@ public enum CinemaRevenueField {
     PROMOTION_CODE("promotionCode", String.class),
     PROMOTION_NAME("promotionName", String.class),
     PROMOTION_DISCOUNT_AMOUNT("promotionDiscountAmount", BigDecimal.class),
+    LOYALTY_POINTS_DISCOUNT_AMOUNT("loyaltyPointsDiscountAmount", BigDecimal.class),
     PAID_AMOUNT("paidAmount", BigDecimal.class),
     REFUNDED_AMOUNT("refundedAmount", BigDecimal.class),
     GROSS_AMOUNT("grossAmount", BigDecimal.class),

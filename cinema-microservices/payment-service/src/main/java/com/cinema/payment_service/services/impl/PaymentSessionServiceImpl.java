@@ -465,6 +465,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                         "Mã khuyến mãi",
                         "Tên khuyến mãi",
                         "Tiền giảm giá",
+                        "Tiền giảm từ điểm",
                         "Tiền đã thu",
                         "Tiền đã hoàn",
                         "Tổng giá trị giao dịch",
@@ -485,6 +486,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                                 item.promotionCode(),
                                 item.promotionName(),
                                 item.promotionDiscountAmount(),
+                                item.loyaltyPointsDiscountAmount(),
                                 item.paidAmount(),
                                 item.refundedAmount(),
                                 item.grossAmount(),
@@ -1991,6 +1993,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             case PROMOTION_CODE -> item.promotionCode();
             case PROMOTION_NAME -> item.promotionName();
             case PROMOTION_DISCOUNT_AMOUNT -> item.promotionDiscountAmount();
+            case LOYALTY_POINTS_DISCOUNT_AMOUNT -> item.loyaltyPointsDiscountAmount();
             case PAID_AMOUNT -> item.paidAmount();
             case REFUNDED_AMOUNT -> item.refundedAmount();
             case GROSS_AMOUNT -> item.grossAmount();
@@ -2046,6 +2049,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     .promotionCode("")
                     .promotionName("")
                     .promotionDiscountAmount(ZERO)
+                    .loyaltyPointsDiscountAmount(ZERO)
                     .paidAmount(ZERO)
                     .refundedAmount(ZERO)
                     .grossAmount(ZERO)
@@ -2063,6 +2067,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         BigDecimal ticketSubtotalAmount = ZERO;
         BigDecimal productSubtotalAmount = ZERO;
         BigDecimal promotionDiscountAmount = ZERO;
+        BigDecimal loyaltyPointsDiscountAmount = ZERO;
         BigDecimal paidAmount = ZERO;
         BigDecimal refundedAmount = ZERO;
         BigDecimal grossAmount = ZERO;
@@ -2086,6 +2091,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             appendPromotionTokens(promotionCodes, item.promotionCode());
             appendPromotionTokens(promotionNames, item.promotionName());
             promotionDiscountAmount = promotionDiscountAmount.add(normalizeAmount(item.promotionDiscountAmount()));
+            loyaltyPointsDiscountAmount = loyaltyPointsDiscountAmount.add(
+                    normalizeAmount(item.loyaltyPointsDiscountAmount()));
             paidAmount = paidAmount.add(normalizeAmount(item.paidAmount()));
             refundedAmount = refundedAmount.add(normalizeAmount(item.refundedAmount()));
             grossAmount = grossAmount.add(normalizeAmount(item.grossAmount()));
@@ -2105,6 +2112,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .promotionCode(joinPromotionTokens(promotionCodes))
                 .promotionName(joinPromotionTokens(promotionNames))
                 .promotionDiscountAmount(promotionDiscountAmount)
+                .loyaltyPointsDiscountAmount(loyaltyPointsDiscountAmount)
                 .paidAmount(paidAmount)
                 .refundedAmount(refundedAmount)
                 .grossAmount(grossAmount)

@@ -18,6 +18,7 @@ public record CinemaRevenueSummaryResponse(
         String promotionCode,
         String promotionName,
         BigDecimal promotionDiscountAmount,
+        BigDecimal loyaltyPointsDiscountAmount,
         BigDecimal paidAmount,
         BigDecimal refundedAmount,
         BigDecimal grossAmount,

@@ -747,6 +747,7 @@ class PaymentSessionServiceImplTest {
                 LocalDateTime.of(2026, 5, 29, 9, 0), null,
                 BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(10000),
                 "CINEMASTAR10", "CinemaStar 10%");
+        tx1.setLoyaltyPointsUsed(5000L);
         PaymentTransaction tx2 = buildTransaction(cinema1, film2, PaymentTransactionStatus.PAID,
                 LocalDateTime.of(2026, 5, 29, 10, 0), null,
                 BigDecimal.valueOf(120000), BigDecimal.ZERO, BigDecimal.ZERO,
@@ -806,9 +807,11 @@ class PaymentSessionServiceImplTest {
         assertEquals("CINEMASTAR10", response.items().get(0).promotionCode());
         assertEquals("CinemaStar 10%", response.items().get(0).promotionName());
         assertEquals(BigDecimal.valueOf(10000), response.items().get(0).promotionDiscountAmount());
+        assertEquals(BigDecimal.valueOf(5000), response.items().get(0).loyaltyPointsDiscountAmount());
         assertEquals("CINEMASTAR10", response.total().promotionCode());
         assertEquals("CinemaStar 10%", response.total().promotionName());
         assertEquals(BigDecimal.valueOf(10000), response.total().promotionDiscountAmount());
+        assertEquals(BigDecimal.valueOf(5000), response.total().loyaltyPointsDiscountAmount());
     }
 
     @Test
@@ -842,11 +845,54 @@ class PaymentSessionServiceImplTest {
         CinemaRevenueReportResponse response = paymentSessionService.getAllCinemaRevenueReport(request);
 
         assertEquals(BigDecimal.ZERO.setScale(0), response.items().get(0).promotionDiscountAmount());
+        assertEquals(BigDecimal.ZERO.setScale(0), response.items().get(0).loyaltyPointsDiscountAmount());
         assertEquals("", response.items().get(0).promotionCode());
         assertEquals("", response.items().get(0).promotionName());
         assertEquals(BigDecimal.ZERO.setScale(0), response.total().promotionDiscountAmount());
+        assertEquals(BigDecimal.ZERO.setScale(0), response.total().loyaltyPointsDiscountAmount());
         assertEquals("", response.total().promotionCode());
         assertEquals("", response.total().promotionName());
+    }
+
+    @Test
+    void exportCinemaRevenueReport_shouldIncludeLoyaltyPointsDiscountColumn() throws Exception {
+        UUID cinema1 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+
+        when(httpRequest.getHeader(com.cinema.http.HeaderNames.X_USER_ROLE))
+                .thenReturn(HeaderNames.ROLE_ADMIN);
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+
+        PaymentTransaction tx1 = buildTransaction(cinema1, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 9, 0), null,
+                BigDecimal.valueOf(100000), BigDecimal.ZERO, BigDecimal.valueOf(10000),
+                "CINEMASTAR10", "CinemaStar 10%");
+        tx1.setLoyaltyPointsUsed(5000L);
+
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                isNull(),
+                any(),
+                any()))
+                .thenReturn(List.of(tx1));
+
+        PageRequest<CinemaRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
+        CinemaRevenueReportRequest request = CinemaRevenueReportRequest.builder()
+                .pageRequest(pageRequest)
+                .build();
+
+        byte[] file = paymentSessionService.exportCinemaRevenueReport(request, httpRequest);
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                     new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            assertEquals("Tiền giảm từ điểm", sheet.getRow(1).getCell(14).getStringCellValue());
+            assertEquals(5000d, sheet.getRow(2).getCell(14).getNumericCellValue());
+        }
     }
 
     @Test
