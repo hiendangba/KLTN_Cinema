@@ -2,8 +2,11 @@ package com.cinema.film_service.controller;
 
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.response.PageResponse;
+import com.cinema.film_service.dto.request.ActorField;
 import com.cinema.film_service.dto.request.CreateActorRequest;
 import com.cinema.film_service.dto.request.UpdateActorRequest;
 import com.cinema.film_service.dto.response.ActorResponse;
@@ -21,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -58,8 +60,9 @@ public class ActorController extends BaseController {
         return ok(SuccessMessage.FETCHED, actorService.getActorById(id));
     }
 
-    @GetMapping
-    public ResponseEntity<APIResponse<List<ActorResponse>>> listActors() {
-        return ok(SuccessMessage.LISTED, actorService.listActors());
+    @PostMapping("/search")
+    public ResponseEntity<APIResponse<PageResponse<ActorResponse>>> searchActors(
+            @Valid @RequestBody PageRequest<ActorField> request) {
+        return ok(SuccessMessage.LISTED, actorService.searchActors(request));
     }
 }

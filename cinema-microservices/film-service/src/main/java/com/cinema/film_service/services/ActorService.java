@@ -1,12 +1,14 @@
 package com.cinema.film_service.services;
 
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.response.PageResponse;
+import com.cinema.dto.request.PageRequest;
+import com.cinema.film_service.dto.request.ActorField;
 import com.cinema.film_service.dto.request.CreateActorRequest;
 import com.cinema.film_service.dto.request.UpdateActorRequest;
 import com.cinema.film_service.dto.response.ActorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface ActorService {
@@ -18,5 +20,5 @@ public interface ActorService {
 
     ActorResponse getActorById(UUID id);
 
-    List<ActorResponse> listActors();
+    PageResponse<ActorResponse> searchActors(PageRequest<ActorField> request);
 }

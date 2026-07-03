@@ -1,12 +1,13 @@
 package com.cinema.film_service.services;
 
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.film_service.dto.request.CreateFilmTypeRequest;
+import com.cinema.film_service.dto.request.FilmTypeField;
 import com.cinema.film_service.dto.request.UpdateFilmTypeRequest;
 import com.cinema.film_service.dto.response.FilmTypeResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
-import java.util.List;
 import java.util.UUID;
 
 public interface TypeService {
@@ -18,5 +19,5 @@ public interface TypeService {
 
     FilmTypeResponse getTypeById(UUID id);
 
-    List<FilmTypeResponse> listTypes();
+    PageResponse<FilmTypeResponse> searchTypes(com.cinema.dto.request.PageRequest<FilmTypeField> request);
 }

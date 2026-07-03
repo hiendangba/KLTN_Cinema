@@ -2,9 +2,12 @@ package com.cinema.film_service.controller;
 
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.dto.response.ActionMessageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.film_service.dto.request.CreateFilmTypeRequest;
+import com.cinema.film_service.dto.request.FilmTypeField;
 import com.cinema.film_service.dto.request.UpdateFilmTypeRequest;
 import com.cinema.film_service.dto.response.FilmTypeResponse;
 import com.cinema.film_service.services.TypeService;
@@ -21,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -58,8 +60,9 @@ public class TypeController extends BaseController {
         return ok(SuccessMessage.FETCHED, typeService.getTypeById(id));
     }
 
-    @GetMapping
-    public ResponseEntity<APIResponse<List<FilmTypeResponse>>> listTypes() {
-        return ok(SuccessMessage.LISTED, typeService.listTypes());
+    @PostMapping("/search")
+    public ResponseEntity<APIResponse<PageResponse<FilmTypeResponse>>> searchTypes(
+            @Valid @RequestBody PageRequest<FilmTypeField> request) {
+        return ok(SuccessMessage.LISTED, typeService.searchTypes(request));
     }
 }

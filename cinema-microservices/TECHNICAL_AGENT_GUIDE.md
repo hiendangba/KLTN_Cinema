@@ -2122,10 +2122,29 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
   - thêm `TypeController` và `ActorController` để CRUD dữ liệu catalog; FE lấy `avatarUrl` từ `upload-service` rồi gửi vào actor
   - `FilmServiceImpl` tự sync lại chuỗi cache từ quan hệ mới để keyword/search cũ không bị gãy trong giai đoạn migrate
 - Film search APIs đã thêm filter theo thể loại:
-  - `film-service` nhận thêm field `genre` trong `FilmCursorPageRequest` và alias `type` để giữ tương thích ngược
-  - cả `POST /api/films/search` và `POST /api/films/customer/search` đều map `genre` sang filter `FilmField.TYPE LIKE genre`, nên chọn một thể loại con vẫn khớp phim có nhiều thể loại trong cùng chuỗi
-  - customer search vẫn giữ nguyên scope cinema/status hiện tại, chỉ bổ sung thêm điều kiện thể loại nếu FE truyền lên
-  - đã có regression test cho cả admin search và customer search khi lọc theo genre
+- `film-service` nhận thêm field `genre` trong `FilmCursorPageRequest` và alias `type` để giữ tương thích ngược
+- cả `POST /api/films/search` và `POST /api/films/customer/search` đều map `genre` sang filter `FilmField.TYPE LIKE genre`, nên chọn một thể loại con vẫn khớp phim có nhiều thể loại trong cùng chuỗi
+- customer search vẫn giữ nguyên scope cinema/status hiện tại, chỉ bổ sung thêm điều kiện thể loại nếu FE truyền lên
+- đã có regression test cho cả admin search và customer search khi lọc theo genre
+- `film-service` và `showtime-service` đã đồng bộ response phim sang schema có `types` và `actors` đầy đủ ở cả REST lẫn gRPC:
+  - `common-lib/src/main/proto/film_internal.proto` thêm `FilmTypePayload` và `ActorPayload`, `FilmPayload` trả `repeated types`/`repeated actors`
+  - `film-service` gRPC server đẩy danh sách type/actor vào `FilmPayload`, nên mọi consumer nội bộ nhận được actor/type chứ không còn chỉ chuỗi cũ
+  - `showtime-service` `FilmResponse`/mapper cũng trả `types` và `actors`, trong đó actor có `avatarUrl`, `birthYear`, `hometown`
+  - CRUD catalog `type/actor` đổi sang API quản trị `search` có pagination thay vì trả full list để FE màn hình quản lý dùng trực tiếp
+- Files chạm thêm:
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\proto\film_internal.proto`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\film-service\src\main\java\com\cinema\film_service\controller\ActorController.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\film-service\src\main\java\com\cinema\film_service\controller\TypeController.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\film-service\src\main\java\com\cinema\film_service\dto\request\ActorField.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\film-service\src\main\java\com\cinema\film_service\dto\request\FilmTypeField.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\film-service\src\main\java\com\cinema\film_service\services\impl\ActorServiceImpl.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\film-service\src\main\java\com\cinema\film_service\services\impl\TypeServiceImpl.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\film-service\src\test\java\com\cinema\film_service\services\impl\ActorServiceImplTest.java`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\film-service\src\test\java\com\cinema\film_service\services\impl\TypeServiceImplTest.java`
+- Verification:
+  - `film-service` targeted tests pass 15/15 (`FilmServiceImplTest`, `ActorServiceImplTest`, `TypeServiceImplTest`)
+  - reactor compile pass cho `film-service` + `showtime-service`
+- Remaining risk: application-level `SpringBootTest` trong `film-service` vẫn cần env DB thật (`DB_URL`) nếu muốn chạy full suite, nhưng luồng source/mapper/search hiện đã compile và unit test xanh.
 - Files chạm thêm:
   - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\proto\user_internal.proto`
   - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\common-lib\src\main\java\com\cinema\exception\ErrorCode.java`
