@@ -14,6 +14,14 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-07-04)
+
+- `film-service` và `showtime-service` đã bỏ hẳn legacy scalar `actor/type` khỏi response và gRPC payload, chỉ còn model quan hệ `types`/`actors`.
+- Files chạm: `common-lib/src/main/proto/film_internal.proto`, `film-service/src/main/java/com/cinema/film_service/entity/Film.java`, `film-service/src/main/java/com/cinema/film_service/repository/FilmRepositoryImpl.java`, `film-service/src/main/java/com/cinema/film_service/dto/request/CreateFilmRequest.java`, `film-service/src/main/java/com/cinema/film_service/dto/request/UpdateFilmRequest.java`, `film-service/src/main/java/com/cinema/film_service/dto/response/FilmResponse.java`, `film-service/src/main/java/com/cinema/film_service/mapper/FilmMapper.java`, `film-service/src/main/java/com/cinema/film_service/grpc/FilmInternalGrpcService.java`, `showtime-service/src/main/java/com/cinema/showtime_service/dto/response/FilmResponse.java`, `showtime-service/src/main/java/com/cinema/showtime_service/mapper/FilmMapper.java`, `scripts/drop-film-legacy-columns.sql`.
+- Reason: sau khi backfill sang bảng quan hệ mới, giữ cột string cũ chỉ làm tăng rủi ro lệch dữ liệu và tạo thêm đường đọc legacy không cần thiết.
+- Verification: đã chạy `ALTER TABLE films DROP COLUMN IF EXISTS actor/type` trên local `film_db`, và query lại schema thấy chỉ còn 15 cột hiện tại, không còn `actor`/`type`.
+- Remaining risk: lệnh compile reactor `film-service/showtime-service/booking-service` hiện vẫn bị chặn ở `common-lib` bởi lỗi sẵn có trong generated/source Lombok pipeline, nên chưa thể green-run full build ở phiên này; production/VPS phải bảo đảm backfill + backup xong rồi mới chạy script drop cột.
+
 ## Changelog ngắn (2026-07-03)
 
 - `film-service` đã chuẩn hóa lại validation message cho CRUD `type` và `actor` sang tiếng Việt có dấu.

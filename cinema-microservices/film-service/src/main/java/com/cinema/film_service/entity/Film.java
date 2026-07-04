@@ -45,12 +45,6 @@ public class Film {
     @Column(length = 100)
     String director;
 
-    @Column(columnDefinition = "text")
-    String actor;
-
-    @Column(length = 50)
-    String type;
-
     @Builder.Default
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(

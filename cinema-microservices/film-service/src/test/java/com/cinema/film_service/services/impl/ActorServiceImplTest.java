@@ -5,7 +5,6 @@ import com.cinema.dto.response.PageResponse;
 import com.cinema.film_service.dto.request.ActorField;
 import com.cinema.film_service.entity.Actor;
 import com.cinema.film_service.repository.ActorRepository;
-import com.cinema.film_service.services.FilmCatalogSyncService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,9 +23,6 @@ class ActorServiceImplTest {
 
     @Mock
     private ActorRepository actorRepository;
-
-    @Mock
-    private FilmCatalogSyncService filmCatalogSyncService;
 
     @InjectMocks
     private ActorServiceImpl actorService;

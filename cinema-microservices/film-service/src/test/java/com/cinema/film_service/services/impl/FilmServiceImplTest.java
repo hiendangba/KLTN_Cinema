@@ -15,7 +15,6 @@ import com.cinema.film_service.grpc.ShowtimeGrpcClient;
 import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.FilmRepository;
 import com.cinema.film_service.repository.FilmRepositoryImpl;
-import com.cinema.film_service.services.FilmCatalogSyncService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -55,9 +54,6 @@ class FilmServiceImplTest {
 
     @Mock
     private FilmMapper filmMapper;
-
-    @Mock
-    private FilmCatalogSyncService filmCatalogSyncService;
 
     @Mock
     private ShowtimeGrpcClient showtimeGrpcClient;

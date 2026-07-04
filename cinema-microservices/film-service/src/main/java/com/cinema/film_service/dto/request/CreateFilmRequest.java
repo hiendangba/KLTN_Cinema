@@ -23,12 +23,6 @@ public class CreateFilmRequest {
     @Size(max = 100, message = "Tên đạo diễn không vượt quá 100 ký tự")
     String director;
 
-    @Size(max = 1000, message = "Tên diễn viên không vượt quá 1000 ký tự")
-    String actor;
-
-    @Size(max = 50, message = "Loại phim không vượt quá 50 ký tự")
-    String type;
-
     List<UUID> typeIds;
 
     List<UUID> actorIds;

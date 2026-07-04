@@ -15,7 +15,6 @@ import com.cinema.film_service.dto.response.ActorResponse;
 import com.cinema.film_service.entity.Actor;
 import com.cinema.film_service.repository.ActorRepository;
 import com.cinema.film_service.services.ActorService;
-import com.cinema.film_service.services.FilmCatalogSyncService;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.cinema.text.SearchTextUtils;
@@ -41,7 +40,6 @@ import java.util.stream.Collectors;
 public class ActorServiceImpl implements ActorService {
 
     private final ActorRepository actorRepository;
-    private final FilmCatalogSyncService filmCatalogSyncService;
 
     @Override
     @Transactional
@@ -76,7 +74,6 @@ public class ActorServiceImpl implements ActorService {
         actor.setHometown(normalizeOptional(request.getHometown()));
         actor.setAvatarUrl(normalizeOptional(request.getAvatarUrl()));
         actorRepository.save(actor);
-        filmCatalogSyncService.refreshFilmsForActor(id);
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.UPDATED.getMessage())
                 .build();
@@ -89,7 +86,6 @@ public class ActorServiceImpl implements ActorService {
         Actor actor = getActiveActorOrThrow(id);
         actor.setIsDeleted(true);
         actorRepository.save(actor);
-        filmCatalogSyncService.refreshFilmsForActor(id);
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.DELETED.getMessage())
                 .build();

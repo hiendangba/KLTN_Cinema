@@ -135,8 +135,6 @@ public class FilmInternalGrpcService extends FilmInternalServiceGrpc.FilmInterna
                 .setId(film.getId().toString())
                 .setTitle(Objects.toString(film.getTitle(), ""))
                 .setDirector(Objects.toString(film.getDirector(), ""))
-                .setActor(Objects.toString(film.getActor(), ""))
-                .setType(Objects.toString(film.getType(), ""))
                 .setReleaseDate(Objects.toString(film.getReleaseDate(), ""))
                 .setDescription(Objects.toString(film.getDescription(), ""))
                 .setDuration(film.getDuration() == null ? 0 : film.getDuration())

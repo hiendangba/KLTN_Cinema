@@ -19,8 +19,7 @@ message FilmPayload {
   string id = 1;
   string title = 2;
   string director = 3;
-  string actor = 4;
-  string type = 5;
+  reserved 4, 5;
   string release_date = 6;
   string description = 7;
   int32 duration = 8;

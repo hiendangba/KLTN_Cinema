@@ -22,8 +22,6 @@ public interface FilmMapper {
 
     @Mapping(target = "id", expression = "java(parseUuid(payload.getId()))")
     @Mapping(target = "director", expression = "java(emptyToNull(payload.getDirector()))")
-    @Mapping(target = "actor", expression = "java(emptyToNull(payload.getActor()))")
-    @Mapping(target = "type", expression = "java(emptyToNull(payload.getType()))")
     @Mapping(target = "types", expression = "java(mapTypes(payload.getTypesList()))")
     @Mapping(target = "actors", expression = "java(mapActors(payload.getActorsList()))")
     @Mapping(target = "releaseDate", expression = "java(parseLocalDate(payload.getReleaseDate()))")

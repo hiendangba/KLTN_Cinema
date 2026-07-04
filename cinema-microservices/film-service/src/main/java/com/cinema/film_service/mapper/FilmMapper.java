@@ -39,8 +39,6 @@ public interface FilmMapper {
                 .id(film.getId())
                 .title(film.getTitle())
                 .director(film.getDirector())
-                .actor(film.getActor())
-                .type(film.getType())
                 .types(mapTypes(film.getTypes()))
                 .actors(mapActors(film.getActors()))
                 .releaseDate(film.getReleaseDate())

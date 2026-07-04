@@ -17,14 +17,17 @@ import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
 import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
+import com.cinema.film_service.entity.Actor;
 import com.cinema.film_service.entity.Film;
+import com.cinema.film_service.entity.FilmType;
 import com.cinema.film_service.grpc.CinemaGrpcClient;
 import com.cinema.film_service.grpc.ShowtimeGrpcClient;
 import com.cinema.film_service.mapper.FilmMapper;
+import com.cinema.film_service.repository.ActorRepository;
+import com.cinema.film_service.repository.FilmTypeRepository;
 import com.cinema.film_service.repository.FilmRepository;
 import com.cinema.film_service.repository.FilmRepositoryImpl;
 import com.cinema.film_service.services.FilmService;
-import com.cinema.film_service.services.FilmCatalogSyncService;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -53,7 +56,8 @@ public class FilmServiceImpl implements FilmService {
     private final FilmRepository filmRepository;
     private final FilmRepositoryImpl filmRepositoryImpl;
     private final FilmMapper filmMapper;
-    private final FilmCatalogSyncService filmCatalogSyncService;
+    private final FilmTypeRepository filmTypeRepository;
+    private final ActorRepository actorRepository;
     private final ShowtimeGrpcClient showtimeGrpcClient;
     private final CinemaGrpcClient cinemaGrpcClient;
 
@@ -67,9 +71,8 @@ public class FilmServiceImpl implements FilmService {
         }
 
         Film film = filmMapper.toEntity(request);
-        film.setTypes(filmCatalogSyncService.resolveTypes(request.getTypeIds(), request.getType()));
-        film.setActors(filmCatalogSyncService.resolveActors(request.getActorIds(), request.getActor()));
-        filmCatalogSyncService.syncFilmDisplayFields(film);
+        film.setTypes(resolveTypes(request.getTypeIds()));
+        film.setActors(resolveActors(request.getActorIds()));
         Film savedFilm = filmRepository.save(film);
         log.info("Film created successfully with ID: {}", savedFilm.getId());
         return ActionMessageResponse.builder()
@@ -89,8 +92,8 @@ public class FilmServiceImpl implements FilmService {
                 });
 
         filmMapper.updateEntityFromRequest(film, request);
-        film.setTypes(filmCatalogSyncService.resolveTypes(request.getTypeIds(), request.getType()));
-        film.setActors(filmCatalogSyncService.resolveActors(request.getActorIds(), request.getActor()));
+        film.setTypes(resolveTypes(request.getTypeIds()));
+        film.setActors(resolveActors(request.getActorIds()));
 
         if (filmRepository.existsByTitleAndReleaseDateAndIdNotAndIsDeletedFalse(
                 request.getTitle(), request.getReleaseDate(), id)) {
@@ -98,7 +101,6 @@ public class FilmServiceImpl implements FilmService {
             throw new BusinessException(ErrorCode.FILM_TITLE_EXISTED);
         }
 
-        filmCatalogSyncService.syncFilmDisplayFields(film);
         filmRepository.save(film);
         log.info("Film updated successfully: {}", id);
         return ActionMessageResponse.builder()
@@ -413,5 +415,29 @@ public class FilmServiceImpl implements FilmService {
 
     private void validateAdminRole(HttpServletRequest httpRequest, String action) {
         RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_ADMIN, log, action);
+    }
+
+    private Set<FilmType> resolveTypes(List<UUID> typeIds) {
+        if (typeIds == null || typeIds.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+
+        List<FilmType> types = filmTypeRepository.findAllByIdInAndIsDeletedFalse(typeIds);
+        if (types.size() != new LinkedHashSet<>(typeIds).size()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        return new LinkedHashSet<>(types);
+    }
+
+    private Set<Actor> resolveActors(List<UUID> actorIds) {
+        if (actorIds == null || actorIds.isEmpty()) {
+            return new LinkedHashSet<>();
+        }
+
+        List<Actor> actors = actorRepository.findAllByIdInAndIsDeletedFalse(actorIds);
+        if (actors.size() != new LinkedHashSet<>(actorIds).size()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND);
+        }
+        return new LinkedHashSet<>(actors);
     }
 }

@@ -23,10 +23,6 @@ public class FilmResponse {
 
     String director;
 
-    String actor;
-
-    String type;
-
     @Builder.Default
     List<FilmTypeResponse> types = List.of();
 

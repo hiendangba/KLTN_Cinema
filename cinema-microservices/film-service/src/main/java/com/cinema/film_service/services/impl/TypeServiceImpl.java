@@ -14,7 +14,6 @@ import com.cinema.film_service.dto.request.UpdateFilmTypeRequest;
 import com.cinema.film_service.dto.response.FilmTypeResponse;
 import com.cinema.film_service.entity.FilmType;
 import com.cinema.film_service.repository.FilmTypeRepository;
-import com.cinema.film_service.services.FilmCatalogSyncService;
 import com.cinema.film_service.services.TypeService;
 import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
@@ -42,7 +41,6 @@ import java.util.stream.Collectors;
 public class TypeServiceImpl implements TypeService {
 
     private final FilmTypeRepository filmTypeRepository;
-    private final FilmCatalogSyncService filmCatalogSyncService;
 
     @Override
     @Transactional
@@ -74,7 +72,6 @@ public class TypeServiceImpl implements TypeService {
 
         type.setName(name);
         filmTypeRepository.save(type);
-        filmCatalogSyncService.refreshFilmsForType(id);
 
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.UPDATED.getMessage())
@@ -88,7 +85,6 @@ public class TypeServiceImpl implements TypeService {
         FilmType type = getActiveTypeOrThrow(id);
         type.setIsDeleted(true);
         filmTypeRepository.save(type);
-        filmCatalogSyncService.refreshFilmsForType(id);
 
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.DELETED.getMessage())

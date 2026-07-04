@@ -5,7 +5,6 @@ import com.cinema.dto.response.PageResponse;
 import com.cinema.film_service.dto.request.FilmTypeField;
 import com.cinema.film_service.entity.FilmType;
 import com.cinema.film_service.repository.FilmTypeRepository;
-import com.cinema.film_service.services.FilmCatalogSyncService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -24,9 +23,6 @@ class TypeServiceImplTest {
 
     @Mock
     private FilmTypeRepository filmTypeRepository;
-
-    @Mock
-    private FilmCatalogSyncService filmCatalogSyncService;
 
     @InjectMocks
     private TypeServiceImpl typeService;
