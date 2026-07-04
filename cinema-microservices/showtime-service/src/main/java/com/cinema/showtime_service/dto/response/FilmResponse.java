@@ -24,10 +24,10 @@ public class FilmResponse {
     String director;
 
     @Builder.Default
-    List<FilmTypeResponse> types = List.of();
+    List<FilmTypeBriefResponse> types = List.of();
 
     @Builder.Default
-    List<ActorResponse> actors = List.of();
+    List<ActorBriefResponse> actors = List.of();
 
     @JsonFormat(pattern = "yyyy-MM-dd")
     LocalDate releaseDate;

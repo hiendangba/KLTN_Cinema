@@ -302,6 +302,30 @@ services:
       - upload_data:/data/uploads
     mem_limit: 352m
 
+  review-service:
+    image: ${IMAGE_REPO}/review-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms64m -Xmx192m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_URL: jdbc:postgresql://postgres:5432/review_db
+      DB_USERNAME: review_user
+      DB_PASSWORD: review_pass
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      GRPC_SERVER_PORT: 9198
+      SERVER_PORT: 8101
+    expose:
+      - "9198"
+      - "8101"
+    depends_on:
+      - postgres
+      - booking-service
+    mem_limit: 224m
+
   hall-service:
     image: ${IMAGE_REPO}/hall-service:${IMAGE_TAG:-dev}
     pull_policy: always

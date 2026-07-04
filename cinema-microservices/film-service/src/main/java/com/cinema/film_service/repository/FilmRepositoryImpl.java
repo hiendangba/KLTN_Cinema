@@ -231,6 +231,18 @@ public class FilmRepositoryImpl {
         }
     }
 
+    private Predicate buildLikePredicate(
+            CriteriaBuilder cb,
+            Root<Film> root,
+            String fieldName,
+            Class<?> dataType,
+            Object rawValue) {
+        if (dataType != String.class) {
+            throw new BusinessException(ErrorCode.INVALID_INPUT);
+        }
+        return SearchTextUtils.accentInsensitiveLike(cb, root.get(fieldName), String.valueOf(rawValue));
+    }
+
     private Predicate buildRelationPredicate(
             CriteriaBuilder cb,
             CriteriaQuery<Film> cq,

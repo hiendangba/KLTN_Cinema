@@ -2,6 +2,7 @@ package com.cinema.booking_service.repository;
 
 import com.cinema.booking_service.entity.Booking;
 import com.cinema.booking_service.enums.BookingStatus;
+import com.cinema.booking_service.enums.PaymentStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -67,4 +68,10 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     boolean existsByShowtimeIdInAndIsDeletedFalseAndBookingStatusIn(
             Collection<UUID> showtimeIds,
             Collection<BookingStatus> statuses);
+
+    boolean existsByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
+            UUID userId,
+            UUID filmId,
+            BookingStatus bookingStatus,
+            PaymentStatus paymentStatus);
 }

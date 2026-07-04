@@ -2,9 +2,9 @@ package com.cinema.film_service.mapper;
 
 import com.cinema.film_service.dto.request.CreateFilmRequest;
 import com.cinema.film_service.dto.request.UpdateFilmRequest;
-import com.cinema.film_service.dto.response.ActorResponse;
+import com.cinema.film_service.dto.response.ActorBriefResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
-import com.cinema.film_service.dto.response.FilmTypeResponse;
+import com.cinema.film_service.dto.response.FilmTypeBriefResponse;
 import com.cinema.film_service.entity.Film;
 import com.cinema.film_service.entity.Actor;
 import com.cinema.film_service.entity.FilmType;
@@ -63,37 +63,31 @@ public interface FilmMapper {
     @Mapping(target = "actors", ignore = true)
     void updateEntityFromRequest(@MappingTarget Film film, UpdateFilmRequest request);
 
-    default List<FilmTypeResponse> mapTypes(Set<FilmType> types) {
+    default List<FilmTypeBriefResponse> mapTypes(Set<FilmType> types) {
         if (types == null || types.isEmpty()) {
             return List.of();
         }
         return types.stream()
                 .filter(type -> type != null && !Boolean.TRUE.equals(type.getIsDeleted()))
                 .sorted(Comparator.comparing(type -> Objects.toString(type.getName(), ""), String.CASE_INSENSITIVE_ORDER))
-                .map(type -> FilmTypeResponse.builder()
-                        .id(type.getId())
+                .map(type -> FilmTypeBriefResponse.builder()
                         .name(type.getName())
-                        .timeCreated(type.getTimeCreated())
-                        .timeUpdated(type.getTimeUpdated())
                         .build())
                 .toList();
     }
 
-    default List<ActorResponse> mapActors(Set<Actor> actors) {
+    default List<ActorBriefResponse> mapActors(Set<Actor> actors) {
         if (actors == null || actors.isEmpty()) {
             return List.of();
         }
         return actors.stream()
                 .filter(actor -> actor != null && !Boolean.TRUE.equals(actor.getIsDeleted()))
                 .sorted(Comparator.comparing(actor -> Objects.toString(actor.getName(), ""), String.CASE_INSENSITIVE_ORDER))
-                .map(actor -> ActorResponse.builder()
-                        .id(actor.getId())
+                .map(actor -> ActorBriefResponse.builder()
                         .name(actor.getName())
                         .birthYear(actor.getBirthYear())
                         .hometown(actor.getHometown())
                         .avatarUrl(actor.getAvatarUrl())
-                        .timeCreated(actor.getTimeCreated())
-                        .timeUpdated(actor.getTimeUpdated())
                         .build())
                 .toList();
     }

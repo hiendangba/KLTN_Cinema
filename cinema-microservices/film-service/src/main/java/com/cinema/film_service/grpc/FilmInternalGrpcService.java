@@ -2,10 +2,10 @@ package com.cinema.film_service.grpc;
 
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
-import com.cinema.film_service.dto.response.ActorResponse;
+import com.cinema.film_service.dto.response.ActorBriefResponse;
 import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
-import com.cinema.film_service.dto.response.FilmTypeResponse;
+import com.cinema.film_service.dto.response.FilmTypeBriefResponse;
 import com.cinema.film_service.services.FilmService;
 import com.cinema.grpc.film.FilmInternalServiceGrpc;
 import com.cinema.grpc.film.ActorPayload;
@@ -151,35 +151,29 @@ public class FilmInternalGrpcService extends FilmInternalServiceGrpc.FilmInterna
         return builder.build();
     }
 
-    private List<FilmTypePayload> toTypePayloads(List<FilmTypeResponse> types) {
+    private List<FilmTypePayload> toTypePayloads(List<FilmTypeBriefResponse> types) {
         if (types == null || types.isEmpty()) {
             return List.<FilmTypePayload>of();
         }
         return types.stream()
                 .filter(Objects::nonNull)
                 .map(type -> FilmTypePayload.newBuilder()
-                        .setId(Objects.toString(type.getId(), ""))
                         .setName(Objects.toString(type.getName(), ""))
-                        .setTimeCreated(Objects.toString(type.getTimeCreated(), ""))
-                        .setTimeUpdated(Objects.toString(type.getTimeUpdated(), ""))
                         .build())
                 .toList();
     }
 
-    private List<ActorPayload> toActorPayloads(List<ActorResponse> actors) {
+    private List<ActorPayload> toActorPayloads(List<ActorBriefResponse> actors) {
         if (actors == null || actors.isEmpty()) {
             return List.<ActorPayload>of();
         }
         return actors.stream()
                 .filter(Objects::nonNull)
                 .map(actor -> ActorPayload.newBuilder()
-                        .setId(Objects.toString(actor.getId(), ""))
                         .setName(Objects.toString(actor.getName(), ""))
                         .setBirthYear(actor.getBirthYear() == null ? 0 : actor.getBirthYear())
                         .setHometown(Objects.toString(actor.getHometown(), ""))
                         .setAvatarUrl(Objects.toString(actor.getAvatarUrl(), ""))
-                        .setTimeCreated(Objects.toString(actor.getTimeCreated(), ""))
-                        .setTimeUpdated(Objects.toString(actor.getTimeUpdated(), ""))
                         .build())
                 .toList();
     }

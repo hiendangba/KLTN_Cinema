@@ -4,9 +4,9 @@ import com.cinema.Enum.FilmEnum;
 import com.cinema.grpc.film.ActorPayload;
 import com.cinema.grpc.film.FilmPayload;
 import com.cinema.grpc.film.FilmTypePayload;
-import com.cinema.showtime_service.dto.response.ActorResponse;
+import com.cinema.showtime_service.dto.response.ActorBriefResponse;
 import com.cinema.showtime_service.dto.response.FilmResponse;
-import com.cinema.showtime_service.dto.response.FilmTypeResponse;
+import com.cinema.showtime_service.dto.response.FilmTypeBriefResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
@@ -75,7 +75,7 @@ public interface FilmMapper {
         return FilmEnum.FilmStatus.valueOf(value);
     }
 
-    default List<FilmTypeResponse> mapTypes(List<FilmTypePayload> payloads) {
+    default List<FilmTypeBriefResponse> mapTypes(List<FilmTypePayload> payloads) {
         if (payloads == null || payloads.isEmpty()) {
             return List.of();
         }
@@ -84,16 +84,13 @@ public interface FilmMapper {
                 .sorted(Comparator.comparing(
                         (FilmTypePayload payload) -> emptyToNull(payload.getName()),
                         Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-                .map(payload -> FilmTypeResponse.builder()
-                        .id(parseUuid(payload.getId()))
+                .map(payload -> FilmTypeBriefResponse.builder()
                         .name(emptyToNull(payload.getName()))
-                        .timeCreated(parseLocalDateTime(payload.getTimeCreated()))
-                        .timeUpdated(parseLocalDateTime(payload.getTimeUpdated()))
                         .build())
                 .toList();
     }
 
-    default List<ActorResponse> mapActors(List<ActorPayload> payloads) {
+    default List<ActorBriefResponse> mapActors(List<ActorPayload> payloads) {
         if (payloads == null || payloads.isEmpty()) {
             return List.of();
         }
@@ -102,14 +99,11 @@ public interface FilmMapper {
                 .sorted(Comparator.comparing(
                         (ActorPayload payload) -> emptyToNull(payload.getName()),
                         Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
-                .map(payload -> ActorResponse.builder()
-                        .id(parseUuid(payload.getId()))
+                .map(payload -> ActorBriefResponse.builder()
                         .name(emptyToNull(payload.getName()))
                         .birthYear(payload.getBirthYear() == 0 ? null : payload.getBirthYear())
                         .hometown(emptyToNull(payload.getHometown()))
                         .avatarUrl(emptyToNull(payload.getAvatarUrl()))
-                        .timeCreated(parseLocalDateTime(payload.getTimeCreated()))
-                        .timeUpdated(parseLocalDateTime(payload.getTimeUpdated()))
                         .build())
                 .toList();
     }

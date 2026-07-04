@@ -16,6 +16,8 @@ import com.cinema.grpc.booking.GetSeatRuntimeStatesReply;
 import com.cinema.grpc.booking.GetSeatRuntimeStatesRequest;
 import com.cinema.grpc.booking.GetBookingPaymentContextReply;
 import com.cinema.grpc.booking.GetBookingPaymentContextRequest;
+import com.cinema.grpc.booking.CheckUserEligibleForReviewReply;
+import com.cinema.grpc.booking.CheckUserEligibleForReviewRequest;
 import com.cinema.grpc.booking.HasActiveBookingByShowtimeIdsReply;
 import com.cinema.grpc.booking.HasActiveBookingByShowtimeIdsRequest;
 import com.cinema.grpc.booking.SeatRuntimeStatePayload;
@@ -401,6 +403,56 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while checking active bookings by showtime list", ex);
             responseObserver.onNext(HasActiveBookingByShowtimeIdsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void checkUserEligibleForReview(
+            CheckUserEligibleForReviewRequest request,
+            StreamObserver<CheckUserEligibleForReviewReply> responseObserver) {
+        UUID userId;
+        UUID filmId;
+        try {
+            userId = UUID.fromString(request.getUserId());
+            filmId = UUID.fromString(request.getFilmId());
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(CheckUserEligibleForReviewReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+            return;
+        }
+
+        try {
+            boolean eligible = bookingRepository.existsByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
+                    userId,
+                    filmId,
+                    BookingStatus.CONFIRMED,
+                    PaymentStatus.PAID);
+
+            responseObserver.onNext(CheckUserEligibleForReviewReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Review eligibility checked successfully")
+                    .setEligible(eligible)
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(CheckUserEligibleForReviewReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while checking review eligibility", ex);
+            responseObserver.onNext(CheckUserEligibleForReviewReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())

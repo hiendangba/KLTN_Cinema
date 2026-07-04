@@ -13,6 +13,7 @@ service BookingInternalService {
   rpc GetBookingPaymentContext(GetBookingPaymentContextRequest) returns (GetBookingPaymentContextReply);
   rpc UpsertBookingPromotionSnapshot(UpsertBookingPromotionSnapshotRequest) returns (UpsertBookingPromotionSnapshotReply);
   rpc ConfirmBookingPayment(ConfirmBookingPaymentRequest) returns (ConfirmBookingPaymentReply);
+  rpc CheckUserEligibleForReview(CheckUserEligibleForReviewRequest) returns (CheckUserEligibleForReviewReply);
 }
 
 message CheckShowtimeBookedRequest {
@@ -113,4 +114,16 @@ message ConfirmBookingPaymentReply {
   string error_key = 2;
   string message = 3;
   BookingPaymentContextPayload booking = 4;
+}
+
+message CheckUserEligibleForReviewRequest {
+  string user_id = 1;
+  string film_id = 2;
+}
+
+message CheckUserEligibleForReviewReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  bool eligible = 4;
 }
