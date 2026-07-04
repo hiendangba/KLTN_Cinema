@@ -13,6 +13,7 @@ import com.cinema.film_service.dto.request.FilmTypeField;
 import com.cinema.film_service.dto.request.UpdateFilmTypeRequest;
 import com.cinema.film_service.dto.response.FilmTypeResponse;
 import com.cinema.film_service.entity.FilmType;
+import com.cinema.film_service.mapper.FilmTypeMapper;
 import com.cinema.film_service.repository.FilmTypeRepository;
 import com.cinema.film_service.services.TypeService;
 import com.cinema.http.HeaderNames;
@@ -41,6 +42,7 @@ import java.util.stream.Collectors;
 public class TypeServiceImpl implements TypeService {
 
     private final FilmTypeRepository filmTypeRepository;
+    private final FilmTypeMapper filmTypeMapper;
 
     @Override
     @Transactional
@@ -51,9 +53,9 @@ public class TypeServiceImpl implements TypeService {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
 
-        filmTypeRepository.save(FilmType.builder()
-                .name(name)
-                .build());
+        FilmType type = filmTypeMapper.toEntity(request);
+        type.setName(name);
+        filmTypeRepository.save(type);
 
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.CREATED.getMessage())
@@ -70,6 +72,7 @@ public class TypeServiceImpl implements TypeService {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
 
+        filmTypeMapper.updateEntityFromRequest(type, request);
         type.setName(name);
         filmTypeRepository.save(type);
 
@@ -94,7 +97,7 @@ public class TypeServiceImpl implements TypeService {
     @Override
     @Transactional(readOnly = true)
     public FilmTypeResponse getTypeById(UUID id) {
-        return toResponse(getActiveTypeOrThrow(id));
+        return filmTypeMapper.toResponse(getActiveTypeOrThrow(id));
     }
 
     @Override
@@ -116,7 +119,7 @@ public class TypeServiceImpl implements TypeService {
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
         List<FilmType> pageItems = paginate(filtered, page, size);
         List<FilmTypeResponse> data = pageItems.stream()
-                .map(this::toResponse)
+                .map(filmTypeMapper::toResponse)
                 .toList();
 
         return PageResponse.<FilmTypeResponse>builder()
@@ -133,15 +136,6 @@ public class TypeServiceImpl implements TypeService {
     private FilmType getActiveTypeOrThrow(UUID id) {
         return filmTypeRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
-    }
-
-    private FilmTypeResponse toResponse(FilmType type) {
-        return FilmTypeResponse.builder()
-                .id(type.getId())
-                .name(type.getName())
-                .timeCreated(type.getTimeCreated())
-                .timeUpdated(type.getTimeUpdated())
-                .build();
     }
 
     private PageResponse<FilmTypeResponse> emptyPageResponse(PageRequest<FilmTypeField> request) {

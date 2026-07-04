@@ -16,6 +16,12 @@
 
 ## Changelog ngắn (2026-07-04)
 
+- `film-service` đã tách nốt mapping của `ActorServiceImpl` và `TypeServiceImpl` sang `ActorMapper` và `FilmTypeMapper`, nên không còn `toResponse(...)` thủ công nằm trong service cho actor/type nữa.
+- `user-service` phần loyalty đã được rà lại và hiện vẫn đi qua `UserMapper`/response DTO có sẵn, không có pattern dựng response dài trong service cần đổi thêm.
+- Files chạm: `film-service/src/main/java/com/cinema/film_service/mapper/ActorMapper.java`, `film-service/src/main/java/com/cinema/film_service/mapper/FilmTypeMapper.java`, `film-service/src/main/java/com/cinema/film_service/services/impl/ActorServiceImpl.java`, `film-service/src/main/java/com/cinema/film_service/services/impl/TypeServiceImpl.java`.
+- Reason: giữ boundary sạch, đồng bộ style MapStruct đang dùng ở các module còn lại, và tránh response builder/manual mapping nằm rải trong service.
+- Verification: đã quét tĩnh lại `film-service/src/main/java/com/cinema/film_service/services/impl`; không còn `private toResponse(...)` trong actor/type service.
+
 - `review-service` đã tách toàn bộ mapping response ra `mapper/` theo style MapStruct của monorepo, nên `ReviewServiceImpl` và `CommentServiceImpl` giờ chỉ còn business logic, auth, cursor paging, soft delete và gắn quan hệ media/parent.
 - `booking-service` đã bổ sung eligibility gRPC cho review qua `checkUserEligibleForReview(userId, filmId)` để review-service không phải biết logic booking nội bộ.
 - Files chạm: `review-service/src/main/java/com/cinema/review_service/mapper/ReviewMapper.java`, `review-service/src/main/java/com/cinema/review_service/mapper/CommentMapper.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/ReviewServiceImpl.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/CommentServiceImpl.java`, `review-service/src/main/java/com/cinema/review_service/entity/Review.java`, `review-service/pom.xml`, `booking-service/src/main/java/com/cinema/booking_service/repository/BookingRepository.java`.

@@ -13,6 +13,7 @@ import com.cinema.film_service.dto.request.CreateActorRequest;
 import com.cinema.film_service.dto.request.UpdateActorRequest;
 import com.cinema.film_service.dto.response.ActorResponse;
 import com.cinema.film_service.entity.Actor;
+import com.cinema.film_service.mapper.ActorMapper;
 import com.cinema.film_service.repository.ActorRepository;
 import com.cinema.film_service.services.ActorService;
 import com.cinema.http.HeaderNames;
@@ -40,6 +41,7 @@ import java.util.stream.Collectors;
 public class ActorServiceImpl implements ActorService {
 
     private final ActorRepository actorRepository;
+    private final ActorMapper actorMapper;
 
     @Override
     @Transactional
@@ -49,12 +51,10 @@ public class ActorServiceImpl implements ActorService {
         if (actorRepository.existsByNameIgnoreCaseAndIsDeletedFalse(name)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
-        Actor actor = Actor.builder()
-                .name(name)
-                .birthYear(request.getBirthYear())
-                .hometown(normalizeOptional(request.getHometown()))
-                .avatarUrl(normalizeOptional(request.getAvatarUrl()))
-                .build();
+        Actor actor = actorMapper.toEntity(request);
+        actor.setName(name);
+        actor.setHometown(normalizeOptional(request.getHometown()));
+        actor.setAvatarUrl(normalizeOptional(request.getAvatarUrl()));
         actorRepository.save(actor);
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.CREATED.getMessage())
@@ -70,7 +70,8 @@ public class ActorServiceImpl implements ActorService {
         if (actorRepository.existsByNameIgnoreCaseAndIdNotAndIsDeletedFalse(actor.getName(), id)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
-        actor.setBirthYear(request.getBirthYear());
+        actorMapper.updateEntityFromRequest(actor, request);
+        actor.setName(normalize(request.getName()));
         actor.setHometown(normalizeOptional(request.getHometown()));
         actor.setAvatarUrl(normalizeOptional(request.getAvatarUrl()));
         actorRepository.save(actor);
@@ -94,7 +95,7 @@ public class ActorServiceImpl implements ActorService {
     @Override
     @Transactional(readOnly = true)
     public ActorResponse getActorById(UUID id) {
-        return toResponse(getActiveActorOrThrow(id));
+        return actorMapper.toResponse(getActiveActorOrThrow(id));
     }
 
     @Override
@@ -116,7 +117,7 @@ public class ActorServiceImpl implements ActorService {
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
         List<Actor> pageItems = paginate(filtered, page, size);
         List<ActorResponse> data = pageItems.stream()
-                .map(this::toResponse)
+                .map(actorMapper::toResponse)
                 .toList();
 
         return PageResponse.<ActorResponse>builder()
@@ -133,18 +134,6 @@ public class ActorServiceImpl implements ActorService {
     private Actor getActiveActorOrThrow(UUID id) {
         return actorRepository.findByIdAndIsDeletedFalse(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
-    }
-
-    private ActorResponse toResponse(Actor actor) {
-        return ActorResponse.builder()
-                .id(actor.getId())
-                .name(actor.getName())
-                .birthYear(actor.getBirthYear())
-                .hometown(actor.getHometown())
-                .avatarUrl(actor.getAvatarUrl())
-                .timeCreated(actor.getTimeCreated())
-                .timeUpdated(actor.getTimeUpdated())
-                .build();
     }
 
     private PageResponse<ActorResponse> emptyPageResponse(PageRequest<ActorField> request) {
