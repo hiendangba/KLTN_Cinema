@@ -392,6 +392,66 @@
                             cluster: user-service
                             timeout: 30s
                         - match:
+                            safe_regex:
+                              regex: "^/api/films/[^/]+/reviews/search$"
+                          route:
+                            cluster: review-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            safe_regex:
+                              regex: "^/api/reviews/[^/]+/comments/search$"
+                          route:
+                            cluster: review-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            safe_regex:
+                              regex: "^/api/comments/[^/]+/replies/search$"
+                          route:
+                            cluster: review-service
+                            timeout: 30s
+                          typed_per_filter_config:
+                            envoy.filters.http.ext_authz:
+                              "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
+                              disabled: true
+                        - match:
+                            safe_regex:
+                              regex: "^/api/films/[^/]+/reviews$"
+                          route:
+                            cluster: review-service
+                            timeout: 30s
+                        - match:
+                            safe_regex:
+                              regex: "^/api/reviews/[^/]+$"
+                          route:
+                            cluster: review-service
+                            timeout: 30s
+                        - match:
+                            safe_regex:
+                              regex: "^/api/reviews/[^/]+/comments$"
+                          route:
+                            cluster: review-service
+                            timeout: 30s
+                        - match:
+                            safe_regex:
+                              regex: "^/api/comments/[^/]+/reply$"
+                          route:
+                            cluster: review-service
+                            timeout: 30s
+                        - match:
+                            safe_regex:
+                              regex: "^/api/comments/[^/]+$"
+                          route:
+                            cluster: review-service
+                            timeout: 30s
+                        - match:
                             prefix: /api/films
                           route:
                             cluster: film-service
@@ -618,6 +678,20 @@
                     socket_address:
                       address: host.docker.internal
                       port_value: 8092
+    - name: review-service
+      connect_timeout: 1s
+      type: LOGICAL_DNS
+      dns_lookup_family: ALL
+      lb_policy: ROUND_ROBIN
+      load_assignment:
+        cluster_name: review-service
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      address: host.docker.internal
+                      port_value: 8101
     - name: showtime-service
       connect_timeout: 1s
       type: LOGICAL_DNS

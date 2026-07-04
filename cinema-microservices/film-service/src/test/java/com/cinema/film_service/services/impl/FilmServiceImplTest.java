@@ -11,6 +11,7 @@ import com.cinema.film_service.dto.request.FilmField;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.entity.Film;
 import com.cinema.film_service.grpc.CinemaGrpcClient;
+import com.cinema.film_service.grpc.ReviewGrpcClient;
 import com.cinema.film_service.grpc.ShowtimeGrpcClient;
 import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.FilmRepository;
@@ -27,6 +28,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -54,6 +57,9 @@ class FilmServiceImplTest {
 
     @Mock
     private FilmMapper filmMapper;
+
+    @Mock
+    private ReviewGrpcClient reviewGrpcClient;
 
     @Mock
     private ShowtimeGrpcClient showtimeGrpcClient;
@@ -442,6 +448,23 @@ class FilmServiceImplTest {
                         && "IN".equals(filter.getOperator())
                         && new HashSet<>((List<String>) filter.getValue()).equals(Set.of(filmId.toString()))));
         assertTrue(filters.stream().noneMatch(filter -> filter.getField() == FilmField.STATUS));
+    }
+
+    @Test
+    void getFilmById_shouldEnrichAverageRatingRoundedToTwoDecimals() {
+        UUID filmId = UUID.randomUUID();
+        Film film = buildFilm(filmId, "Film 1", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+
+        when(filmRepository.findByIdAndIsDeletedFalse(filmId)).thenReturn(Optional.of(film));
+        when(filmMapper.toResponse(film)).thenReturn(toResponse(film));
+        when(reviewGrpcClient.getFilmRatingSummaries(List.of(filmId)))
+                .thenReturn(Map.of(filmId, new ReviewGrpcClient.RatingSummary(4.6666d, 3L)));
+
+        FilmResponse response = filmService.getFilmById(filmId);
+
+        assertNotNull(response);
+        assertEquals(4.67d, response.getAverageRating());
+        assertEquals(3L, response.getReviewCount());
     }
 
     private HttpServletRequest mockRequest(String role) {

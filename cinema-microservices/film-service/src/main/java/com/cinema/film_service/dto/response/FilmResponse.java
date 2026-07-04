@@ -48,6 +48,12 @@ public class FilmResponse {
 
     FilmEnum.FilmStatus status;
 
+    @Builder.Default
+    Double averageRating = 0.0d;
+
+    @Builder.Default
+    Long reviewCount = 0L;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     LocalDateTime timeCreated;
 

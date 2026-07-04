@@ -1,6 +1,8 @@
 package com.cinema.review_service.repository;
 
 import com.cinema.review_service.entity.Review;
+import com.cinema.review_service.entity.enums.ReviewStatus;
+import com.cinema.review_service.repository.projection.ReviewRatingSummaryView;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -41,4 +43,18 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             @Param("cursorId") UUID cursorId,
             @Param("keyword") String keyword,
             Pageable pageable);
+
+    @Query("""
+            SELECT r.filmId as filmId,
+                   AVG(r.rating) as averageRating,
+                   COUNT(r.id) as reviewCount
+            FROM Review r
+            WHERE r.filmId IN :filmIds
+              AND r.isDeleted = false
+              AND r.status = :status
+            GROUP BY r.filmId
+            """)
+    List<ReviewRatingSummaryView> findRatingSummariesByFilmIds(
+            @Param("filmIds") List<UUID> filmIds,
+            @Param("status") ReviewStatus status);
 }

@@ -21,6 +21,7 @@ import com.cinema.film_service.entity.Actor;
 import com.cinema.film_service.entity.Film;
 import com.cinema.film_service.entity.FilmType;
 import com.cinema.film_service.grpc.CinemaGrpcClient;
+import com.cinema.film_service.grpc.ReviewGrpcClient;
 import com.cinema.film_service.grpc.ShowtimeGrpcClient;
 import com.cinema.film_service.mapper.FilmMapper;
 import com.cinema.film_service.repository.ActorRepository;
@@ -39,9 +40,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
@@ -56,6 +60,7 @@ public class FilmServiceImpl implements FilmService {
     private final FilmRepository filmRepository;
     private final FilmRepositoryImpl filmRepositoryImpl;
     private final FilmMapper filmMapper;
+    private final ReviewGrpcClient reviewGrpcClient;
     private final FilmTypeRepository filmTypeRepository;
     private final ActorRepository actorRepository;
     private final ShowtimeGrpcClient showtimeGrpcClient;
@@ -119,7 +124,7 @@ public class FilmServiceImpl implements FilmService {
                     return new BusinessException(ErrorCode.FILM_NOT_FOUND);
                 });
 
-        return filmMapper.toResponse(film);
+        return enrichRating(filmMapper.toResponse(film), reviewGrpcClient.getFilmRatingSummaries(List.of(id)));
     }
 
     @Override
@@ -127,10 +132,9 @@ public class FilmServiceImpl implements FilmService {
     public BatchFilmResponse getFilmsInBatch(BatchFilmRequest request) {
         log.info("Getting films by batch: {} ids", request.getIds().size());
         List<Film> films = filmRepository.findAllById(request.getIds());
-        List<FilmResponse> filmResponses = films.stream()
+        List<FilmResponse> filmResponses = enrichResponses(films.stream()
                 .filter(film -> !film.getIsDeleted())
-                .map(filmMapper::toResponse)
-                .collect(Collectors.toList());
+                .toList());
         return new BatchFilmResponse(filmResponses);
     }
 
@@ -240,7 +244,7 @@ public class FilmServiceImpl implements FilmService {
         }
 
         return CursorPageResponse.<FilmResponse>builder()
-                .data(films.stream().map(filmMapper::toResponse).collect(Collectors.toList()))
+                .data(enrichResponses(films))
                 .nextCursor(nextCursor)
                 .prevCursor(prevCursor)
                 .hasNext(hasNext)
@@ -439,5 +443,44 @@ public class FilmServiceImpl implements FilmService {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         return new LinkedHashSet<>(actors);
+    }
+
+    private List<FilmResponse> enrichResponses(List<Film> films) {
+        if (films == null || films.isEmpty()) {
+            return List.of();
+        }
+
+        List<UUID> filmIds = films.stream()
+                .map(Film::getId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        Map<UUID, ReviewGrpcClient.RatingSummary> summaries = reviewGrpcClient.getFilmRatingSummaries(filmIds);
+
+        return films.stream()
+                .map(film -> enrichRating(filmMapper.toResponse(film), summaries))
+                .collect(Collectors.toList());
+    }
+
+    private FilmResponse enrichRating(FilmResponse response, Map<UUID, ReviewGrpcClient.RatingSummary> summaries) {
+        if (response == null) {
+            return null;
+        }
+
+        ReviewGrpcClient.RatingSummary summary = summaries == null ? null : summaries.get(response.getId());
+        if (summary == null) {
+            response.setAverageRating(0.0d);
+            response.setReviewCount(0L);
+            return response;
+        }
+
+        response.setAverageRating(roundToTwoDecimals(summary.averageRating()));
+        response.setReviewCount(summary.reviewCount());
+        return response;
+    }
+
+    private double roundToTwoDecimals(double value) {
+        return BigDecimal.valueOf(value)
+                .setScale(2, RoundingMode.HALF_UP)
+                .doubleValue();
     }
 }

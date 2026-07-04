@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package cinema.review.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.review";
+option java_outer_classname = "ReviewInternalProto";
+
+service ReviewInternalService {
+  rpc GetFilmRatingSummaries(GetFilmRatingSummariesRequest) returns (GetFilmRatingSummariesReply);
+}
+
+message GetFilmRatingSummariesRequest {
+  repeated string film_ids = 1;
+}
+
+message FilmRatingSummaryPayload {
+  string film_id = 1;
+  double average_rating = 2;
+  int64 review_count = 3;
+}
+
+message GetFilmRatingSummariesReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated FilmRatingSummaryPayload summaries = 4;
+}

@@ -16,6 +16,11 @@
 
 ## Changelog ngắn (2026-07-04)
 
+- `envoy` đã được cập nhật để route review-service đúng nghĩa: các route search/view của review/comment được disable `ext_authz`, còn create/update/delete vẫn đi qua auth như cũ; review-service cluster mới trỏ về port `8101`.
+- Files chạm: `envoy/envoy.local.yaml`, `envoy/envoy.prod.yaml`.
+- Reason: review view cần public, nhưng mutation vẫn cần token. Gateway phải tách rõ theo path vì review search dùng `POST`, không thể dựa vào method.
+- Verification: review/search routes được đặt trước route generic `/api/films` để không bị film-service nuốt mất.
+
 - `film-service` đã tách nốt mapping của `ActorServiceImpl` và `TypeServiceImpl` sang `ActorMapper` và `FilmTypeMapper`, nên không còn `toResponse(...)` thủ công nằm trong service cho actor/type nữa.
 - `user-service` phần loyalty đã được rà lại và hiện vẫn đi qua `UserMapper`/response DTO có sẵn, không có pattern dựng response dài trong service cần đổi thêm.
 - Files chạm: `film-service/src/main/java/com/cinema/film_service/mapper/ActorMapper.java`, `film-service/src/main/java/com/cinema/film_service/mapper/FilmTypeMapper.java`, `film-service/src/main/java/com/cinema/film_service/services/impl/ActorServiceImpl.java`, `film-service/src/main/java/com/cinema/film_service/services/impl/TypeServiceImpl.java`.
@@ -2130,6 +2135,17 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
 - Verification cuối: `SeatSuggestionServiceImplTest` pass 13/13 sau khi khóa `seatCount=1` đi nhánh normal và giữ couple-first chỉ cho `seatCount>1`.
 - Case đã chốt trong test: `J7/J8` vẫn thắng ở layout 3 ghế, case `J1/J2` + `J13/J14` trả `I14`, và case 5 ghế với `J7-J10` couple trả `I9, J7, J8, J9, J10`.
 - Remaining risk: trọng số score đang khớp layout hiện tại; nếu hall khác có bố cục lệch mạnh thì có thể cần tune lại.
+- `film-service`/`review-service` đã thêm luồng rating summary cho film list/detail:
+  - `common-lib/src/main/proto/review_internal.proto` thêm internal gRPC `GetFilmRatingSummaries`
+  - `review-service` aggregate rating theo `filmId`, bỏ review soft delete, rồi làm tròn `averageRating` 2 chữ số sau dấu chấm
+  - `film-service` enrich `averageRating` và `reviewCount` cho search/detail/batch, default `0.0`/`0` khi film chưa có review
+  - `FilmResponse` được mở rộng để UI lấy rating ngay từ response film
+- Lý do: film search cần hiển thị film nào đang được đánh giá tốt, nhưng vẫn giữ review-service là nguồn sự thật cho rating.
+- Verification:
+  - `review-service` compile thành công sau khi thêm gRPC summary
+  - `film-service` compile thành công với luồng enrich rating
+  - test chạy được một phần trước khi chạm vào các lỗi môi trường Windows/protobuf cleanup; các failure còn lại là do `target`/generated proto artifacts bị khóa hoặc bị xóa trong lúc Maven đang build, không phải do logic rating mới
+- Remaining risk: nếu chạy `mvn test` lặp lại trên Windows, `protobuf-maven-plugin` vẫn có thể gặp lỗi dọn `target/protoc-dependencies`; khi cần test lại nên xoá `target` thủ công rồi build từng module một.
 - Loyalty points v1 đã chuyển sang mô hình async bền vững:
   - `user-service` là nguồn sự thật cho `users.loyalty_points`, vẫn expose trong `UserResponse` và `GetUserBasicById`
   - `payment-service` giữ snapshot `loyaltyPointsUsed`/`loyaltyPointsEarned` trên `payment_transaction`, nhưng không còn mutate điểm trực tiếp qua gRPC trong flow confirm/webhook
