@@ -38,6 +38,7 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -431,11 +432,15 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
         }
 
         try {
-            boolean eligible = bookingRepository.existsByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
-                    userId,
-                    filmId,
-                    BookingStatus.CONFIRMED,
-                    PaymentStatus.PAID);
+            boolean eligible = bookingRepository.findAllByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
+                            userId,
+                            filmId,
+                            BookingStatus.CONFIRMED,
+                            PaymentStatus.PAID)
+                    .stream()
+                    .map(Booking::getShowtimeEndDateTime)
+                    .filter(Objects::nonNull)
+                    .anyMatch(endDateTime -> endDateTime.isBefore(LocalDateTime.now()));
 
             responseObserver.onNext(CheckUserEligibleForReviewReply.newBuilder()
                     .setSuccess(true)

@@ -74,4 +74,10 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             UUID filmId,
             BookingStatus bookingStatus,
             PaymentStatus paymentStatus);
+
+    List<Booking> findAllByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
+            UUID userId,
+            UUID filmId,
+            BookingStatus bookingStatus,
+            PaymentStatus paymentStatus);
 }

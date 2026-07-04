@@ -24,12 +24,12 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
     @Query("""
             SELECT c
             FROM Comment c
-            WHERE c.reviewId = :reviewId
+              WHERE c.reviewId = :reviewId
               AND c.parentCommentId IS NULL
               AND c.isDeleted = false
               AND (:keywordPattern IS NULL OR lower(coalesce(c.content, '')) LIKE :keywordPattern)
               AND (
-                   :cursorCreatedAt IS NULL
+                   cast(:cursorCreatedAt as timestamp) IS NULL
                    OR c.createdAt < :cursorCreatedAt
                    OR (c.createdAt = :cursorCreatedAt AND c.id < :cursorId)
               )
@@ -50,7 +50,7 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
               AND c.isDeleted = false
               AND (:keywordPattern IS NULL OR lower(coalesce(c.content, '')) LIKE :keywordPattern)
               AND (
-                   :cursorCreatedAt IS NULL
+                   cast(:cursorCreatedAt as timestamp) IS NULL
                    OR c.createdAt < :cursorCreatedAt
                    OR (c.createdAt = :cursorCreatedAt AND c.id < :cursorId)
               )

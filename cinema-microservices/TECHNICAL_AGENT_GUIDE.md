@@ -16,6 +16,12 @@
 
 ## Changelog ngắn (2026-07-04)
 
+- `booking-service` đã siết rule review eligibility: chỉ booking `CONFIRMED + PAID` và có `showtimeEndDateTime` nhỏ hơn `now` mới trả `eligible=true` qua gRPC `checkUserEligibleForReview`; `review-service` tiếp tục dùng client này để chặn/mở review.
+- Files chạm: `booking-service/src/main/java/com/cinema/booking_service/grpc/BookingInternalGrpcService.java`, `booking-service/src/main/java/com/cinema/booking_service/repository/BookingRepository.java`, `booking-service/src/test/java/com/cinema/booking_service/grpc/BookingInternalGrpcServiceTest.java`.
+- Reason: người dùng đã mua vé và thanh toán xong vẫn chưa được review nếu suất chiếu chưa kết thúc; rule phải bám theo `endTime < now` của vé chứ không chỉ trạng thái thanh toán.
+- Verification: `BookingInternalGrpcServiceTest` pass 7/7 sau khi thêm 2 test mới cho case đã chiếu rồi và case chưa chiếu xong; `review-service` compile main cũng đã chạy xanh trong session trước đó.
+- Remaining risk: nếu booking cũ trong DB chưa có `showtimeEndDateTime`, eligibility sẽ không mở cho review cho tới khi dữ liệu được backfill hoặc booking được tạo theo flow mới.
+
 - `review-service` đã sửa lỗi PostgreSQL `text ~~ bytea` ở các API search review/comment bằng cách bỏ `LIKE concat('%', :keyword, '%')` trong JPQL và chuyển sang truyền sẵn `keywordPattern` từ service.
 - Files chạm: `review-service/src/main/java/com/cinema/review_service/repository/ReviewRepository.java`, `review-service/src/main/java/com/cinema/review_service/repository/CommentRepository.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/ReviewServiceImpl.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/CommentServiceImpl.java`.
 - Reason: log production cho thấy query `searchByFilmIdAndCursor` bind tham số keyword thành kiểu không khớp trong biểu thức concat/LIKE, làm Postgres suy ra RHS là `bytea` và nổ ở runtime.

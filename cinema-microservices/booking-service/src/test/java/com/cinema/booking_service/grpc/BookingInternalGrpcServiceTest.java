@@ -6,6 +6,8 @@ import com.cinema.booking_service.enums.PaymentStatus;
 import com.cinema.booking_service.repository.BookingRepository;
 import com.cinema.booking_service.repository.BookingSeatItemRepository;
 import com.cinema.booking_service.services.SeatLockService;
+import com.cinema.grpc.booking.CheckUserEligibleForReviewReply;
+import com.cinema.grpc.booking.CheckUserEligibleForReviewRequest;
 import com.cinema.grpc.booking.GetSeatRuntimeStatesReply;
 import com.cinema.grpc.booking.GetSeatRuntimeStatesRequest;
 import com.cinema.grpc.booking.ConfirmBookingPaymentReply;
@@ -202,6 +204,66 @@ class BookingInternalGrpcServiceTest {
                 any(LocalDateTime.class));
     }
 
+    @Test
+    void checkUserEligibleForReview_shouldReturnTrueWhenPaymentConfirmedAndShowtimeEnded() {
+        UUID userId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        Booking booking = buildBooking(UUID.randomUUID());
+        booking.setUserId(userId);
+        booking.setFilmId(filmId);
+        booking.setBookingStatus(BookingStatus.CONFIRMED);
+        booking.setPaymentStatus(PaymentStatus.PAID);
+        booking.setShowtimeEndDateTime(LocalDateTime.now().minusMinutes(1));
+
+        when(bookingRepository.findAllByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
+                eq(userId),
+                eq(filmId),
+                eq(BookingStatus.CONFIRMED),
+                eq(PaymentStatus.PAID))).thenReturn(List.of(booking));
+
+        CapturingObserver<CheckUserEligibleForReviewReply> observer = new CapturingObserver<>();
+        grpcService.checkUserEligibleForReview(
+                CheckUserEligibleForReviewRequest.newBuilder()
+                        .setUserId(userId.toString())
+                        .setFilmId(filmId.toString())
+                        .build(),
+                observer);
+
+        assertTrue(observer.completed);
+        assertTrue(observer.value.getSuccess());
+        assertTrue(observer.value.getEligible());
+    }
+
+    @Test
+    void checkUserEligibleForReview_shouldReturnFalseWhenShowtimeNotEnded() {
+        UUID userId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+        Booking booking = buildBooking(UUID.randomUUID());
+        booking.setUserId(userId);
+        booking.setFilmId(filmId);
+        booking.setBookingStatus(BookingStatus.CONFIRMED);
+        booking.setPaymentStatus(PaymentStatus.PAID);
+        booking.setShowtimeEndDateTime(LocalDateTime.now().plusMinutes(1));
+
+        when(bookingRepository.findAllByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
+                eq(userId),
+                eq(filmId),
+                eq(BookingStatus.CONFIRMED),
+                eq(PaymentStatus.PAID))).thenReturn(List.of(booking));
+
+        CapturingObserver<CheckUserEligibleForReviewReply> observer = new CapturingObserver<>();
+        grpcService.checkUserEligibleForReview(
+                CheckUserEligibleForReviewRequest.newBuilder()
+                        .setUserId(userId.toString())
+                        .setFilmId(filmId.toString())
+                        .build(),
+                observer);
+
+        assertTrue(observer.completed);
+        assertTrue(observer.value.getSuccess());
+        assertFalse(observer.value.getEligible());
+    }
+
     private Booking buildBooking(UUID bookingId) {
         Booking booking = new Booking();
         booking.setId(bookingId);
@@ -214,6 +276,7 @@ class BookingInternalGrpcServiceTest {
         booking.setPayableAmount(BigDecimal.valueOf(300000));
         booking.setIsDeleted(false);
         booking.setReservedUntil(LocalDateTime.now().plusMinutes(5));
+        booking.setShowtimeEndDateTime(LocalDateTime.now().plusHours(2));
         return booking;
     }
 

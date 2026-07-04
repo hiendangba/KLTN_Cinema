@@ -31,7 +31,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
               AND (:keywordPattern IS NULL OR lower(coalesce(r.title, '')) LIKE :keywordPattern
                    OR lower(coalesce(r.content, '')) LIKE :keywordPattern)
               AND (
-                   :cursorCreatedAt IS NULL
+                   cast(:cursorCreatedAt as timestamp) IS NULL
                    OR r.createdAt < :cursorCreatedAt
                    OR (r.createdAt = :cursorCreatedAt AND r.id < :cursorId)
               )
