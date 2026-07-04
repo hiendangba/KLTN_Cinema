@@ -131,10 +131,6 @@ class BookingServiceImplTest {
                 when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
                                 new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"),
                                 new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
-                when(cinemaGrpcClient.getCinemaById(cinema1))
-                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
-                when(cinemaGrpcClient.getCinemaById(cinema2))
-                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2"));
 
                 Booking booking1 = buildBooking(cinema1, film1, BookingStatus.PENDING, BigDecimal.valueOf(70000),
                                 BigDecimal.ZERO);
@@ -390,6 +386,10 @@ class BookingServiceImplTest {
                 when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
                                 new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"),
                                 new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
+                when(cinemaGrpcClient.getCinemaById(cinema1))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
+                when(cinemaGrpcClient.getCinemaById(cinema2))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2"));
 
                 Booking booking1 = buildShowtimeBooking(
                                 showtime1, cinema1, film1, BookingStatus.RESERVED,

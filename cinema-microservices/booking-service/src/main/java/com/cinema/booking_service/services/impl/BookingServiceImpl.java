@@ -531,7 +531,12 @@ public class BookingServiceImpl implements BookingService {
             return cache.get(cinemaId);
         }
         try {
-            String cinemaName = cinemaGrpcClient.getCinemaById(cinemaId).name();
+            CinemaGrpcClient.CinemaSummary cinema = cinemaGrpcClient.getCinemaById(cinemaId);
+            if (cinema == null) {
+                cache.put(cinemaId, null);
+                return null;
+            }
+            String cinemaName = cinema.name();
             cache.put(cinemaId, cinemaName);
             return cinemaName;
         } catch (BusinessException ex) {
@@ -549,7 +554,12 @@ public class BookingServiceImpl implements BookingService {
             return cache.get(filmId);
         }
         try {
-            String filmName = filmGrpcClient.getFilmById(filmId).getTitle();
+            FilmGrpcClient.FilmSnapshot film = filmGrpcClient.getFilmById(filmId);
+            if (film == null) {
+                cache.put(filmId, null);
+                return null;
+            }
+            String filmName = film.getTitle();
             cache.put(filmId, filmName);
             return filmName;
         } catch (BusinessException ex) {
@@ -567,7 +577,12 @@ public class BookingServiceImpl implements BookingService {
             return cache.get(hallId);
         }
         try {
-            String hallName = hallGrpcClient.getHallById(hallId).name();
+            HallGrpcClient.HallSummary hall = hallGrpcClient.getHallById(hallId);
+            if (hall == null) {
+                cache.put(hallId, null);
+                return null;
+            }
+            String hallName = hall.name();
             cache.put(hallId, hallName);
             return hallName;
         } catch (BusinessException ex) {
