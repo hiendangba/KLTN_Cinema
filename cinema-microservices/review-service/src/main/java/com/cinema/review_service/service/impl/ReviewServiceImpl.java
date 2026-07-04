@@ -13,6 +13,7 @@ import com.cinema.review_service.entity.Review;
 import com.cinema.review_service.entity.ReviewMedia;
 import com.cinema.review_service.entity.enums.ReviewStatus;
 import com.cinema.review_service.grpc.BookingGrpcClient;
+import com.cinema.review_service.grpc.UserGrpcClient;
 import com.cinema.review_service.mapper.ReviewMapper;
 import com.cinema.review_service.repository.ReviewRepository;
 import com.cinema.review_service.service.ReviewService;
@@ -39,6 +40,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     private final ReviewRepository reviewRepository;
     private final BookingGrpcClient bookingGrpcClient;
+    private final UserGrpcClient userGrpcClient;
     private final ReviewMapper reviewMapper;
 
     @Override
@@ -64,7 +66,7 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(ReviewStatus.ACTIVE);
         review.setDeletedAt(null);
         applyReviewMedias(review, mediaDescriptors);
-        return reviewMapper.toResponse(reviewRepository.save(review));
+        return enrichUserName(reviewMapper.toResponse(reviewRepository.save(review)));
     }
 
     @Override
@@ -80,7 +82,7 @@ public class ReviewServiceImpl implements ReviewService {
                 toLikePattern(request.getNormalizedKeyword()),
                 PageRequest.of(0, size + 1));
 
-        return toCursorPageResponse(reviews, size, reviewMapper::toResponse);
+        return toCursorPageResponse(reviews, size, review -> enrichUserName(reviewMapper.toResponse(review)));
     }
 
     @Override
@@ -100,7 +102,7 @@ public class ReviewServiceImpl implements ReviewService {
         review.setStatus(ReviewStatus.ACTIVE);
         review.setDeletedAt(null);
         applyReviewMedias(review, mediaDescriptors);
-        return reviewMapper.toResponse(reviewRepository.save(review));
+        return enrichUserName(reviewMapper.toResponse(reviewRepository.save(review)));
     }
 
     @Override
@@ -210,6 +212,23 @@ public class ReviewServiceImpl implements ReviewService {
 
     private String toLikePattern(String keyword) {
         return keyword == null ? null : "%" + keyword + "%";
+    }
+
+    private ReviewResponse enrichUserName(ReviewResponse response) {
+        if (response == null || response.getUserId() == null) {
+            return response;
+        }
+
+        try {
+            String userName = userGrpcClient.getUserNameById(response.getUserId());
+            if (userName != null && !userName.isBlank()) {
+                response.setName(userName);
+            }
+        } catch (BusinessException ex) {
+            // Keep the review visible even if user-service is temporarily unavailable.
+        }
+
+        return response;
     }
 
     private record CursorAnchor(LocalDateTime createdAt, UUID id) {

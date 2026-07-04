@@ -30,6 +30,8 @@ spring:
       channels:
         booking:
           address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
+        user:
+          address: "${USER_GRPC_HOST:localhost}:${USER_GRPC_PORT:9191}"
 server:
   port: ${SERVER_PORT:8101}
   http2:

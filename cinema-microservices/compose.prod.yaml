@@ -47,7 +47,7 @@ services:
       - postgres
       - redis
       - rabbitmq
-    mem_limit: 352m
+    mem_limit: 448m
 
   user-service:
     image: ${IMAGE_REPO}/user-service:${IMAGE_TAG:-dev}
@@ -95,7 +95,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms48m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
       SPRINGDOC_API_DOCS_ENABLED: "false"
@@ -126,7 +126,7 @@ services:
       - postgres
       - redis
       - rabbitmq
-    mem_limit: 352m
+    mem_limit: 448m
 
   showtime-service:
     image: ${IMAGE_REPO}/showtime-service:${IMAGE_TAG:-dev}
@@ -308,7 +308,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms64m -Xmx192m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"
       DB_URL: jdbc:postgresql://postgres:5432/review_db
@@ -316,6 +316,8 @@ services:
       DB_PASSWORD: review_pass
       BOOKING_GRPC_HOST: booking-service
       BOOKING_GRPC_PORT: 9195
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
       GRPC_SERVER_PORT: 9198
       SERVER_PORT: 8101
     expose:
@@ -324,7 +326,8 @@ services:
     depends_on:
       - postgres
       - booking-service
-    mem_limit: 224m
+      - user-service
+    mem_limit: 448m
 
   hall-service:
     image: ${IMAGE_REPO}/hall-service:${IMAGE_TAG:-dev}
@@ -361,7 +364,7 @@ services:
       - postgres
       - redis
       - cinema-service
-    mem_limit: 352m
+    mem_limit: 448m
 
   seat-service:
     image: ${IMAGE_REPO}/seat-service:${IMAGE_TAG:-dev}

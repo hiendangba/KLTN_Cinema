@@ -16,6 +16,24 @@
 
 ## Changelog ngắn (2026-07-04)
 
+- `review-service` đã trả thêm `name` bên cạnh `userId` trong `ReviewResponse` và enrich response bằng gRPC `GetUserBasicById` từ `user-service`; đồng thời `ReviewServiceApplication` được thu hẹp component-scan để tránh quét nhầm proto classes trong `common-lib`.
+- Files chạm: `review-service/src/main/java/com/cinema/review_service/dto/response/ReviewResponse.java`, `review-service/src/main/java/com/cinema/review_service/grpc/UserGrpcClient.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/ReviewServiceImpl.java`, `review-service/src/main/java/com/cinema/review_service/ReviewServiceApplication.java`, `review-service/src/main/resources/application.yaml`, `compose.prod.yaml`, `review-service/src/test/java/com/cinema/review_service/service/impl/ReviewServiceImplTest.java`, `review-service/src/test/java/com/cinema/review_service/ReviewServiceApplicationTests.java`.
+- Reason: review card đang chỉ hiện `Khách #...` vì response cũ chỉ có `userId`; backend cần trả thêm tên hiển thị để FE có thể render tên thật khi phù hợp, và scan scope cũ `com.cinema` làm `contextLoads` vấp vào bytecode proto trong `common-lib`.
+- Verification: `review-service` Maven test pass toàn bộ (`ReviewServiceApplicationTests` và 2 test service mới), đồng thời context đã khởi động được sau khi bỏ scan `com.cinema` tổng và chỉ giữ `com.cinema.review_service` + `com.cinema.exception`.
+- Remaining risk: FE vẫn cần ưu tiên render `name`; nếu UI chưa cập nhật thì nó sẽ tiếp tục dùng label ẩn danh cũ dù API đã có dữ liệu tên.
+
+- `review-service` và `film-service` trong `compose.prod.yaml` đã được nới thêm bộ nhớ: cả hai đều tăng `MaxMetaspaceSize` lên `160m`, `ReservedCodeCacheSize` lên `64m`, và `mem_limit` lên `448m`; `review-service` dùng `Xmx224m`, còn `film-service` dùng `Xmx224m`.
+- Files chạm: `compose.prod.yaml`.
+- Reason: `review-service` đã từng OOM ở Metaspace, còn `film-service` trong `docker stats` đang chạy sát trần >90%; tăng đồng bộ JVM và container limit giúp giảm nguy cơ chết khi traffic tăng hoặc Spring/Hibernate sinh thêm class/proxy.
+- Verification: đối chiếu lại block `film-service` và `review-service` trong `compose.prod.yaml`; thay đổi chỉ là tuning tài nguyên, không đụng logic nghiệp vụ.
+- Remaining risk: nếu peak load tiếp tục tăng, có thể cần tune thêm heap/metaspace theo số liệu thực tế sau khi deploy.
+
+- `review-service` trong `compose.prod.yaml` đã được nới bộ nhớ để tránh `OutOfMemoryError: Metaspace`: `MaxMetaspaceSize` tăng từ `96m` lên `128m`, `ReservedCodeCacheSize` từ `48m` lên `64m`, và `mem_limit` từ `224m` lên `352m`.
+- Files chạm: `compose.prod.yaml`.
+- Reason: log container cho thấy app chết sau khi khởi động xong vì Metaspace, không phải heap; mức cũ quá sát trần cho Spring/Hibernate/gRPC runtime hiện tại.
+- Verification: đối chiếu lại block `review-service` trong `compose.prod.yaml`; thay đổi chỉ là tuning tài nguyên, không ảnh hưởng contract API.
+- Remaining risk: nếu traffic hoặc số proxy/class tăng mạnh hơn nữa, vẫn có thể cần tăng tiếp `mem_limit` hoặc giảm class churn từ runtime.
+
 - `booking-service` đã siết rule review eligibility: chỉ booking `CONFIRMED + PAID` và có `showtimeEndDateTime` nhỏ hơn `now` mới trả `eligible=true` qua gRPC `checkUserEligibleForReview`; `review-service` tiếp tục dùng client này để chặn/mở review.
 - Files chạm: `booking-service/src/main/java/com/cinema/booking_service/grpc/BookingInternalGrpcService.java`, `booking-service/src/main/java/com/cinema/booking_service/repository/BookingRepository.java`, `booking-service/src/test/java/com/cinema/booking_service/grpc/BookingInternalGrpcServiceTest.java`.
 - Reason: người dùng đã mua vé và thanh toán xong vẫn chưa được review nếu suất chiếu chưa kết thúc; rule phải bám theo `endTime < now` của vé chứ không chỉ trạng thái thanh toán.

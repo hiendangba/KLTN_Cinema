@@ -10,7 +10,8 @@ import org.springframework.boot.test.context.SpringBootTest;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-        "spring.grpc.client.channels.booking.address=localhost:9195"
+        "spring.grpc.client.channels.booking.address=localhost:9195",
+        "spring.grpc.client.channels.user.address=localhost:9191"
 })
 class ReviewServiceApplicationTests {
 
