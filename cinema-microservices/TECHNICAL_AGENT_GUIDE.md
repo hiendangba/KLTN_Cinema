@@ -16,6 +16,24 @@
 
 ## Changelog ngắn (2026-07-04)
 
+- `review-service` đã sửa lỗi PostgreSQL `text ~~ bytea` ở các API search review/comment bằng cách bỏ `LIKE concat('%', :keyword, '%')` trong JPQL và chuyển sang truyền sẵn `keywordPattern` từ service.
+- Files chạm: `review-service/src/main/java/com/cinema/review_service/repository/ReviewRepository.java`, `review-service/src/main/java/com/cinema/review_service/repository/CommentRepository.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/ReviewServiceImpl.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/CommentServiceImpl.java`.
+- Reason: log production cho thấy query `searchByFilmIdAndCursor` bind tham số keyword thành kiểu không khớp trong biểu thức concat/LIKE, làm Postgres suy ra RHS là `bytea` và nổ ở runtime.
+- Verification: đã đối chiếu lại toàn bộ call site search trong review-service để cùng dùng helper `toLikePattern(...)` và param name `keywordPattern`; full Maven test chưa chạy được trong session này vì `mvn` không có sẵn trên máy hiện tại.
+- Remaining risk: cần deploy/restart review-service rồi smoke test `POST /api/films/{filmId}/reviews/search` và comment search để xác nhận lỗi runtime đã hết hẳn.
+
+- `compose.prod.yaml` đã khai báo `cinema-shared` là network `external: true`, nên Envoy sẽ dùng lại network có sẵn thay vì để project `cinema-deploy` cố tạo lại và sinh warning.
+- Files chạm: `compose.prod.yaml`.
+- Reason: trên VPS đã có network `cinema-shared` dùng chung giữa stack CinemaStar và container khác, nên Compose cần được báo rõ đây là network bên ngoài quản lý.
+- Verification: đối chiếu lại block `envoy` và `networks` trong `compose.prod.yaml`; thay đổi chỉ tác động cách Compose attach network, không đổi service logic.
+- Remaining risk: nếu network `cinema-shared` chưa tồn tại trên máy deploy mới, `docker compose up` sẽ báo lỗi cho tới khi tạo network một lần bằng tay.
+
+- `postgres-init/create-databases.sql` đã được bổ sung đầy đủ `review_user` và `review_db` theo cùng pattern với các service còn lại: tạo role/login password, tạo database owner, revoke `PUBLIC`, rồi grant toàn quyền cho role.
+- Files chạm: `postgres-init/create-databases.sql`.
+- Reason: `review-service` trong `compose.prod.yaml` đã trỏ sẵn tới `jdbc:postgresql://postgres:5432/review_db` và `review_user`, nhưng script bootstrap PostgreSQL chưa tạo cặp này nên deploy mới có thể thiếu DB/user.
+- Verification: đối chiếu static với `compose.prod.yaml` và `review-service/src/main/resources/application.yaml`; không cần đổi thêm config service vì phần compose đã đúng.
+- Remaining risk: nếu PostgreSQL instance đã được khởi tạo từ trước mà không chạy lại script init, cần tạo/migrate thủ công `review_db` và `review_user` một lần.
+
 - `envoy` đã được cập nhật để route review-service đúng nghĩa: các route search/view của review/comment được disable `ext_authz`, còn create/update/delete vẫn đi qua auth như cũ; review-service cluster mới trỏ về port `8101`.
 - Files chạm: `envoy/envoy.local.yaml`, `envoy/envoy.prod.yaml`.
 - Reason: review view cần public, nhưng mutation vẫn cần token. Gateway phải tách rõ theo path vì review search dùng `POST`, không thể dựa vào method.

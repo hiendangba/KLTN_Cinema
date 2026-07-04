@@ -48,6 +48,12 @@ BEGIN
         ALTER ROLE payment_user WITH LOGIN PASSWORD 'payment_pass';
     END IF;
 
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'review_user') THEN
+        CREATE ROLE review_user LOGIN PASSWORD 'review_pass';
+    ELSE
+        ALTER ROLE review_user WITH LOGIN PASSWORD 'review_pass';
+    END IF;
+
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'seat_user') THEN
         CREATE ROLE seat_user LOGIN PASSWORD 'seat_pass';
     ELSE
@@ -78,6 +84,8 @@ SELECT format('CREATE DATABASE %I OWNER %I', 'booking_db', 'booking_user')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'booking_db') \gexec
 SELECT format('CREATE DATABASE %I OWNER %I', 'payment_db', 'payment_user')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'payment_db') \gexec
+SELECT format('CREATE DATABASE %I OWNER %I', 'review_db', 'review_user')
+WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'review_db') \gexec
 SELECT format('CREATE DATABASE %I OWNER %I', 'seat_db', 'seat_user')
 WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'seat_db') \gexec
 SELECT format('CREATE DATABASE %I OWNER %I', 'upload_db', 'upload_user')
@@ -91,6 +99,7 @@ ALTER DATABASE hall_db OWNER TO hall_user;
 ALTER DATABASE cinema_db OWNER TO cinema_user;
 ALTER DATABASE booking_db OWNER TO booking_user;
 ALTER DATABASE payment_db OWNER TO payment_user;
+ALTER DATABASE review_db OWNER TO review_user;
 ALTER DATABASE seat_db OWNER TO seat_user;
 ALTER DATABASE upload_db OWNER TO upload_user;
 
@@ -102,6 +111,7 @@ REVOKE ALL ON DATABASE hall_db FROM PUBLIC;
 REVOKE ALL ON DATABASE cinema_db FROM PUBLIC;
 REVOKE ALL ON DATABASE booking_db FROM PUBLIC;
 REVOKE ALL ON DATABASE payment_db FROM PUBLIC;
+REVOKE ALL ON DATABASE review_db FROM PUBLIC;
 REVOKE ALL ON DATABASE seat_db FROM PUBLIC;
 REVOKE ALL ON DATABASE upload_db FROM PUBLIC;
 
@@ -113,5 +123,6 @@ GRANT ALL PRIVILEGES ON DATABASE hall_db TO hall_user;
 GRANT ALL PRIVILEGES ON DATABASE cinema_db TO cinema_user;
 GRANT ALL PRIVILEGES ON DATABASE booking_db TO booking_user;
 GRANT ALL PRIVILEGES ON DATABASE payment_db TO payment_user;
+GRANT ALL PRIVILEGES ON DATABASE review_db TO review_user;
 GRANT ALL PRIVILEGES ON DATABASE seat_db TO seat_user;
 GRANT ALL PRIVILEGES ON DATABASE upload_db TO upload_user;

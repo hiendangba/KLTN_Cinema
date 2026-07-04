@@ -27,7 +27,7 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
             WHERE c.reviewId = :reviewId
               AND c.parentCommentId IS NULL
               AND c.isDeleted = false
-              AND (:keyword IS NULL OR lower(coalesce(c.content, '')) LIKE concat('%', :keyword, '%'))
+              AND (:keywordPattern IS NULL OR lower(coalesce(c.content, '')) LIKE :keywordPattern)
               AND (
                    :cursorCreatedAt IS NULL
                    OR c.createdAt < :cursorCreatedAt
@@ -39,7 +39,7 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
             @Param("reviewId") UUID reviewId,
             @Param("cursorCreatedAt") LocalDateTime cursorCreatedAt,
             @Param("cursorId") UUID cursorId,
-            @Param("keyword") String keyword,
+            @Param("keywordPattern") String keywordPattern,
             Pageable pageable);
 
     @EntityGraph(attributePaths = "medias")
@@ -48,7 +48,7 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
             FROM Comment c
             WHERE c.parentCommentId = :parentCommentId
               AND c.isDeleted = false
-              AND (:keyword IS NULL OR lower(coalesce(c.content, '')) LIKE concat('%', :keyword, '%'))
+              AND (:keywordPattern IS NULL OR lower(coalesce(c.content, '')) LIKE :keywordPattern)
               AND (
                    :cursorCreatedAt IS NULL
                    OR c.createdAt < :cursorCreatedAt
@@ -60,6 +60,6 @@ public interface CommentRepository extends JpaRepository<Comment, UUID> {
             @Param("parentCommentId") UUID parentCommentId,
             @Param("cursorCreatedAt") LocalDateTime cursorCreatedAt,
             @Param("cursorId") UUID cursorId,
-            @Param("keyword") String keyword,
+            @Param("keywordPattern") String keywordPattern,
             Pageable pageable);
 }

@@ -71,7 +71,7 @@ public class CommentServiceImpl implements CommentService {
                 reviewId,
                 cursorAnchor.createdAt(),
                 cursorAnchor.id(),
-                request.getNormalizedKeyword(),
+                toLikePattern(request.getNormalizedKeyword()),
                 PageRequest.of(0, size + 1));
 
         return toCursorPageResponse(comments, size, commentMapper::toResponse);
@@ -106,7 +106,7 @@ public class CommentServiceImpl implements CommentService {
                 commentId,
                 cursorAnchor.createdAt(),
                 cursorAnchor.id(),
-                request.getNormalizedKeyword(),
+                toLikePattern(request.getNormalizedKeyword()),
                 PageRequest.of(0, size + 1));
 
         return toCursorPageResponse(comments, size, commentMapper::toResponse);
@@ -228,6 +228,10 @@ public class CommentServiceImpl implements CommentService {
                 .hasNext(hasNext)
                 .size(data.size())
                 .build();
+    }
+
+    private String toLikePattern(String keyword) {
+        return keyword == null ? null : "%" + keyword + "%";
     }
 
     private record CursorAnchor(LocalDateTime createdAt, UUID id) {

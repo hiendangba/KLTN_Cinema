@@ -28,8 +28,8 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             FROM Review r
             WHERE r.filmId = :filmId
               AND r.isDeleted = false
-              AND (:keyword IS NULL OR lower(coalesce(r.title, '')) LIKE concat('%', :keyword, '%')
-                   OR lower(coalesce(r.content, '')) LIKE concat('%', :keyword, '%'))
+              AND (:keywordPattern IS NULL OR lower(coalesce(r.title, '')) LIKE :keywordPattern
+                   OR lower(coalesce(r.content, '')) LIKE :keywordPattern)
               AND (
                    :cursorCreatedAt IS NULL
                    OR r.createdAt < :cursorCreatedAt
@@ -41,7 +41,7 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
             @Param("filmId") UUID filmId,
             @Param("cursorCreatedAt") LocalDateTime cursorCreatedAt,
             @Param("cursorId") UUID cursorId,
-            @Param("keyword") String keyword,
+            @Param("keywordPattern") String keywordPattern,
             Pageable pageable);
 
     @Query("""

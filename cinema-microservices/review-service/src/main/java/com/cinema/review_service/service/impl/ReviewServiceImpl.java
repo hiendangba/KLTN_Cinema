@@ -77,7 +77,7 @@ public class ReviewServiceImpl implements ReviewService {
                 filmId,
                 cursorAnchor.createdAt(),
                 cursorAnchor.id(),
-                request.getNormalizedKeyword(),
+                toLikePattern(request.getNormalizedKeyword()),
                 PageRequest.of(0, size + 1));
 
         return toCursorPageResponse(reviews, size, reviewMapper::toResponse);
@@ -206,6 +206,10 @@ public class ReviewServiceImpl implements ReviewService {
                 .hasNext(hasNext)
                 .size(data.size())
                 .build();
+    }
+
+    private String toLikePattern(String keyword) {
+        return keyword == null ? null : "%" + keyword + "%";
     }
 
     private record CursorAnchor(LocalDateTime createdAt, UUID id) {
