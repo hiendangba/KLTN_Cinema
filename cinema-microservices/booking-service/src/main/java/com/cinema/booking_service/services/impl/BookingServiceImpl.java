@@ -540,6 +540,42 @@ public class BookingServiceImpl implements BookingService {
         }
     }
 
+    private String resolveFilmName(UUID filmId, Map<UUID, String> filmNameCache) {
+        if (filmId == null) {
+            return null;
+        }
+        Map<UUID, String> cache = filmNameCache == null ? new LinkedHashMap<>() : filmNameCache;
+        if (cache.containsKey(filmId)) {
+            return cache.get(filmId);
+        }
+        try {
+            String filmName = filmGrpcClient.getFilmById(filmId).getTitle();
+            cache.put(filmId, filmName);
+            return filmName;
+        } catch (BusinessException ex) {
+            cache.put(filmId, null);
+            return null;
+        }
+    }
+
+    private String resolveHallName(UUID hallId, Map<UUID, String> hallNameCache) {
+        if (hallId == null) {
+            return null;
+        }
+        Map<UUID, String> cache = hallNameCache == null ? new LinkedHashMap<>() : hallNameCache;
+        if (cache.containsKey(hallId)) {
+            return cache.get(hallId);
+        }
+        try {
+            String hallName = hallGrpcClient.getHallById(hallId).name();
+            cache.put(hallId, hallName);
+            return hallName;
+        } catch (BusinessException ex) {
+            cache.put(hallId, null);
+            return null;
+        }
+    }
+
     private String resolveHallName(
             Booking booking,
             Map<UUID, String> hallNameCache,
@@ -831,6 +867,7 @@ public class BookingServiceImpl implements BookingService {
         long totalElements = filteredItems.size();
         int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / size);
         List<ShowtimePerformanceItemResponse> pageItems = paginateShowtimePerformance(filteredItems, page, size);
+        pageItems = enrichShowtimePerformanceItems(pageItems);
 
         return ShowtimePerformanceReportResponse.builder()
                 .from(from)
@@ -1143,6 +1180,42 @@ public class BookingServiceImpl implements BookingService {
         return new ArrayList<>(items.subList(fromIndex, toIndex));
     }
 
+    private List<ShowtimePerformanceItemResponse> enrichShowtimePerformanceItems(
+            List<ShowtimePerformanceItemResponse> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+
+        Map<UUID, String> cinemaNameCache = new LinkedHashMap<>();
+        Map<UUID, String> hallNameCache = new LinkedHashMap<>();
+        Map<UUID, String> filmNameCache = new LinkedHashMap<>();
+
+        List<ShowtimePerformanceItemResponse> enriched = new ArrayList<>(items.size());
+        for (ShowtimePerformanceItemResponse item : items) {
+            if (item == null) {
+                enriched.add(null);
+                continue;
+            }
+
+            enriched.add(ShowtimePerformanceItemResponse.builder()
+                    .showtimeId(item.showtimeId())
+                    .cinemaId(item.cinemaId())
+                    .cinemaName(resolveCinemaName(item.cinemaId(), cinemaNameCache))
+                    .filmId(item.filmId())
+                    .filmName(resolveFilmName(item.filmId(), filmNameCache))
+                    .hallId(item.hallId())
+                    .hallName(resolveHallName(item.hallId(), hallNameCache))
+                    .startDateTime(item.startDateTime())
+                    .endDateTime(item.endDateTime())
+                    .totalBookings(item.totalBookings())
+                    .totalSeatsBooked(item.totalSeatsBooked())
+                    .totalSeatCapacity(item.totalSeatCapacity())
+                    .occupancyRate(item.occupancyRate())
+                    .build());
+        }
+        return enriched;
+    }
+
     private ShowtimePerformanceSummaryResponse toShowtimePerformanceSummary(
             List<ShowtimePerformanceItemResponse> items) {
         if (items == null || items.isEmpty()) {
@@ -1151,7 +1224,7 @@ public class BookingServiceImpl implements BookingService {
                     .totalBookings(0)
                     .totalSeatsBooked(0)
                     .totalSeatCapacity(0)
-                    .occupancyRate(BigDecimal.ZERO)
+                    .occupancyRate(BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP))
                     .build();
         }
 
@@ -1180,11 +1253,10 @@ public class BookingServiceImpl implements BookingService {
 
     private static BigDecimal calcOccupancyRate(long bookedSeats, long totalSeatCapacity) {
         if (totalSeatCapacity <= 0L) {
-            return BigDecimal.ZERO;
+            return BigDecimal.ZERO.setScale(4, RoundingMode.HALF_UP);
         }
         return BigDecimal.valueOf(bookedSeats)
-                .multiply(BigDecimal.valueOf(100))
-                .divide(BigDecimal.valueOf(totalSeatCapacity), 2, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(totalSeatCapacity), 4, RoundingMode.HALF_UP);
     }
 
     private static class ShowtimePerformanceAccumulator {

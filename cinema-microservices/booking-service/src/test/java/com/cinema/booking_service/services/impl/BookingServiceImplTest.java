@@ -131,6 +131,10 @@ class BookingServiceImplTest {
                 when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
                                 new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"),
                                 new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
+                when(cinemaGrpcClient.getCinemaById(cinema1))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
+                when(cinemaGrpcClient.getCinemaById(cinema2))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2"));
 
                 Booking booking1 = buildBooking(cinema1, film1, BookingStatus.PENDING, BigDecimal.valueOf(70000),
                                 BigDecimal.ZERO);
@@ -430,6 +434,20 @@ class BookingServiceImplTest {
 
                 when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 10));
                 when(seatGrpcClient.getLayoutByHallId(hall2)).thenReturn(layoutBundle(hall2, 20));
+                when(hallGrpcClient.getHallById(hall1))
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 1"));
+                when(hallGrpcClient.getHallById(hall2))
+                                .thenReturn(new HallGrpcClient.HallSummary(hall2, cinema2, "Phòng 2"));
+                when(filmGrpcClient.getFilmById(film1))
+                                .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                                .id(film1)
+                                                .title("Phim 1")
+                                                .build());
+                when(filmGrpcClient.getFilmById(film2))
+                                .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                                .id(film2)
+                                                .title("Phim 2")
+                                                .build());
 
                 ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
                                 .pageRequest(PageRequest.<ShowtimePerformanceField>builder()
@@ -445,7 +463,7 @@ class BookingServiceImplTest {
                 assertEquals(3L, response.total().totalBookings());
                 assertEquals(5L, response.total().totalSeatsBooked());
                 assertEquals(30L, response.total().totalSeatCapacity());
-                assertEquals(0, response.total().occupancyRate().compareTo(new BigDecimal("16.67")));
+                assertEquals(0, response.total().occupancyRate().compareTo(new BigDecimal("0.1667")));
 
                 Map<UUID, ShowtimePerformanceItemResponse> itemByShowtimeId = response.items().stream()
                                 .collect(Collectors.toMap(ShowtimePerformanceItemResponse::showtimeId, item -> item));
@@ -453,11 +471,148 @@ class BookingServiceImplTest {
                 assertEquals(2L, itemByShowtimeId.get(showtime1).totalBookings());
                 assertEquals(3L, itemByShowtimeId.get(showtime1).totalSeatsBooked());
                 assertEquals(10L, itemByShowtimeId.get(showtime1).totalSeatCapacity());
-                assertEquals(0, itemByShowtimeId.get(showtime1).occupancyRate().compareTo(new BigDecimal("30.00")));
+                assertEquals("Cinema 1", itemByShowtimeId.get(showtime1).cinemaName());
+                assertEquals("Phim 1", itemByShowtimeId.get(showtime1).filmName());
+                assertEquals("Phòng 1", itemByShowtimeId.get(showtime1).hallName());
+                assertEquals(0, itemByShowtimeId.get(showtime1).occupancyRate().compareTo(new BigDecimal("0.3000")));
                 assertEquals(1L, itemByShowtimeId.get(showtime2).totalBookings());
                 assertEquals(2L, itemByShowtimeId.get(showtime2).totalSeatsBooked());
                 assertEquals(20L, itemByShowtimeId.get(showtime2).totalSeatCapacity());
-                assertEquals(0, itemByShowtimeId.get(showtime2).occupancyRate().compareTo(new BigDecimal("10.00")));
+                assertEquals("Cinema 2", itemByShowtimeId.get(showtime2).cinemaName());
+                assertEquals("Phim 2", itemByShowtimeId.get(showtime2).filmName());
+                assertEquals("Phòng 2", itemByShowtimeId.get(showtime2).hallName());
+                assertEquals(0, itemByShowtimeId.get(showtime2).occupancyRate().compareTo(new BigDecimal("0.1000")));
+        }
+
+        @Test
+        void getAllShowtimePerformanceReport_shouldCalculateOccupancyAsRatio() {
+                UUID cinema1 = UUID.randomUUID();
+                UUID film1 = UUID.randomUUID();
+                UUID showtime1 = UUID.randomUUID();
+                UUID hall1 = UUID.randomUUID();
+
+                when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+                when(cinemaGrpcClient.getCinemaById(cinema1))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
+
+                Booking booking1 = buildShowtimeBooking(
+                                showtime1, cinema1, film1, BookingStatus.RESERVED,
+                                LocalDateTime.of(2026, 7, 3, 17, 20),
+                                LocalDateTime.of(2026, 7, 3, 19, 39),
+                                7);
+
+                when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), any(), any(), any(),
+                                any()))
+                                .thenReturn(List.of(booking1));
+
+                when(showtimeGrpcClient.getShowtimeById(showtime1))
+                                .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
+                                                .id(showtime1)
+                                                .hallId(hall1)
+                                                .cinemaId(cinema1)
+                                                .pricingPolicyId(UUID.randomUUID())
+                                                .filmId(film1)
+                                                .startDateTime(LocalDateTime.of(2026, 7, 3, 17, 20))
+                                                .endDateTime(LocalDateTime.of(2026, 7, 3, 19, 39))
+                                                .build());
+
+                when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 54));
+                when(hallGrpcClient.getHallById(hall1))
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 06"));
+                when(filmGrpcClient.getFilmById(film1))
+                                .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                                .id(film1)
+                                                .title("VENOM: KẺ CUỐI")
+                                                .build());
+
+                ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
+                                .pageRequest(PageRequest.<ShowtimePerformanceField>builder()
+                                                .page(1)
+                                                .size(10)
+                                                .build())
+                                .build();
+
+                ShowtimePerformanceReportResponse response = bookingService.getAllShowtimePerformanceReport(request);
+
+                assertEquals(0, response.total().occupancyRate().compareTo(new BigDecimal("0.1296")));
+                assertEquals(0, response.items().get(0).occupancyRate().compareTo(new BigDecimal("0.1296")));
+                assertEquals("Cinema 1", response.items().get(0).cinemaName());
+                assertEquals("Phòng 06", response.items().get(0).hallName());
+                assertEquals("VENOM: KẺ CUỐI", response.items().get(0).filmName());
+        }
+
+        @Test
+        void getAllShowtimePerformanceReport_shouldResolveNamesOncePerUniqueEntity() {
+                UUID cinema1 = UUID.randomUUID();
+                UUID film1 = UUID.randomUUID();
+                UUID showtime1 = UUID.randomUUID();
+                UUID showtime2 = UUID.randomUUID();
+                UUID hall1 = UUID.randomUUID();
+
+                when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+                when(cinemaGrpcClient.getCinemaById(cinema1))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
+
+                Booking booking1 = buildShowtimeBooking(
+                                showtime1, cinema1, film1, BookingStatus.RESERVED,
+                                LocalDateTime.of(2026, 7, 3, 17, 20),
+                                LocalDateTime.of(2026, 7, 3, 19, 39),
+                                2);
+                Booking booking2 = buildShowtimeBooking(
+                                showtime2, cinema1, film1, BookingStatus.CONFIRMED,
+                                LocalDateTime.of(2026, 7, 3, 20, 0),
+                                LocalDateTime.of(2026, 7, 3, 22, 0),
+                                3);
+
+                when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), any(), any(), any(),
+                                any()))
+                                .thenReturn(List.of(booking1, booking2));
+
+                when(showtimeGrpcClient.getShowtimeById(showtime1))
+                                .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
+                                                .id(showtime1)
+                                                .hallId(hall1)
+                                                .cinemaId(cinema1)
+                                                .pricingPolicyId(UUID.randomUUID())
+                                                .filmId(film1)
+                                                .startDateTime(LocalDateTime.of(2026, 7, 3, 17, 20))
+                                                .endDateTime(LocalDateTime.of(2026, 7, 3, 19, 39))
+                                                .build());
+                when(showtimeGrpcClient.getShowtimeById(showtime2))
+                                .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
+                                                .id(showtime2)
+                                                .hallId(hall1)
+                                                .cinemaId(cinema1)
+                                                .pricingPolicyId(UUID.randomUUID())
+                                                .filmId(film1)
+                                                .startDateTime(LocalDateTime.of(2026, 7, 3, 20, 0))
+                                                .endDateTime(LocalDateTime.of(2026, 7, 3, 22, 0))
+                                                .build());
+
+                when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 54));
+                when(hallGrpcClient.getHallById(hall1))
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 06"));
+                when(filmGrpcClient.getFilmById(film1))
+                                .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                                .id(film1)
+                                                .title("VENOM: KẺ CUỐI")
+                                                .build());
+
+                ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
+                                .pageRequest(PageRequest.<ShowtimePerformanceField>builder()
+                                                .page(1)
+                                                .size(10)
+                                                .build())
+                                .build();
+
+                ShowtimePerformanceReportResponse response = bookingService.getAllShowtimePerformanceReport(request);
+
+                assertEquals(2, response.items().size());
+                org.mockito.Mockito.verify(cinemaGrpcClient).getCinemaById(cinema1);
+                org.mockito.Mockito.verify(hallGrpcClient).getHallById(hall1);
+                org.mockito.Mockito.verify(filmGrpcClient).getFilmById(film1);
         }
 
         @Test

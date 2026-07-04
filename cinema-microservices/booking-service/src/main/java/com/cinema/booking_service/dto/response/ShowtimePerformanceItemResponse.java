@@ -10,8 +10,11 @@ import java.util.UUID;
 public record ShowtimePerformanceItemResponse(
         UUID showtimeId,
         UUID cinemaId,
+        String cinemaName,
         UUID filmId,
+        String filmName,
         UUID hallId,
+        String hallName,
         LocalDateTime startDateTime,
         LocalDateTime endDateTime,
         long totalBookings,

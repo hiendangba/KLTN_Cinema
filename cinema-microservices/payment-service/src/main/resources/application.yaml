@@ -26,6 +26,8 @@ spring:
           address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
         cinema:
           address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
+        film:
+          address: "${FILM_GRPC_HOST:localhost}:${FILM_GRPC_PORT:9192}"
   rabbitmq:
     host: ${SPRING_RABBITMQ_HOST:localhost}
     port: ${SPRING_RABBITMQ_PORT:5672}

@@ -244,6 +244,8 @@ services:
       BOOKING_GRPC_PORT: 9195
       CINEMA_GRPC_HOST: cinema-service
       CINEMA_GRPC_PORT: 9196
+      FILM_GRPC_HOST: film-service
+      FILM_GRPC_PORT: 9192
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: admin
@@ -268,6 +270,7 @@ services:
     depends_on:
       - postgres
       - booking-service
+      - film-service
       - cinema-service
     mem_limit: 352m
 

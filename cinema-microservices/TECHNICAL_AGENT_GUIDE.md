@@ -14,6 +14,20 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-07-05 - booking report)
+
+- `booking-service` báo cáo `POST /api/bookings/reports/showtimes/search` đã trả thêm `cinemaName`, `hallName`, `filmName` cho từng item report bằng lookup qua `CinemaGrpcClient`, `HallGrpcClient`, `FilmGrpcClient`.
+- `occupancyRate` của report showtime đã đổi sang tỷ lệ thực `bookedSeats / capacity` với scale 4, nên ví dụ `7/54` sẽ ra `0.1296` thay vì `12.96`.
+- Page/total summary của báo cáo giữ nguyên shape hiện tại, chỉ đổi giá trị occupancy để khớp với item.
+
+## Changelog ngắn (2026-07-05)
+
+- `payment-service` đã được bổ sung channel gRPC `film` trong `application.yaml` và `compose.prod.yaml` (`FILM_GRPC_HOST/PORT`, `depends_on: film-service`), đồng thời thu hẹp `@SpringBootApplication` scan về `com.cinema.payment_service` + `com.cinema.exception` để tránh lỗi quét proto classes trong `common-lib`; mục tiêu là `GET /api/payments/revenues/films/search` lấy được `title` từ `film-service` thay vì rơi về `null`.
+- Files chạm: `payment-service/src/main/resources/application.yaml`, `compose.prod.yaml`, `payment-service/src/main/java/com/cinema/payment_service/PaymentServiceApplication.java`.
+- Reason: `FilmGrpcClient` đang gọi `channelFactory.createChannel("film")`, nhưng config production trước đó không khai báo channel này nên lookup tên phim thất bại và `filmName` bị rỗng trong response; đồng thời `scanBasePackages = "com.cinema"` làm `contextLoads` vấp bytecode proto của `common-lib`.
+- Verification: đối chiếu lại `film_internal.proto` và `FilmInternalGrpcService` xác nhận film-service trả field `title`; `payment-service` Maven test pass toàn bộ (`42 tests, 0 failures, 0 errors`) sau khi thêm channel `film` và thu hẹp component-scan.
+- Remaining risk: container đang chạy bản cũ phải restart/redeploy thì env mới có hiệu lực; nếu chưa restart, API cũ vẫn có thể tiếp tục trả `null`.
+
 ## Changelog ngắn (2026-07-04)
 
 - `review-service` đã trả thêm `name` bên cạnh `userId` trong `ReviewResponse` và enrich response bằng gRPC `GetUserBasicById` từ `user-service`; đồng thời `ReviewServiceApplication` được thu hẹp component-scan để tránh quét nhầm proto classes trong `common-lib`.

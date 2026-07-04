@@ -7,10 +7,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-@SpringBootApplication(scanBasePackages = "com.cinema")
+@SpringBootApplication(scanBasePackages = {"com.cinema.payment_service", "com.cinema.exception"})
 @EnableConfigurationProperties({
-		VietQrProperties.class,
-		MomoGatewayProperties.class
+	VietQrProperties.class,
+	MomoGatewayProperties.class
 })
 @EnableScheduling
 public class PaymentServiceApplication {
