@@ -32,6 +32,7 @@ build_and_push "seat-service" "./seat-service/Dockerfile"
 build_and_push "payment-service" "./payment-service/Dockerfile"
 build_and_push "email-service" "./email-service/Dockerfile"
 build_and_push "upload-service" "./upload-service/Dockerfile"
+build_and_push "review-service" "./review-service/Dockerfile"
 
 echo "Done. Export these vars on server before deploy:"
 echo "  export IMAGE_REPO=${IMAGE_REPO}"

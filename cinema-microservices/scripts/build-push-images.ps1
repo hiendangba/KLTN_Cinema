@@ -36,6 +36,7 @@ Build-And-Push -ServiceName "email-service" -DockerfilePath "./email-service/Doc
 Build-And-Push -ServiceName "booking-service" -DockerfilePath "./booking-service/Dockerfile"
 Build-And-Push -ServiceName "payment-service" -DockerfilePath "./payment-service/Dockerfile"
 Build-And-Push -ServiceName "upload-service" -DockerfilePath "./upload-service/Dockerfile"
+Build-And-Push -ServiceName "review-service" -DockerfilePath "./review-service/Dockerfile"
 
 Write-Host "Done."
 Write-Host "Set these vars on server before deploy:"
