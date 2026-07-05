@@ -26,6 +26,10 @@
 - Page/total summary của báo cáo giữ nguyên shape hiện tại, chỉ đổi giá trị occupancy để khớp với item.
 - `booking-service` đã thêm `POST /api/bookings/reports/showtimes/export` và export này, cùng `payment-service` export film, đều lấy toàn bộ data đã lọc thay vì cắt theo `pageRequest.size`.
 - Verification mới nhất: `BookingServiceImplTest` và `PaymentSessionServiceImplTest` đã có regression cho export showtime/film khi `pageSize=1`, nhưng file Excel vẫn chứa đầy đủ dòng dữ liệu.
+- `compose.prod.yaml` đã bỏ `film-service -> review-service` trong `depends_on` để phá vòng phụ thuộc gRPC `booking-service -> film-service -> review-service -> booking-service`; gRPC host/port review vẫn giữ nguyên để lookup rating hoạt động lúc runtime.
+- Files chạm: `compose.prod.yaml`.
+- Reason: Compose sẽ validate toàn bộ dependency graph ngay cả khi chạy `--no-deps`, nên một cạnh startup không cần thiết cũng đủ làm `docker compose up` fail nếu tạo cycle.
+- Verification: sửa chỉ là gỡ dependency order, không đổi contract env; service vẫn có thể resolve nhau qua DNS nội bộ container khi runtime.
 
 ## Changelog ngắn (2026-07-05)
 
