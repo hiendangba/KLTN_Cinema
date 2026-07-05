@@ -136,7 +136,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
       DB_POOL_MAX_SIZE: "4"
@@ -181,7 +181,7 @@ services:
       - hall-service
       - cinema-service
       - seat-service
-    mem_limit: 352m
+    mem_limit: 448m
 
   booking-service:
     image: ${IMAGE_REPO}/booking-service:${IMAGE_TAG:-dev}
@@ -340,7 +340,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms48m -Xmx288m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms64m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       DB_POOL_MAX_SIZE: "4"
       DB_POOL_MIN_IDLE: "1"
@@ -369,7 +369,7 @@ services:
       - postgres
       - redis
       - cinema-service
-    mem_limit: 448m
+    mem_limit: 512m
 
   seat-service:
     image: ${IMAGE_REPO}/seat-service:${IMAGE_TAG:-dev}
@@ -377,7 +377,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms48m -Xmx144m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms64m -Xmx192m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       DB_POOL_MAX_SIZE: "4"
       DB_POOL_MIN_IDLE: "1"
@@ -400,7 +400,7 @@ services:
       - postgres
       - redis
       - booking-service
-    mem_limit: 300m
+    mem_limit: 384m
 
   cinema-service:
     image: ${IMAGE_REPO}/cinema-service:${IMAGE_TAG:-dev}

@@ -34,6 +34,11 @@
 - `booking-service` đã thêm `selectedIds` vào `ShowtimePerformanceReportRequest`; `POST /api/bookings/reports/showtimes/export` giờ lọc theo `showtimeId` trong `selectedIds` giống 3 export còn lại, còn search vẫn giữ pagination như cũ.
 - Verification mới nhất: `BookingServiceImplTest` đã có regression cho export showtime khi `pageSize=1` và khi truyền `selectedIds`, file Excel vẫn xuất đủ đúng các dòng được chọn; `PaymentSessionServiceImplTest` vẫn giữ regression export film/cinema.
 - Verification bổ sung: `booking-service` `clean compile` pass ở root, và chạy test module-local bằng `booking-service\\mvnw.cmd -Dtest=BookingServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false test` cũng pass (`29 tests, 0 failures, 0 errors`).
+- `compose.prod.yaml` đã nới thêm RAM cho đúng 3 service nằm trong đường đi báo cáo nhiều nhất là `showtime-service` (`Xmx224m`, `mem_limit 448m`), `hall-service` (`Xmx320m`, `mem_limit 512m`), và `seat-service` (`Xmx192m`, `mem_limit 384m`) để giảm rủi ro sập khi report kéo gRPC/seat layout liên tục.
+- Files chạm: `compose.prod.yaml`, `TECHNICAL_AGENT_GUIDE.md`.
+- Reason: screenshot docker stats cho thấy `showtime-service` và `seat-service` đang ở vùng 87-88% mem usage, còn `hall-service` cũng trên 80%; đây là ba service dễ bị đẩy thêm tải khi báo cáo suất chiếu render liên tục.
+- Verification: chỉ tăng các container liên quan trực tiếp đến flow report, không động tới database/broker/core auth service để giữ tổng RAM tăng có kiểm soát.
+- Remaining risk: nếu host VPS thực tế còn ít RAM trống, cần restart theo thứ tự ưu tiên từng service và quan sát lại `docker stats`; tăng limit chỉ giảm xác suất OOM, không thay thế việc kiểm tra leak nếu có.
 - `compose.prod.yaml` đã bỏ `film-service -> review-service` trong `depends_on` để phá vòng phụ thuộc gRPC `booking-service -> film-service -> review-service -> booking-service`; gRPC host/port review vẫn giữ nguyên để lookup rating hoạt động lúc runtime.
 - Files chạm: `compose.prod.yaml`.
 - Reason: Compose sẽ validate toàn bộ dependency graph ngay cả khi chạy `--no-deps`, nên một cạnh startup không cần thiết cũng đủ làm `docker compose up` fail nếu tạo cycle.
