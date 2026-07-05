@@ -189,7 +189,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
       DB_POOL_MAX_SIZE: "4"
@@ -226,7 +226,7 @@ services:
       - cinema-service
       - identity-service
       - film-service
-    mem_limit: 352m
+    mem_limit: 448m
 
   payment-service:
     image: ${IMAGE_REPO}/payment-service:${IMAGE_TAG:-dev}

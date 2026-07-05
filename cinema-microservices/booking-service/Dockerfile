@@ -7,6 +7,6 @@ RUN --mount=type=cache,target=/root/.m2 mvn -DskipTests -pl booking-service -am 
 
 FROM eclipse-temurin:17
 WORKDIR /app
-ENV JAVA_OPTS="-Xms96m -Xmx192m"
+ENV JAVA_OPTS="-Xms64m -Xmx224m -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m"
 COPY --from=builder /app/booking-service/target/*.jar app.jar
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

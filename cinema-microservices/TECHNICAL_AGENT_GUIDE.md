@@ -24,6 +24,12 @@
 - `film-service` prod compose trước đó thiếu `REVIEW_GRPC_HOST/PORT` nên `averageRating`/`reviewCount` có thể fallback về `0`; đã bổ sung review gRPC channel vào `compose.prod.yaml` và `film-service` config.
 - `film-service` đang cache `FilmResponse` ở `cache name=films`, nên nếu film đã bị cache từ trước khi review-service có dữ liệu thì cần clear cache/evict để thấy rating mới.
 - `film-service` `ReviewGrpcClient` và `FilmServiceImpl` đã có log warn/info để biết rõ review rating summary gRPC có gọi được hay không, trả rỗng hay lỗi ở đâu.
+- `payment-service` `JacksonConfig` đã bật `findAndRegisterModules()` và tắt `WRITE_DATES_AS_TIMESTAMPS` để serialize `LoyaltyPointsSyncEvent.occurredAt` đúng kiểu, tránh fail ngay trước khi ghi `payment_loyalty_outbox`.
+- `booking-service` prod compose và Dockerfile đã nới JVM/memory lên `-Xmx224m`, `MaxMetaspaceSize=160m`, `ReservedCodeCacheSize=64m`, `mem_limit=448m` để giảm nguy cơ `OutOfMemoryError: Metaspace` khi Spring/JPA/gRPC sinh thêm proxy/class metadata trong runtime.
+- Files chạm: `compose.prod.yaml`, `booking-service/Dockerfile`, `TECHNICAL_AGENT_GUIDE.md`.
+- Reason: log cho thấy `booking-service` đã chạy được nhưng sau đó chết vì Metaspace, còn cấu hình cũ chỉ `-Xmx160m` và `MaxMetaspaceSize=128m` nên quá sát trần cho workload report/lookup hiện tại.
+- Verification: đối chiếu lại block `booking-service` trong `compose.prod.yaml` và default JVM opts trong Dockerfile, đảm bảo prod compose và local container cùng dùng mức mới.
+- Remaining risk: nếu traffic/gRPC proxy tiếp tục tăng mạnh thì cần soi heap dump/metaspace usage thực tế, vì tăng tài nguyên chỉ giảm xác suất OOM chứ không thay thế điều tra leak classloader/proxy bất thường.
 - Page/total summary của báo cáo giữ nguyên shape hiện tại, chỉ đổi giá trị occupancy để khớp với item.
 - `booking-service` đã thêm `POST /api/bookings/reports/showtimes/export` và export này, cùng `payment-service` export film, đều lấy toàn bộ data đã lọc thay vì cắt theo `pageRequest.size`.
 - Verification mới nhất: `BookingServiceImplTest` và `PaymentSessionServiceImplTest` đã có regression cho export showtime/film khi `pageSize=1`, nhưng file Excel vẫn chứa đầy đủ dòng dữ liệu.
