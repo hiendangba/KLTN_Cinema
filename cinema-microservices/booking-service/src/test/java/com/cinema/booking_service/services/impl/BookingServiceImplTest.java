@@ -690,6 +690,83 @@ class BookingServiceImplTest {
         }
 
         @Test
+        void exportShowtimePerformanceReport_shouldFilterBySelectedIds() throws Exception {
+                UUID cinema1 = UUID.randomUUID();
+                UUID film1 = UUID.randomUUID();
+                UUID showtime1 = UUID.randomUUID();
+                UUID showtime2 = UUID.randomUUID();
+                UUID hall1 = UUID.randomUUID();
+
+                when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);
+                when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+                when(cinemaGrpcClient.getCinemaById(cinema1))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
+
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row1 =
+                                showtimeAggregateRow(showtime1, cinema1, film1,
+                                                LocalDateTime.of(2026, 7, 3, 17, 20),
+                                                LocalDateTime.of(2026, 7, 3, 19, 39),
+                                                1L, 2L);
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row2 =
+                                showtimeAggregateRow(showtime2, cinema1, film1,
+                                                LocalDateTime.of(2026, 7, 3, 20, 0),
+                                                LocalDateTime.of(2026, 7, 3, 22, 0),
+                                                1L, 3L);
+
+                when(bookingRepositoryImpl.findShowtimePerformanceAggregates(anyCollection(), any(), any(), any(),
+                                any()))
+                                .thenReturn(List.of(row1, row2));
+
+                when(showtimeGrpcClient.getShowtimeById(showtime1))
+                                .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
+                                                .id(showtime1)
+                                                .hallId(hall1)
+                                                .cinemaId(cinema1)
+                                                .pricingPolicyId(UUID.randomUUID())
+                                                .filmId(film1)
+                                                .startDateTime(LocalDateTime.of(2026, 7, 3, 17, 20))
+                                                .endDateTime(LocalDateTime.of(2026, 7, 3, 19, 39))
+                                                .build());
+                when(showtimeGrpcClient.getShowtimeById(showtime2))
+                                .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
+                                                .id(showtime2)
+                                                .hallId(hall1)
+                                                .cinemaId(cinema1)
+                                                .pricingPolicyId(UUID.randomUUID())
+                                                .filmId(film1)
+                                                .startDateTime(LocalDateTime.of(2026, 7, 3, 20, 0))
+                                                .endDateTime(LocalDateTime.of(2026, 7, 3, 22, 0))
+                                                .build());
+                when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 54));
+                when(hallGrpcClient.getHallById(hall1))
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 06"));
+                when(filmGrpcClient.getFilmById(film1))
+                                .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
+                                                .id(film1)
+                                                .title("VENOM: KÈO CUỐI")
+                                                .build());
+
+                ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
+                                .selectedIds(List.of(showtime2))
+                                .pageRequest(PageRequest.<ShowtimePerformanceField>builder()
+                                                .page(1)
+                                                .size(1)
+                                                .build())
+                                .build();
+
+                byte[] file = bookingService.exportShowtimePerformanceReport(request, httpRequest);
+
+                try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                             new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
+                        org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+                        assertTrue(sheet.getRow(0).getCell(0).getStringCellValue().length() > 0);
+                        assertEquals(2, sheet.getLastRowNum());
+                        assertEquals(showtime2.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
+                }
+        }
+
+        @Test
         void getAllShowtimePerformanceReport_shouldFilterByCinemaAndFilmBeforeAggregating() {
                 UUID cinema1 = UUID.randomUUID();
                 UUID cinema2 = UUID.randomUUID();

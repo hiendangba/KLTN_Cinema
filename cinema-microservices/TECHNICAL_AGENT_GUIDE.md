@@ -31,8 +31,9 @@
 - Verification: đối chiếu lại block `booking-service` trong `compose.prod.yaml` và default JVM opts trong Dockerfile, đảm bảo prod compose và local container cùng dùng mức mới.
 - Remaining risk: nếu traffic/gRPC proxy tiếp tục tăng mạnh thì cần soi heap dump/metaspace usage thực tế, vì tăng tài nguyên chỉ giảm xác suất OOM chứ không thay thế điều tra leak classloader/proxy bất thường.
 - Page/total summary của báo cáo giữ nguyên shape hiện tại, chỉ đổi giá trị occupancy để khớp với item.
-- `booking-service` đã thêm `POST /api/bookings/reports/showtimes/export` và export này, cùng `payment-service` export film, đều lấy toàn bộ data đã lọc thay vì cắt theo `pageRequest.size`.
-- Verification mới nhất: `BookingServiceImplTest` và `PaymentSessionServiceImplTest` đã có regression cho export showtime/film khi `pageSize=1`, nhưng file Excel vẫn chứa đầy đủ dòng dữ liệu.
+- `booking-service` đã thêm `selectedIds` vào `ShowtimePerformanceReportRequest`; `POST /api/bookings/reports/showtimes/export` giờ lọc theo `showtimeId` trong `selectedIds` giống 3 export còn lại, còn search vẫn giữ pagination như cũ.
+- Verification mới nhất: `BookingServiceImplTest` đã có regression cho export showtime khi `pageSize=1` và khi truyền `selectedIds`, file Excel vẫn xuất đủ đúng các dòng được chọn; `PaymentSessionServiceImplTest` vẫn giữ regression export film/cinema.
+- Verification bổ sung: `booking-service` `clean compile` pass ở root, và chạy test module-local bằng `booking-service\\mvnw.cmd -Dtest=BookingServiceImplTest -Dsurefire.failIfNoSpecifiedTests=false test` cũng pass (`29 tests, 0 failures, 0 errors`).
 - `compose.prod.yaml` đã bỏ `film-service -> review-service` trong `depends_on` để phá vòng phụ thuộc gRPC `booking-service -> film-service -> review-service -> booking-service`; gRPC host/port review vẫn giữ nguyên để lookup rating hoạt động lúc runtime.
 - Files chạm: `compose.prod.yaml`.
 - Reason: Compose sẽ validate toàn bộ dependency graph ngay cả khi chạy `--no-deps`, nên một cạnh startup không cần thiết cũng đủ làm `docker compose up` fail nếu tạo cycle.

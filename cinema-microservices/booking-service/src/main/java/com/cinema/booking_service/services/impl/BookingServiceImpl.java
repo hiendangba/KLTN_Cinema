@@ -402,7 +402,9 @@ public class BookingServiceImpl implements BookingService {
         validateShowtimePerformanceReportRequest(request);
         List<CinemaGrpcClient.CinemaSummary> cinemas = resolveShowtimePerformanceScope(httpRequest);
         List<ShowtimePerformanceItemResponse> items = enrichShowtimePerformanceItems(
-                loadShowtimePerformanceItems(cinemas, request));
+                filterSelectedShowtimePerformanceItems(
+                        loadShowtimePerformanceItems(cinemas, request),
+                        request.getSelectedIds()));
 
         return ExcelExportUtils.exportSingleSheet(
                 "BÃ¡o cÃ¡o hiá»‡u suáº¥t suáº¥t chiáº¿u",
@@ -1139,6 +1141,23 @@ public class BookingServiceImpl implements BookingService {
 
         filtered.sort(buildShowtimePerformanceComparator(request.getSortBy()));
         return filtered;
+    }
+
+    private List<ShowtimePerformanceItemResponse> filterSelectedShowtimePerformanceItems(
+            List<ShowtimePerformanceItemResponse> items,
+            List<UUID> selectedIds) {
+        List<UUID> normalizedSelectedIds = normalizeUuidList(selectedIds);
+        if (normalizedSelectedIds == null) {
+            return items == null ? List.of() : new ArrayList<>(items);
+        }
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        return items.stream()
+                .filter(item -> item != null
+                        && item.showtimeId() != null
+                        && normalizedSelectedIds.contains(item.showtimeId()))
+                .toList();
     }
 
     private Comparator<ShowtimePerformanceItemResponse> buildShowtimePerformanceComparator(

@@ -28,6 +28,9 @@ public class ShowtimePerformanceReportRequest {
     @Builder.Default
     private List<UUID> filmIds = new ArrayList<>();
 
+    @Builder.Default
+    private List<UUID> selectedIds = new ArrayList<>();
+
     @Valid
     @NotNull(message = "Page request is required")
     private PageRequest<ShowtimePerformanceField> pageRequest;
