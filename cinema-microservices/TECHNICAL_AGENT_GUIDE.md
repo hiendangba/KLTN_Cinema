@@ -19,6 +19,10 @@
 - `booking-service` báo cáo `POST /api/bookings/reports/showtimes/search` đã trả thêm `cinemaName`, `hallName`, `filmName` cho từng item report bằng lookup qua `CinemaGrpcClient`, `HallGrpcClient`, `FilmGrpcClient`.
 - `occupancyRate` của report showtime đã đổi sang tỷ lệ thực `bookedSeats / capacity` với scale 4, nên ví dụ `7/54` sẽ ra `0.1296` thay vì `12.96`.
 - `booking-service` showtime report đã đổi sang aggregate query theo showtime ngay ở DB và prefetch gRPC song song cho showtime/seat capacity để giảm độ trễ khi render report.
+- `booking-service` đã thêm index JPA trên `booking` và `booking_seat_item.booking_id` để giảm cost lọc report suất chiếu và join đếm ghế.
+- `postgres-init/add-booking-performance-indexes.sql` và `scripts/apply-booking-performance-indexes.sh` là bộ lệnh apply index thủ công trên VPS qua `docker exec` khi không muốn phụ thuộc `ddl-auto=update`.
+- `film-service` prod compose trước đó thiếu `REVIEW_GRPC_HOST/PORT` nên `averageRating`/`reviewCount` có thể fallback về `0`; đã bổ sung review gRPC channel vào `compose.prod.yaml` và `film-service` config.
+- `film-service` đang cache `FilmResponse` ở `cache name=films`, nên nếu film đã bị cache từ trước khi review-service có dữ liệu thì cần clear cache/evict để thấy rating mới.
 - Page/total summary của báo cáo giữ nguyên shape hiện tại, chỉ đổi giá trị occupancy để khớp với item.
 - `booking-service` đã thêm `POST /api/bookings/reports/showtimes/export` và export này, cùng `payment-service` export film, đều lấy toàn bộ data đã lọc thay vì cắt theo `pageRequest.size`.
 - Verification mới nhất: `BookingServiceImplTest` và `PaymentSessionServiceImplTest` đã có regression cho export showtime/film khi `pageSize=1`, nhưng file Excel vẫn chứa đầy đủ dòng dữ liệu.

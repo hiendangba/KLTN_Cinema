@@ -10,6 +10,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -24,7 +25,12 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "booking")
+@Table(name = "booking", indexes = {
+        @Index(name = "idx_booking_report_showtime", columnList = "is_deleted, booking_status, showtime_start_date_time"),
+        @Index(name = "idx_booking_report_cinema_film", columnList = "is_deleted, cinema_id, film_id"),
+        @Index(name = "idx_booking_user_active", columnList = "user_id, is_deleted, booking_status, reserved_until"),
+        @Index(name = "idx_booking_showtime_status", columnList = "showtime_id, is_deleted, booking_status")
+})
 @Getter
 @Setter
 public class Booking {

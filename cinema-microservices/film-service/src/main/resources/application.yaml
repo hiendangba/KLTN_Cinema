@@ -58,6 +58,8 @@ spring:
           address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
         showtime:
           address: "${SHOWTIME_GRPC_HOST:localhost}:${SHOWTIME_GRPC_PORT:9194}"
+        review:
+          address: "${REVIEW_GRPC_HOST:localhost}:${REVIEW_GRPC_PORT:9198}"
 server:
   port: ${SERVER_PORT:8092}
   http2:
