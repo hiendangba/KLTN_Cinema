@@ -128,7 +128,6 @@ services:
       - postgres
       - redis
       - rabbitmq
-      - review-service
     mem_limit: 448m
 
   showtime-service:
