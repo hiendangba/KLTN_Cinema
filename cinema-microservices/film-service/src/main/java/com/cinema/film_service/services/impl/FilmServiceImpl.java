@@ -455,6 +455,9 @@ public class FilmServiceImpl implements FilmService {
                 .filter(java.util.Objects::nonNull)
                 .toList();
         Map<UUID, ReviewGrpcClient.RatingSummary> summaries = reviewGrpcClient.getFilmRatingSummaries(filmIds);
+        if (summaries.isEmpty()) {
+            log.warn("No review rating summaries returned for filmIds={}", filmIds);
+        }
 
         return films.stream()
                 .map(film -> enrichRating(filmMapper.toResponse(film), summaries))
