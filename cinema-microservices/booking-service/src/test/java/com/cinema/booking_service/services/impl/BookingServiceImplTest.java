@@ -54,6 +54,7 @@ import java.util.Collection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -392,25 +393,20 @@ class BookingServiceImplTest {
                 when(cinemaGrpcClient.getCinemaById(cinema2))
                                 .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2"));
 
-                Booking booking1 = buildShowtimeBooking(
-                                showtime1, cinema1, film1, BookingStatus.RESERVED,
-                                LocalDateTime.of(2026, 5, 29, 18, 0),
-                                LocalDateTime.of(2026, 5, 29, 20, 0),
-                                2);
-                Booking booking2 = buildShowtimeBooking(
-                                showtime1, cinema1, film1, BookingStatus.CONFIRMED,
-                                LocalDateTime.of(2026, 5, 29, 18, 0),
-                                LocalDateTime.of(2026, 5, 29, 20, 0),
-                                1);
-                Booking booking3 = buildShowtimeBooking(
-                                showtime2, cinema2, film2, BookingStatus.PENDING,
-                                LocalDateTime.of(2026, 5, 29, 21, 0),
-                                LocalDateTime.of(2026, 5, 29, 23, 0),
-                                2);
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row1 =
+                                showtimeAggregateRow(showtime1, cinema1, film1,
+                                                LocalDateTime.of(2026, 5, 29, 18, 0),
+                                                LocalDateTime.of(2026, 5, 29, 20, 0),
+                                                2L, 3L);
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row2 =
+                                showtimeAggregateRow(showtime2, cinema2, film2,
+                                                LocalDateTime.of(2026, 5, 29, 21, 0),
+                                                LocalDateTime.of(2026, 5, 29, 23, 0),
+                                                1L, 2L);
 
-                when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), any(), any(), any(),
+                when(bookingRepositoryImpl.findShowtimePerformanceAggregates(anyCollection(), any(), any(), any(),
                                 any()))
-                                .thenReturn(List.of(booking1, booking2, booking3));
+                                .thenReturn(List.of(row1, row2));
 
                 when(showtimeGrpcClient.getShowtimeById(showtime1))
                                 .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
@@ -497,15 +493,15 @@ class BookingServiceImplTest {
                 when(cinemaGrpcClient.getCinemaById(cinema1))
                                 .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
 
-                Booking booking1 = buildShowtimeBooking(
-                                showtime1, cinema1, film1, BookingStatus.RESERVED,
-                                LocalDateTime.of(2026, 7, 3, 17, 20),
-                                LocalDateTime.of(2026, 7, 3, 19, 39),
-                                7);
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row1 =
+                                showtimeAggregateRow(showtime1, cinema1, film1,
+                                                LocalDateTime.of(2026, 7, 3, 17, 20),
+                                                LocalDateTime.of(2026, 7, 3, 19, 39),
+                                                1L, 7L);
 
-                when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), any(), any(), any(),
+                when(bookingRepositoryImpl.findShowtimePerformanceAggregates(anyCollection(), any(), any(), any(),
                                 any()))
-                                .thenReturn(List.of(booking1));
+                                .thenReturn(List.of(row1));
 
                 when(showtimeGrpcClient.getShowtimeById(showtime1))
                                 .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
@@ -556,20 +552,20 @@ class BookingServiceImplTest {
                 when(cinemaGrpcClient.getCinemaById(cinema1))
                                 .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
 
-                Booking booking1 = buildShowtimeBooking(
-                                showtime1, cinema1, film1, BookingStatus.RESERVED,
-                                LocalDateTime.of(2026, 7, 3, 17, 20),
-                                LocalDateTime.of(2026, 7, 3, 19, 39),
-                                2);
-                Booking booking2 = buildShowtimeBooking(
-                                showtime2, cinema1, film1, BookingStatus.CONFIRMED,
-                                LocalDateTime.of(2026, 7, 3, 20, 0),
-                                LocalDateTime.of(2026, 7, 3, 22, 0),
-                                3);
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row1 =
+                                showtimeAggregateRow(showtime1, cinema1, film1,
+                                                LocalDateTime.of(2026, 7, 3, 17, 20),
+                                                LocalDateTime.of(2026, 7, 3, 19, 39),
+                                                1L, 2L);
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row2 =
+                                showtimeAggregateRow(showtime2, cinema1, film1,
+                                                LocalDateTime.of(2026, 7, 3, 20, 0),
+                                                LocalDateTime.of(2026, 7, 3, 22, 0),
+                                                1L, 3L);
 
-                when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), any(), any(), any(),
+                when(bookingRepositoryImpl.findShowtimePerformanceAggregates(anyCollection(), any(), any(), any(),
                                 any()))
-                                .thenReturn(List.of(booking1, booking2));
+                                .thenReturn(List.of(row1, row2));
 
                 when(showtimeGrpcClient.getShowtimeById(showtime1))
                                 .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
@@ -630,20 +626,20 @@ class BookingServiceImplTest {
                 when(cinemaGrpcClient.getCinemaById(cinema1))
                                 .thenReturn(new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"));
 
-                Booking booking1 = buildShowtimeBooking(
-                                showtime1, cinema1, film1, BookingStatus.RESERVED,
-                                LocalDateTime.of(2026, 7, 3, 17, 20),
-                                LocalDateTime.of(2026, 7, 3, 19, 39),
-                                2);
-                Booking booking2 = buildShowtimeBooking(
-                                showtime2, cinema1, film1, BookingStatus.CONFIRMED,
-                                LocalDateTime.of(2026, 7, 3, 20, 0),
-                                LocalDateTime.of(2026, 7, 3, 22, 0),
-                                3);
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row1 =
+                                showtimeAggregateRow(showtime1, cinema1, film1,
+                                                LocalDateTime.of(2026, 7, 3, 17, 20),
+                                                LocalDateTime.of(2026, 7, 3, 19, 39),
+                                                1L, 2L);
+                BookingRepositoryImpl.ShowtimePerformanceAggregateRow row2 =
+                                showtimeAggregateRow(showtime2, cinema1, film1,
+                                                LocalDateTime.of(2026, 7, 3, 20, 0),
+                                                LocalDateTime.of(2026, 7, 3, 22, 0),
+                                                1L, 3L);
 
-                when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), any(), any(), any(),
+                when(bookingRepositoryImpl.findShowtimePerformanceAggregates(anyCollection(), any(), any(), any(),
                                 any()))
-                                .thenReturn(List.of(booking1, booking2));
+                                .thenReturn(List.of(row1, row2));
 
                 when(showtimeGrpcClient.getShowtimeById(showtime1))
                                 .thenReturn(ShowtimeGrpcClient.ShowtimeSummary.builder()
@@ -732,7 +728,7 @@ class BookingServiceImplTest {
                                 1);
 
                 List<Booking> allBookings = List.of(booking1, booking2, booking3, booking4);
-                when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), anyCollection(), any(),
+                when(bookingRepositoryImpl.findShowtimePerformanceAggregates(anyCollection(), anyCollection(), any(),
                                 any(), anyCollection()))
                                 .thenAnswer(invocation -> {
                                         Collection<UUID> cinemaIds = invocation.getArgument(0);
@@ -748,6 +744,29 @@ class BookingServiceImplTest {
                                                                         .getShowtimeStartDateTime().isBefore(from))
                                                         .filter(booking -> to == null || !booking
                                                                         .getShowtimeStartDateTime().isAfter(to))
+                                                        .collect(Collectors.groupingBy(
+                                                                        Booking::getShowtimeId,
+                                                                        LinkedHashMap::new,
+                                                                        Collectors.toList()))
+                                                        .entrySet().stream()
+                                                        .map(entry -> {
+                                                                Booking first = entry.getValue().get(0);
+                                                                long totalBookings = entry.getValue().size();
+                                                                long totalSeatsBooked = entry.getValue().stream()
+                                                                                .mapToLong(booking -> booking.getSeatItems() == null
+                                                                                                ? 0L
+                                                                                                : booking.getSeatItems()
+                                                                                                                .size())
+                                                                                .sum();
+                                                                return new BookingRepositoryImpl.ShowtimePerformanceAggregateRow(
+                                                                                first.getShowtimeId(),
+                                                                                first.getCinemaId(),
+                                                                                first.getFilmId(),
+                                                                                first.getShowtimeStartDateTime(),
+                                                                                first.getShowtimeEndDateTime(),
+                                                                                totalBookings,
+                                                                                totalSeatsBooked);
+                                                        })
                                                         .toList();
                                 });
 
@@ -776,7 +795,7 @@ class BookingServiceImplTest {
 
                 ArgumentCaptor<Collection<UUID>> cinemaIdsCaptor = ArgumentCaptor.forClass(Collection.class);
                 ArgumentCaptor<Collection<UUID>> filmIdsCaptor = ArgumentCaptor.forClass(Collection.class);
-                org.mockito.Mockito.verify(bookingRepositoryImpl).findAllForShowtimePerformanceReport(
+                org.mockito.Mockito.verify(bookingRepositoryImpl).findShowtimePerformanceAggregates(
                                 cinemaIdsCaptor.capture(),
                                 filmIdsCaptor.capture(),
                                 any(),
@@ -801,7 +820,7 @@ class BookingServiceImplTest {
 
                 when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
                                 new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
-                when(bookingRepositoryImpl.findAllForShowtimePerformanceReport(anyCollection(), any(), any(), any(),
+                when(bookingRepositoryImpl.findShowtimePerformanceAggregates(anyCollection(), any(), any(), any(),
                                 any()))
                                 .thenReturn(List.of());
 
@@ -817,7 +836,7 @@ class BookingServiceImplTest {
 
                 assertEquals(from, response.from());
                 assertEquals(null, response.to());
-                org.mockito.Mockito.verify(bookingRepositoryImpl).findAllForShowtimePerformanceReport(
+                org.mockito.Mockito.verify(bookingRepositoryImpl).findShowtimePerformanceAggregates(
                                 anyCollection(),
                                 isNull(),
                                 eq(from),
@@ -1710,6 +1729,24 @@ class BookingServiceImplTest {
                 }
                 booking.setProductItems(List.of());
                 return booking;
+        }
+
+        private BookingRepositoryImpl.ShowtimePerformanceAggregateRow showtimeAggregateRow(
+                        UUID showtimeId,
+                        UUID cinemaId,
+                        UUID filmId,
+                        LocalDateTime startDateTime,
+                        LocalDateTime endDateTime,
+                        long totalBookings,
+                        long totalSeatsBooked) {
+                return new BookingRepositoryImpl.ShowtimePerformanceAggregateRow(
+                                showtimeId,
+                                cinemaId,
+                                filmId,
+                                startDateTime,
+                                endDateTime,
+                                totalBookings,
+                                totalSeatsBooked);
         }
 
         @SuppressWarnings({ "rawtypes", "unchecked" })

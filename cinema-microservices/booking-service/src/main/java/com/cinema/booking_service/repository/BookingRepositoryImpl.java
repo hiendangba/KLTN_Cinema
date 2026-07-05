@@ -11,9 +11,11 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.text.SearchTextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Tuple;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Path;
@@ -131,12 +133,86 @@ public class BookingRepositoryImpl {
         return entityManager.createQuery(cq).getResultList();
     }
 
+    public List<ShowtimePerformanceAggregateRow> findShowtimePerformanceAggregates(
+            Collection<UUID> cinemaIds,
+            Collection<UUID> filmIds,
+            LocalDateTime from,
+            LocalDateTime to,
+            Collection<com.cinema.booking_service.enums.BookingStatus> statuses) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Tuple> cq = cb.createTupleQuery();
+        Root<Booking> root = cq.from(Booking.class);
+        Join<Booking, BookingSeatItem> seatItems = root.join("seatItems", JoinType.LEFT);
+
+        List<Predicate> predicates = new ArrayList<>();
+        predicates.add(cb.isFalse(root.get("isDeleted")));
+        if (cinemaIds != null && !cinemaIds.isEmpty()) {
+            predicates.add(root.get("cinemaId").in(cinemaIds));
+        }
+        if (filmIds != null && !filmIds.isEmpty()) {
+            predicates.add(root.get("filmId").in(filmIds));
+        }
+        if (from != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get("showtimeStartDateTime"), from));
+        }
+        if (to != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get("showtimeStartDateTime"), to));
+        }
+        if (statuses != null && !statuses.isEmpty()) {
+            predicates.add(root.get("bookingStatus").in(statuses));
+        }
+
+        cq.multiselect(
+                root.get("showtimeId").alias("showtimeId"),
+                root.get("cinemaId").alias("cinemaId"),
+                root.get("filmId").alias("filmId"),
+                root.get("showtimeStartDateTime").alias("startDateTime"),
+                root.get("showtimeEndDateTime").alias("endDateTime"),
+                cb.countDistinct(root.get("id")).alias("totalBookings"),
+                cb.count(seatItems.get("id")).alias("totalSeatsBooked"));
+        cq.where(predicates.toArray(new Predicate[0]));
+        cq.groupBy(
+                root.get("showtimeId"),
+                root.get("cinemaId"),
+                root.get("filmId"),
+                root.get("showtimeStartDateTime"),
+                root.get("showtimeEndDateTime"));
+        cq.orderBy(
+                cb.asc(root.get("showtimeStartDateTime")),
+                cb.asc(root.get("showtimeId")));
+
+        return entityManager.createQuery(cq).getResultList().stream()
+                .map(tuple -> new ShowtimePerformanceAggregateRow(
+                        tuple.get("showtimeId", UUID.class),
+                        tuple.get("cinemaId", UUID.class),
+                        tuple.get("filmId", UUID.class),
+                        tuple.get("startDateTime", LocalDateTime.class),
+                        tuple.get("endDateTime", LocalDateTime.class),
+                        toLong(tuple.get("totalBookings", Number.class)),
+                        toLong(tuple.get("totalSeatsBooked", Number.class))))
+                .toList();
+    }
+
     public List<Booking> findAllForBookingRevenueReport(
             Collection<UUID> cinemaIds,
             LocalDateTime from,
             LocalDateTime to,
             Collection<BookingStatus> statuses) {
         return findAllForBookingRevenueReport(cinemaIds, null, from, to, statuses);
+    }
+
+    public record ShowtimePerformanceAggregateRow(
+            UUID showtimeId,
+            UUID cinemaId,
+            UUID filmId,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            long totalBookings,
+            long totalSeatsBooked) {
+    }
+
+    private long toLong(Number value) {
+        return value == null ? 0L : value.longValue();
     }
 
     public List<Booking> findAllForBookingRevenueReport(

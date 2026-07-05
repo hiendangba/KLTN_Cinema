@@ -78,7 +78,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -942,13 +947,14 @@ public class BookingServiceImpl implements BookingService {
         List<UUID> scopeCinemaIds = resolveScopeCinemaIds(cinemas, requestedCinemaIds);
         List<ShowtimePerformanceItemResponse> allItems = List.of();
         if (!scopeCinemaIds.isEmpty()) {
-            List<Booking> bookings = bookingRepositoryImpl.findAllForShowtimePerformanceReport(
+            List<BookingRepositoryImpl.ShowtimePerformanceAggregateRow> aggregates =
+                    bookingRepositoryImpl.findShowtimePerformanceAggregates(
                     scopeCinemaIds,
                     requestedFilmIds,
                     from,
                     to,
                     EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED));
-            allItems = buildShowtimePerformanceItems(bookings);
+            allItems = buildShowtimePerformanceItems(aggregates);
         }
 
         return applyShowtimePerformancePageRequest(allItems, request.getPageRequest());
@@ -997,46 +1003,46 @@ public class BookingServiceImpl implements BookingService {
                 .toList();
     }
 
-    private List<ShowtimePerformanceItemResponse> buildShowtimePerformanceItems(List<Booking> bookings) {
-        if (bookings == null || bookings.isEmpty()) {
+    private List<ShowtimePerformanceItemResponse> buildShowtimePerformanceItems(
+            List<BookingRepositoryImpl.ShowtimePerformanceAggregateRow> aggregates) {
+        if (aggregates == null || aggregates.isEmpty()) {
             return List.of();
         }
 
-        Map<UUID, Booking> firstBookingByShowtime = new LinkedHashMap<>();
-        for (Booking booking : bookings) {
-            if (booking == null || booking.getShowtimeId() == null) {
-                continue;
-            }
-            firstBookingByShowtime.putIfAbsent(booking.getShowtimeId(), booking);
-        }
-
-        if (firstBookingByShowtime.isEmpty()) {
+        List<UUID> showtimeIds = aggregates.stream()
+                .map(BookingRepositoryImpl.ShowtimePerformanceAggregateRow::showtimeId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (showtimeIds.isEmpty()) {
             return List.of();
         }
 
-        Map<UUID, ShowtimeGrpcClient.ShowtimeSummary> showtimeMap = fetchShowtimeSummaries(firstBookingByShowtime.keySet());
+        Map<UUID, ShowtimeGrpcClient.ShowtimeSummary> showtimeMap = fetchShowtimeSummaries(showtimeIds);
         Map<UUID, Long> seatCapacityByHall = fetchSeatCapacitiesByHallId(showtimeMap.values());
 
-        Map<UUID, ShowtimePerformanceAccumulator> accumulatorMap = new LinkedHashMap<>();
-        for (Booking booking : bookings) {
-            if (booking == null || booking.getShowtimeId() == null) {
+        List<ShowtimePerformanceItemResponse> items = new ArrayList<>(aggregates.size());
+        for (BookingRepositoryImpl.ShowtimePerformanceAggregateRow aggregate : aggregates) {
+            if (aggregate == null || aggregate.showtimeId() == null) {
                 continue;
             }
-            ShowtimeGrpcClient.ShowtimeSummary showtime = showtimeMap.get(booking.getShowtimeId());
+            ShowtimeGrpcClient.ShowtimeSummary showtime = showtimeMap.get(aggregate.showtimeId());
             if (showtime == null) {
                 continue;
             }
-            ShowtimePerformanceAccumulator accumulator = accumulatorMap.computeIfAbsent(
-                    booking.getShowtimeId(),
-                    ignored -> ShowtimePerformanceAccumulator.fromBooking(booking, showtime));
-            accumulator.addBooking(booking);
-        }
-
-        List<ShowtimePerformanceItemResponse> items = new ArrayList<>();
-        for (ShowtimePerformanceAccumulator accumulator : accumulatorMap.values()) {
-            Long capacity = seatCapacityByHall.get(accumulator.hallId());
-            accumulator.setTotalSeatCapacity(capacity == null ? 0L : capacity);
-            items.add(accumulator.toResponse());
+            long totalSeatCapacity = seatCapacityByHall.getOrDefault(showtime.getHallId(), 0L);
+            items.add(ShowtimePerformanceItemResponse.builder()
+                    .showtimeId(aggregate.showtimeId())
+                    .cinemaId(aggregate.cinemaId())
+                    .filmId(aggregate.filmId())
+                    .hallId(showtime.getHallId())
+                    .startDateTime(aggregate.startDateTime() != null ? aggregate.startDateTime() : showtime.getStartDateTime())
+                    .endDateTime(aggregate.endDateTime() != null ? aggregate.endDateTime() : showtime.getEndDateTime())
+                    .totalBookings(aggregate.totalBookings())
+                    .totalSeatsBooked(aggregate.totalSeatsBooked())
+                    .totalSeatCapacity(totalSeatCapacity)
+                    .occupancyRate(calcOccupancyRate(aggregate.totalSeatsBooked(), totalSeatCapacity))
+                    .build());
         }
         return items;
     }
@@ -1046,14 +1052,11 @@ public class BookingServiceImpl implements BookingService {
             return Map.of();
         }
 
-        Map<UUID, ShowtimeGrpcClient.ShowtimeSummary> result = new LinkedHashMap<>();
-        for (UUID showtimeId : showtimeIds) {
-            if (showtimeId == null || result.containsKey(showtimeId)) {
-                continue;
-            }
-            result.put(showtimeId, showtimeGrpcClient.getShowtimeById(showtimeId));
-        }
-        return result;
+        List<UUID> uniqueShowtimeIds = showtimeIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return fetchConcurrently(uniqueShowtimeIds, showtimeGrpcClient::getShowtimeById);
     }
 
     private Map<UUID, Long> fetchSeatCapacitiesByHallId(Collection<ShowtimeGrpcClient.ShowtimeSummary> showtimes) {
@@ -1061,16 +1064,55 @@ public class BookingServiceImpl implements BookingService {
             return Map.of();
         }
 
-        Map<UUID, Long> result = new LinkedHashMap<>();
-        for (ShowtimeGrpcClient.ShowtimeSummary showtime : showtimes) {
-            if (showtime == null || showtime.getHallId() == null || result.containsKey(showtime.getHallId())) {
-                continue;
-            }
-            SeatGrpcClient.LayoutBundle layout = seatGrpcClient.getLayoutByHallId(showtime.getHallId());
-            long capacity = layout.getSeats() == null ? 0L : layout.getSeats().size();
-            result.put(showtime.getHallId(), capacity);
+        List<UUID> hallIds = showtimes.stream()
+                .filter(Objects::nonNull)
+                .map(ShowtimeGrpcClient.ShowtimeSummary::getHallId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return fetchConcurrently(hallIds, hallId -> {
+            SeatGrpcClient.LayoutBundle layout = seatGrpcClient.getLayoutByHallId(hallId);
+            return layout.getSeats() == null ? 0L : (long) layout.getSeats().size();
+        });
+    }
+
+    private <T> Map<UUID, T> fetchConcurrently(Collection<UUID> ids, Function<UUID, T> loader) {
+        if (ids == null || ids.isEmpty()) {
+            return Map.of();
         }
-        return result;
+
+        List<UUID> orderedIds = ids.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (orderedIds.isEmpty()) {
+            return Map.of();
+        }
+
+        int threadCount = Math.min(8, Math.max(2, orderedIds.size()));
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        try {
+            Map<UUID, CompletableFuture<T>> futures = new LinkedHashMap<>();
+            for (UUID id : orderedIds) {
+                futures.put(id, CompletableFuture.supplyAsync(() -> loader.apply(id), executor));
+            }
+
+            Map<UUID, T> result = new LinkedHashMap<>();
+            for (Map.Entry<UUID, CompletableFuture<T>> entry : futures.entrySet()) {
+                try {
+                    result.put(entry.getKey(), entry.getValue().join());
+                } catch (RuntimeException ex) {
+                    Throwable cause = ex.getCause();
+                    if (cause instanceof BusinessException businessException) {
+                        throw businessException;
+                    }
+                    throw ex;
+                }
+            }
+            return result;
+        } finally {
+            executor.shutdown();
+        }
     }
 
     private List<ShowtimePerformanceItemResponse> applyShowtimePerformancePageRequest(
@@ -1348,76 +1390,6 @@ public class BookingServiceImpl implements BookingService {
         }
         return BigDecimal.valueOf(bookedSeats)
                 .divide(BigDecimal.valueOf(totalSeatCapacity), 4, RoundingMode.HALF_UP);
-    }
-
-    private static class ShowtimePerformanceAccumulator {
-        private final UUID showtimeId;
-        private final UUID cinemaId;
-        private final UUID filmId;
-        private final UUID hallId;
-        private final LocalDateTime startDateTime;
-        private final LocalDateTime endDateTime;
-        private long totalBookings;
-        private long totalSeatsBooked;
-        private long totalSeatCapacity;
-
-        private ShowtimePerformanceAccumulator(
-                UUID showtimeId,
-                UUID cinemaId,
-                UUID filmId,
-                UUID hallId,
-                LocalDateTime startDateTime,
-                LocalDateTime endDateTime) {
-            this.showtimeId = showtimeId;
-            this.cinemaId = cinemaId;
-            this.filmId = filmId;
-            this.hallId = hallId;
-            this.startDateTime = startDateTime;
-            this.endDateTime = endDateTime;
-        }
-
-        private static ShowtimePerformanceAccumulator fromBooking(
-                Booking booking,
-                ShowtimeGrpcClient.ShowtimeSummary showtime) {
-            return new ShowtimePerformanceAccumulator(
-                    booking.getShowtimeId(),
-                    booking.getCinemaId(),
-                    booking.getFilmId(),
-                    showtime.getHallId(),
-                    booking.getShowtimeStartDateTime() != null ? booking.getShowtimeStartDateTime() : showtime.getStartDateTime(),
-                    booking.getShowtimeEndDateTime() != null ? booking.getShowtimeEndDateTime() : showtime.getEndDateTime());
-        }
-
-        private void addBooking(Booking booking) {
-            if (booking == null) {
-                return;
-            }
-            totalBookings++;
-            totalSeatsBooked += booking.getSeatItems() == null ? 0 : booking.getSeatItems().size();
-        }
-
-        private UUID hallId() {
-            return hallId;
-        }
-
-        private void setTotalSeatCapacity(long totalSeatCapacity) {
-            this.totalSeatCapacity = totalSeatCapacity;
-        }
-
-        private ShowtimePerformanceItemResponse toResponse() {
-            return ShowtimePerformanceItemResponse.builder()
-                    .showtimeId(showtimeId)
-                    .cinemaId(cinemaId)
-                    .filmId(filmId)
-                    .hallId(hallId)
-                    .startDateTime(startDateTime)
-                    .endDateTime(endDateTime)
-                    .totalBookings(totalBookings)
-                    .totalSeatsBooked(totalSeatsBooked)
-                    .totalSeatCapacity(totalSeatCapacity)
-                    .occupancyRate(calcOccupancyRate(totalSeatsBooked, totalSeatCapacity))
-                    .build();
-        }
     }
 
     private List<BookingRevenueItemResponse> initializeBookingRevenueItems(
