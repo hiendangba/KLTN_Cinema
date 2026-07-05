@@ -150,6 +150,15 @@ public class BookingController extends BaseController {
         return ok(SuccessMessage.SHOWTIME_PERFORMANCE_REPORT_FETCHED, response);
     }
 
+    @PostMapping("/reports/showtimes/export")
+    public ResponseEntity<byte[]> exportShowtimePerformanceReport(
+            HttpServletRequest httpRequest,
+            @Valid @RequestBody ShowtimePerformanceReportRequest request) {
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
+        byte[] file = bookingService.exportShowtimePerformanceReport(request, httpRequest);
+        return ExcelExportUtils.buildDownloadResponse(file, "showtime_performance_report.xlsx");
+    }
+
     @GetMapping("/{id}/checkout-context")
     public ResponseEntity<APIResponse<CheckoutContextResponse>> getCheckoutContext(
             @PathVariable UUID id,

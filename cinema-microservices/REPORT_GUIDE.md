@@ -100,6 +100,7 @@ Nó trả lời các câu hỏi:
 ### API
 - `POST /api/bookings/reports/showtimes/search`
 - `POST /api/bookings/reports/showtimes/me/search`
+- `POST /api/bookings/reports/showtimes/export`
 
 ### Ý nghĩa
 Đây là report hiệu suất suất chiếu.
@@ -122,6 +123,10 @@ Nó trả lời các câu hỏi:
   - tổng ghế đã bán
   - tổng sức chứa
   - occupancy rate
+
+### Export Excel
+- Export showtime performance dùng cùng request với search, nhưng bỏ qua `pageRequest.page` và `pageRequest.size`.
+- File export luôn chứa toàn bộ item khớp filter/sort hiện tại, không bị cắt theo page size.
 
 ### Dùng khi nào
 - Khi muốn biết suất nào bán chạy nhất.

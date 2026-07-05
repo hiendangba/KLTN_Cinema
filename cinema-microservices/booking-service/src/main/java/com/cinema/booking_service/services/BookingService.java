@@ -51,5 +51,9 @@ public interface BookingService {
             ShowtimePerformanceReportRequest request,
             HttpServletRequest httpRequest);
 
+    byte[] exportShowtimePerformanceReport(
+            ShowtimePerformanceReportRequest request,
+            HttpServletRequest httpRequest);
+
     ActionMessageResponse cancelBooking(UUID id, HttpServletRequest httpRequest);
 }

@@ -510,9 +510,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     @Transactional(readOnly = true)
     public byte[] exportFilmRevenueReport(FilmRevenueReportRequest request, HttpServletRequest httpRequest) {
         validateFilmRevenueReportRequest(request);
-        FilmRevenueReportResponse report = buildFilmRevenueReport(request, httpRequest);
         List<FilmRevenueItemResponse> selectedItems = filterSelectedFilmRevenueItems(
-                report.items(),
+                loadFilmRevenueItems(request, httpRequest),
                 request.getSelectedIds());
 
         return ExcelExportUtils.exportSingleSheet(
@@ -1534,28 +1533,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             HttpServletRequest httpRequest) {
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         List<UUID> scopeCinemaIds = resolveFilmRevenueCinemaScope(httpRequest, role, request.getCinemaIds());
-
         DateRange dateRange = request.getDateRange();
         LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
         LocalDateTime to = dateRange == null ? null : dateRange.getTo();
-        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
 
-        List<PaymentTransaction> revenueTransactions = paymentTransactionRepositoryImpl.findAllForRevenueReport(
-                scopeCinemaIds,
-                requestedFilmIds,
-                from,
-                to);
-        Map<UUID, String> filmNames = revenueTransactions.isEmpty()
-                ? Map.of()
-                : filmGrpcClient.getFilmTitlesByIds(
-                        revenueTransactions.stream()
-                                .map(PaymentTransaction::getFilmId)
-                                .filter(java.util.Objects::nonNull)
-                                .distinct()
-                                .toList());
-
+        List<FilmRevenueItemResponse> allItems = loadFilmRevenueItems(request, scopeCinemaIds);
         List<FilmRevenueItemResponse> filteredItems = applyFilmRevenuePageRequest(
-                revenueReportSupport.aggregateFilmRevenueItems(revenueTransactions, filmNames, request),
+                allItems,
                 request.getPageRequest());
         int page = request.getPageRequest().getPageOrDefault();
         int size = request.getPageRequest().getSizeOrDefault();
@@ -1577,6 +1561,38 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .page(toFilmSummary(pageItems))
                 .total(toFilmSummary(filteredItems))
                 .build();
+    }
+
+    private List<FilmRevenueItemResponse> loadFilmRevenueItems(
+            FilmRevenueReportRequest request,
+            HttpServletRequest httpRequest) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        List<UUID> scopeCinemaIds = resolveFilmRevenueCinemaScope(httpRequest, role, request.getCinemaIds());
+        return loadFilmRevenueItems(request, scopeCinemaIds);
+    }
+
+    private List<FilmRevenueItemResponse> loadFilmRevenueItems(
+            FilmRevenueReportRequest request,
+            List<UUID> scopeCinemaIds) {
+        DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
+        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
+
+        List<PaymentTransaction> revenueTransactions = paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                scopeCinemaIds,
+                requestedFilmIds,
+                from,
+                to);
+        Map<UUID, String> filmNames = revenueTransactions.isEmpty()
+                ? Map.of()
+                : filmGrpcClient.getFilmTitlesByIds(
+                        revenueTransactions.stream()
+                                .map(PaymentTransaction::getFilmId)
+                                .filter(java.util.Objects::nonNull)
+                                .distinct()
+                                .toList());
+        return revenueReportSupport.aggregateFilmRevenueItems(revenueTransactions, filmNames, request);
     }
 
     private List<FilmRevenueItemResponse> filterSelectedFilmRevenueItems(

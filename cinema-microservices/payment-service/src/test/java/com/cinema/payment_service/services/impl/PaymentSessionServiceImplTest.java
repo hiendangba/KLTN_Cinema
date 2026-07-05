@@ -1279,6 +1279,76 @@ class PaymentSessionServiceImplTest {
     }
 
     @Test
+    void exportFilmRevenueReport_shouldIgnorePageSizeAndExportAllRows() throws Exception {
+        UUID cinema1 = UUID.randomUUID();
+        UUID cinema2 = UUID.randomUUID();
+        UUID film1 = UUID.randomUUID();
+        UUID film2 = UUID.randomUUID();
+        UUID film3 = UUID.randomUUID();
+
+        when(httpRequest.getHeader(com.cinema.http.HeaderNames.X_USER_ROLE))
+                .thenReturn(HeaderNames.ROLE_ADMIN);
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1"),
+                new CinemaGrpcClient.CinemaSummary(cinema2, "Cinema 2")));
+        when(filmGrpcClient.getFilmTitlesByIds(anyCollection())).thenReturn(Map.of(
+                film1, "Film One",
+                film2, "Film Two",
+                film3, "Film Three"));
+
+        PaymentTransaction tx1 = buildTransaction(cinema1, film1, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 9, 0), null,
+                BigDecimal.valueOf(200000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+        PaymentTransaction tx2 = buildTransaction(cinema2, film2, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 10, 0), null,
+                BigDecimal.valueOf(200000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+        PaymentTransaction tx3 = buildTransaction(cinema1, film3, PaymentTransactionStatus.PAID,
+                LocalDateTime.of(2026, 5, 29, 11, 0), null,
+                BigDecimal.valueOf(200000), BigDecimal.ZERO, BigDecimal.ZERO,
+                null, null);
+
+        when(paymentTransactionRepositoryImpl.findAllForRevenueReport(
+                anyCollection(),
+                anyCollection(),
+                any(),
+                any()))
+                .thenAnswer(invocation -> {
+                    @SuppressWarnings("unchecked")
+                    List<UUID> cinemaIds = (List<UUID>) invocation.getArgument(0);
+                    @SuppressWarnings("unchecked")
+                    List<UUID> filmIds = (List<UUID>) invocation.getArgument(1);
+                    return List.of(tx1, tx2, tx3).stream()
+                            .filter(tx -> cinemaIds.contains(tx.getCinemaId()))
+                            .filter(tx -> filmIds == null || filmIds.isEmpty() || filmIds.contains(tx.getFilmId()))
+                            .toList();
+                });
+
+        PageRequest<FilmRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(1);
+
+        FilmRevenueReportRequest request = FilmRevenueReportRequest.builder()
+                .cinemaIds(List.of(cinema1, cinema2))
+                .filmIds(List.of(film1, film2, film3))
+                .pageRequest(pageRequest)
+                .build();
+
+        byte[] file = paymentSessionService.exportFilmRevenueReport(request, httpRequest);
+
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
+                     new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
+            assertEquals("FILM REVENUE REPORT", sheet.getRow(0).getCell(0).getStringCellValue());
+            assertEquals(4, sheet.getLastRowNum());
+            assertEquals(film1.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
+            assertEquals(film2.toString(), sheet.getRow(3).getCell(0).getStringCellValue());
+            assertEquals(film3.toString(), sheet.getRow(4).getCell(0).getStringCellValue());
+        }
+    }
+
+    @Test
     void handleMomoReturn_shouldMarkPaidAndConfirmBooking() {
         String orderId = "PAY-" + UUID.randomUUID();
         PaymentTransaction transaction = buildPendingTransaction(orderId, BigDecimal.valueOf(200000));

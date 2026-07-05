@@ -7,6 +7,9 @@ Tài liệu này ghi lại đúng contract hiện tại của booking report sau
 - `POST /api/bookings/revenues/cinemas/search`
 - `POST /api/bookings/revenues/cinemas/me/search`
 - `POST /api/bookings/revenues/cinemas/export`
+- `POST /api/bookings/reports/showtimes/search`
+- `POST /api/bookings/reports/showtimes/me/search`
+- `POST /api/bookings/reports/showtimes/export`
 
 ## Request không đổi
 
@@ -17,6 +20,11 @@ Frontend vẫn gửi các field sau trong body:
 - `filmIds`
 - `selectedIds`
 - `pageRequest`
+
+## Export khong bi phan trang
+
+- Excel export lay toan bo item khop filter/sort hien tai.
+- `pageRequest.page` va `pageRequest.size` chi dung cho JSON search, khong cat du lieu trong file export.
 
 ## Response đã đổi
 
@@ -61,4 +69,3 @@ Frontend cần cập nhật mapping cho report booking vì payload hiện tại 
 - Hiển thị thêm `expiredCount`.
 - Format `conversionRate` thành phần trăm nếu muốn giống báo cáo business.
 - Nếu UI đang đặt tên là "booking revenue", nên đổi text sang "booking performance" để khớp nghiệp vụ mới.
-

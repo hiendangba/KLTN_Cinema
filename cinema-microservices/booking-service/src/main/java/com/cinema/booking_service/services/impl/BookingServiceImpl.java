@@ -384,9 +384,54 @@ public class BookingServiceImpl implements BookingService {
         List<CinemaGrpcClient.CinemaSummary> cinemas = cinemaGrpcClient.getAllActiveCinemas().stream()
                 .filter(cinema -> cinema != null
                         && cinema.id() != null
-                        && accessibleCinemaIds.contains(cinema.id()))
+                && accessibleCinemaIds.contains(cinema.id()))
                 .toList();
         return buildShowtimePerformanceReport(cinemas, request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] exportShowtimePerformanceReport(
+            ShowtimePerformanceReportRequest request,
+            HttpServletRequest httpRequest) {
+        validateShowtimePerformanceReportRequest(request);
+        List<CinemaGrpcClient.CinemaSummary> cinemas = resolveShowtimePerformanceScope(httpRequest);
+        List<ShowtimePerformanceItemResponse> items = enrichShowtimePerformanceItems(
+                loadShowtimePerformanceItems(cinemas, request));
+
+        return ExcelExportUtils.exportSingleSheet(
+                "BÃ¡o cÃ¡o hiá»‡u suáº¥t suáº¥t chiáº¿u",
+                "BÃO CÃO HIá»†U SUáº¤T SUáº¤T CHIáº¾U",
+                List.of(
+                        "MÃ£ suáº¥t chiáº¿u",
+                        "MÃ£ ráº¡p",
+                        "TÃªn ráº¡p",
+                        "MÃ£ phim",
+                        "TÃªn phim",
+                        "MÃ£ phÃ²ng",
+                        "TÃªn phÃ²ng",
+                        "Báº¯t Ä‘áº§u",
+                        "Káº¿t thÃºc",
+                        "Tá»•ng booking",
+                        "Tá»•ng ghÃ© Ä‘Ã£ bÃ¡n",
+                        "Tá»•ng sá»©c chá»©a",
+                        "Tá»· lá»‡ láº¥p Ä‘áº§y"),
+                items.stream()
+                        .map(item -> Arrays.asList(
+                                item.showtimeId(),
+                                item.cinemaId(),
+                                item.cinemaName(),
+                                item.filmId(),
+                                item.filmName(),
+                                item.hallId(),
+                                item.hallName(),
+                                item.startDateTime(),
+                                item.endDateTime(),
+                                item.totalBookings(),
+                                item.totalSeatsBooked(),
+                                item.totalSeatCapacity(),
+                                item.occupancyRate()))
+                        .toList());
     }
 
     @Override
@@ -861,22 +906,7 @@ public class BookingServiceImpl implements BookingService {
         LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
         LocalDateTime to = dateRange == null ? null : dateRange.getTo();
         PageRequest<ShowtimePerformanceField> pageRequest = request.getPageRequest();
-        List<UUID> requestedCinemaIds = normalizeUuidList(request.getCinemaIds());
-        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
-
-        List<UUID> scopeCinemaIds = resolveScopeCinemaIds(cinemas, requestedCinemaIds);
-        List<ShowtimePerformanceItemResponse> allItems = List.of();
-        if (!scopeCinemaIds.isEmpty()) {
-            List<Booking> bookings = bookingRepositoryImpl.findAllForShowtimePerformanceReport(
-                    scopeCinemaIds,
-                    requestedFilmIds,
-                    from,
-                    to,
-                    EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED));
-            allItems = buildShowtimePerformanceItems(bookings);
-        }
-
-        List<ShowtimePerformanceItemResponse> filteredItems = applyShowtimePerformancePageRequest(allItems, pageRequest);
+        List<ShowtimePerformanceItemResponse> filteredItems = loadShowtimePerformanceItems(cinemas, request);
         int page = pageRequest.getPageOrDefault();
         int size = pageRequest.getSizeOrDefault();
         long totalElements = filteredItems.size();
@@ -898,6 +928,52 @@ public class BookingServiceImpl implements BookingService {
                 .page(toShowtimePerformanceSummary(pageItems))
                 .total(toShowtimePerformanceSummary(filteredItems))
                 .build();
+    }
+
+    private List<ShowtimePerformanceItemResponse> loadShowtimePerformanceItems(
+            List<CinemaGrpcClient.CinemaSummary> cinemas,
+            ShowtimePerformanceReportRequest request) {
+        DateRange dateRange = request.getDateRange();
+        LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
+        LocalDateTime to = dateRange == null ? null : dateRange.getTo();
+        List<UUID> requestedCinemaIds = normalizeUuidList(request.getCinemaIds());
+        List<UUID> requestedFilmIds = normalizeUuidList(request.getFilmIds());
+
+        List<UUID> scopeCinemaIds = resolveScopeCinemaIds(cinemas, requestedCinemaIds);
+        List<ShowtimePerformanceItemResponse> allItems = List.of();
+        if (!scopeCinemaIds.isEmpty()) {
+            List<Booking> bookings = bookingRepositoryImpl.findAllForShowtimePerformanceReport(
+                    scopeCinemaIds,
+                    requestedFilmIds,
+                    from,
+                    to,
+                    EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED));
+            allItems = buildShowtimePerformanceItems(bookings);
+        }
+
+        return applyShowtimePerformancePageRequest(allItems, request.getPageRequest());
+    }
+
+    private List<CinemaGrpcClient.CinemaSummary> resolveShowtimePerformanceScope(HttpServletRequest httpRequest) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            return cinemaGrpcClient.getAllActiveCinemas();
+        }
+        if (HeaderNames.ROLE_MANAGER.equals(role)) {
+            UUID requesterUserId = resolveUserId(httpRequest);
+            List<UUID> accessibleCinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(
+                    requesterUserId,
+                    HeaderNames.ROLE_MANAGER);
+            if (accessibleCinemaIds == null || accessibleCinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
+            }
+            return cinemaGrpcClient.getAllActiveCinemas().stream()
+                    .filter(cinema -> cinema != null
+                            && cinema.id() != null
+                            && accessibleCinemaIds.contains(cinema.id()))
+                    .toList();
+        }
+        throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
     private List<UUID> resolveScopeCinemaIds(
