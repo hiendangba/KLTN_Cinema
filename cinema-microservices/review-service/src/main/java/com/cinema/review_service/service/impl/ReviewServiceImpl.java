@@ -54,9 +54,7 @@ public class ReviewServiceImpl implements ReviewService {
         if (reviewRepository.findByUserIdAndFilmIdAndIsDeletedFalse(userId, filmId).isPresent()) {
             throw new BusinessException(ErrorCode.ID_EXISTED);
         }
-        if (!bookingGrpcClient.isUserEligibleForReview(userId, filmId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN);
-        }
+        bookingGrpcClient.isUserEligibleForReview(userId, filmId);
 
         Review review = reviewMapper.toEntity(request);
         review.setFilmId(filmId);

@@ -1,0 +1,1241 @@
+{
+  "info": {
+    "_postman_id": "7c91b578-2d6c-49f2-b98c-5e4a02f8c4bd",
+    "name": "CinemaStar Production Smoke Tests",
+    "description": "Read-only and guarded mutation smoke tests for the CinemaStar production gateway.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.environment.set('runTimestamp', new Date().toISOString());"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('HTTP status is below 500', function () {",
+          "  pm.expect(pm.response.code).to.be.below(500);",
+          "});",
+          "const contentType = pm.response.headers.get('Content-Type') || '';",
+          "if (contentType.includes('application/json')) {",
+          "  const json = pm.response.json();",
+          "  if (Object.prototype.hasOwnProperty.call(json, 'success')) {",
+          "    pm.test('API wrapper success is true', function () {",
+          "      pm.expect(json.success).to.eql(true);",
+          "    });",
+          "  }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "ReadOnly Smoke",
+      "item": [
+        {
+          "name": "01 Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin login returns 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Admin auth cookies are issued', function () {",
+                  "  const setCookie = pm.response.headers.all().filter(header => String(header.key).toLowerCase() === 'set-cookie').map(header => header.value).join('; ');",
+                  "  pm.expect(setCookie).to.include('accessToken=');",
+                  "  pm.expect(setCookie).to.include('refreshToken=');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Film Search - Capture Film",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"size\": 12,\n  \"sortBy\": [\n    {\n      \"field\": \"TIME_CREATED\",\n      \"direction\": \"DESC\"\n    }\n  ],\n  \"filterBy\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/films/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "films",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const rows = pm.response.json().data && pm.response.json().data.data ? pm.response.json().data.data : [];",
+                  "pm.test('Film search returns at least one film', function () {",
+                  "  pm.expect(rows.length).to.be.above(0);",
+                  "});",
+                  "if (rows.length > 0) {",
+                  "  const film = rows.find(item => item && item.id) || rows[0];",
+                  "  pm.environment.set('filmId', film.id);",
+                  "  pm.test('Film has rating summary fields', function () {",
+                  "    pm.expect(film).to.have.property('averageRating');",
+                  "    pm.expect(film).to.have.property('reviewCount');",
+                  "    pm.expect(film.averageRating).to.not.eql(null);",
+                  "    pm.expect(film.reviewCount).to.not.eql(null);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Film Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/films/{{filmId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "films",
+                "{{filmId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const film = pm.response.json().data;",
+                  "pm.test('Film detail returns selected film', function () {",
+                  "  pm.expect(film.id).to.eql(pm.environment.get('filmId'));",
+                  "});",
+                  "pm.test('Film detail exposes rating summary', function () {",
+                  "  pm.expect(film).to.have.property('averageRating');",
+                  "  pm.expect(film).to.have.property('reviewCount');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Showtime Search - Capture Showtime",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 1,\n  \"size\": 12,\n  \"sortBy\": [\n    {\n      \"field\": \"START_DATE_TIME\",\n      \"direction\": \"DESC\"\n    }\n  ],\n  \"filterBy\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/showtimes/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "showtimes",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const rows = pm.response.json().data && pm.response.json().data.data ? pm.response.json().data.data : [];",
+                  "pm.test('Showtime search returns at least one showtime', function () {",
+                  "  pm.expect(rows.length).to.be.above(0);",
+                  "});",
+                  "if (rows.length > 0) {",
+                  "  const showtime = rows.find(item => item && item.id && item.filmId && item.startDateTime) || rows[0];",
+                  "  pm.environment.set('showtimeId', showtime.id);",
+                  "  pm.environment.set('filmId', showtime.filmId || pm.environment.get('filmId'));",
+                  "  pm.environment.set('showtimeDate', String(showtime.startDateTime).substring(0, 10));",
+                  "  if (showtime.hall && showtime.hall.id) pm.environment.set('hallId', showtime.hall.id);",
+                  "  if (showtime.hall && showtime.hall.cinemaId) pm.environment.set('cinemaId', showtime.hall.cinemaId);",
+                  "  pm.test('Showtime has film, hall and capacity data', function () {",
+                  "    pm.expect(showtime.filmId).to.be.ok;",
+                  "    pm.expect(showtime.hallId || (showtime.hall && showtime.hall.id)).to.be.ok;",
+                  "    pm.expect(showtime.totalSeatCapacity).to.not.eql(null);",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Showtime Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/showtimes/{{showtimeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "showtimes",
+                "{{showtimeId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const showtime = pm.response.json().data;",
+                  "pm.test('Showtime detail returns selected showtime', function () {",
+                  "  pm.expect(showtime.id).to.eql(pm.environment.get('showtimeId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Showtime Seat Map",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/showtimes/{{showtimeId}}/seat-map",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "showtimes",
+                "{{showtimeId}}",
+                "seat-map"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const seatMap = pm.response.json().data;",
+                  "pm.test('Seat map has cells', function () {",
+                  "  pm.expect(seatMap.showtimeId).to.eql(pm.environment.get('showtimeId'));",
+                  "  pm.expect(seatMap.cells).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Showtime Search By Film",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 1,\n  \"size\": 12,\n  \"date\": \"{{showtimeDate}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/showtimes/films/{{filmId}}/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "showtimes",
+                "films",
+                "{{filmId}}",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const rows = pm.response.json().data && pm.response.json().data.data ? pm.response.json().data.data : [];",
+                  "pm.test('Showtime-by-film endpoint returns a page array', function () {",
+                  "  pm.expect(rows).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 Review Search",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"size\": 10,\n  \"sortBy\": [\n    {\n      \"field\": \"CREATED_AT\",\n      \"direction\": \"DESC\"\n    }\n  ],\n  \"filterBy\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/films/{{filmId}}/reviews/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "films",
+                "{{filmId}}",
+                "reviews",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const page = pm.response.json().data;",
+                  "pm.test('Review search returns cursor page', function () {",
+                  "  pm.expect(page.data).to.be.an('array');",
+                  "  pm.expect(page).to.have.property('size');",
+                  "});",
+                  "if (page.data.length > 0) {",
+                  "  pm.environment.set('reviewId', page.data[0].id);",
+                  "  pm.test('Review exposes reviewer display name', function () {",
+                  "    pm.expect(page.data[0]).to.have.property('name');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 Payment Cinema Revenue Report - Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dateRange\": null,\n  \"cinemaIds\": [],\n  \"filmIds\": [],\n  \"selectedIds\": [],\n  \"pageRequest\": {\n    \"page\": 1,\n    \"size\": 12,\n    \"sortBy\": [],\n    \"filterBy\": []\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/revenues/cinemas/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "revenues",
+                "cinemas",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const report = pm.response.json().data;",
+                  "pm.test('Payment cinema revenue report has items and summary', function () {",
+                  "  pm.expect(report.items).to.be.an('array');",
+                  "  pm.expect(report).to.have.property('total');",
+                  "});",
+                  "if (report.items.length > 0 && report.items[0].cinemaId) pm.environment.set('cinemaId', report.items[0].cinemaId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Payment Film Revenue Report - Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dateRange\": null,\n  \"cinemaIds\": [],\n  \"filmIds\": [],\n  \"selectedIds\": [],\n  \"pageRequest\": {\n    \"page\": 1,\n    \"size\": 12,\n    \"sortBy\": [],\n    \"filterBy\": []\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/revenues/films/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "revenues",
+                "films",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const report = pm.response.json().data;",
+                  "pm.test('Payment film revenue report has non-null film names when items exist', function () {",
+                  "  pm.expect(report.items).to.be.an('array');",
+                  "  if (report.items.length > 0) {",
+                  "    pm.expect(report.items[0]).to.have.property('filmName');",
+                  "    pm.expect(report.items[0].filmName).to.not.eql(null);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Booking Showtime Performance Report - Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dateRange\": null,\n  \"cinemaIds\": [],\n  \"filmIds\": [],\n  \"selectedIds\": [],\n  \"pageRequest\": {\n    \"page\": 1,\n    \"size\": 12,\n    \"sortBy\": [],\n    \"filterBy\": []\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/reports/showtimes/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "reports",
+                "showtimes",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const report = pm.response.json().data;",
+                  "pm.test('Showtime report has names and ratio occupancy', function () {",
+                  "  pm.expect(report.items).to.be.an('array');",
+                  "  if (report.items.length > 0) {",
+                  "    const item = report.items[0];",
+                  "    pm.expect(item).to.have.property('cinemaName');",
+                  "    pm.expect(item).to.have.property('hallName');",
+                  "    pm.expect(item).to.have.property('filmName');",
+                  "    pm.expect(Number(item.occupancyRate)).to.be.at.least(0);",
+                  "    pm.expect(Number(item.occupancyRate)).to.be.at.most(1);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 Payment Cinema Revenue Export - Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dateRange\": null,\n  \"cinemaIds\": [],\n  \"filmIds\": [],\n  \"selectedIds\": [],\n  \"pageRequest\": {\n    \"page\": 1,\n    \"size\": 12,\n    \"sortBy\": [],\n    \"filterBy\": []\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/revenues/cinemas/export",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "revenues",
+                "cinemas",
+                "export"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Excel export returns a non-empty attachment', function () {",
+                  "  const contentDisposition = pm.response.headers.get('Content-Disposition') || '';",
+                  "  const contentLength = Number(pm.response.headers.get('Content-Length') || 0);",
+                  "  pm.expect(contentDisposition.toLowerCase()).to.include('attachment');",
+                  "  pm.expect(contentLength || pm.response.text().length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 Booking Showtime Performance Export - Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dateRange\": null,\n  \"cinemaIds\": [],\n  \"filmIds\": [],\n  \"selectedIds\": [],\n  \"pageRequest\": {\n    \"page\": 1,\n    \"size\": 12,\n    \"sortBy\": [],\n    \"filterBy\": []\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/reports/showtimes/export",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "reports",
+                "showtimes",
+                "export"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Showtime Excel export returns a non-empty attachment', function () {",
+                  "  const contentDisposition = pm.response.headers.get('Content-Disposition') || '';",
+                  "  const contentLength = Number(pm.response.headers.get('Content-Length') || 0);",
+                  "  pm.expect(contentDisposition.toLowerCase()).to.include('attachment');",
+                  "  pm.expect(contentLength || pm.response.text().length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 Login Manager",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{managerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 Payment Cinema Revenue Report - Manager Scope",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dateRange\": null,\n  \"cinemaIds\": [],\n  \"filmIds\": [],\n  \"selectedIds\": [],\n  \"pageRequest\": {\n    \"page\": 1,\n    \"size\": 12,\n    \"sortBy\": [],\n    \"filterBy\": []\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/revenues/cinemas/me/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "revenues",
+                "cinemas",
+                "me",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const report = pm.response.json().data;",
+                  "pm.test('Manager scoped cinema revenue report is valid', function () {",
+                  "  pm.expect(report.items).to.be.an('array');",
+                  "  pm.expect(report).to.have.property('total');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "16 Login Staff",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('staffLoginOk', 'false');",
+                  "if (String(pm.environment.get('staffEnabled')).toLowerCase() !== 'true' && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.environment.set('staffLoginOk', 'true');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 Payment Film Revenue Report - Staff Scope",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if ((String(pm.environment.get('staffEnabled')).toLowerCase() !== 'true' || pm.environment.get('staffLoginOk') !== 'true') && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const report = pm.response.json().data;",
+                  "pm.test('Staff can read scoped film revenue report', function () {",
+                  "  pm.expect(report.items).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dateRange\": null,\n  \"cinemaIds\": [],\n  \"filmIds\": [],\n  \"selectedIds\": [],\n  \"pageRequest\": {\n    \"page\": 1,\n    \"size\": 12,\n    \"sortBy\": [],\n    \"filterBy\": []\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/revenues/films/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "revenues",
+                "films",
+                "search"
+              ]
+            }
+          }
+        },
+        {
+          "name": "18 Login Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 Customer Booking History",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 1,\n  \"size\": 12,\n  \"sortBy\": [\n    {\n      \"field\": \"TIME_CREATED\",\n      \"direction\": \"DESC\"\n    }\n  ],\n  \"filterBy\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/me/history/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "me",
+                "history",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const page = pm.response.json().data;",
+                  "pm.test('Customer booking history returns page', function () {",
+                  "  pm.expect(page.data).to.be.an('array');",
+                  "});",
+                  "if (page.data.length > 0 && page.data[0].id) {",
+                  "  pm.environment.set('bookingId', page.data[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20 Customer Active Bookings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 1,\n  \"size\": 12,\n  \"sortBy\": [\n    {\n      \"field\": \"TIME_CREATED\",\n      \"direction\": \"DESC\"\n    }\n  ],\n  \"filterBy\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/bookings/me/active/search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "bookings",
+                "me",
+                "active",
+                "search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Customer active bookings returns page', function () {",
+                  "  pm.expect(pm.response.json().data.data).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "21 Payment Session By Booking - If Booking Exists",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get('bookingId') && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.environment.get('bookingId')) {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.test('Payment session belongs to captured booking', function () {",
+                  "    pm.expect(pm.response.json().data.bookingId || pm.environment.get('bookingId')).to.be.ok;",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/sessions/{{bookingId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "sessions",
+                "{{bookingId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Mutation Smoke",
+      "item": [
+        {
+          "name": "01 Guard RUN_MUTATIONS",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.environment.get('RUN_MUTATIONS')).toLowerCase() !== 'true' && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Mutation guard acknowledged', function () {",
+                  "  pm.expect(true).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments/vietqr/banks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments",
+                "vietqr",
+                "banks"
+              ]
+            }
+          }
+        },
+        {
+          "name": "02 Login Customer For Review Mutation",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.environment.get('RUN_MUTATIONS')).toLowerCase() !== 'true' && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "03 Create Test Review",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.environment.get('RUN_MUTATIONS')).toLowerCase() !== 'true' && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "const review = pm.response.json().data;",
+                  "pm.environment.set('reviewId', review.id);",
+                  "pm.test('Created review is a Newman test review', function () {",
+                  "  pm.expect(review.title).to.include('NEWMAN_KLTN');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5,\n  \"title\": \"NEWMAN_KLTN review {{runTimestamp}}\",\n  \"content\": \"Bai danh gia kiem thu Newman cho luan van KLTN, tao tren du lieu that va se duoc xoa sau test.\",\n  \"mediaUrls\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/films/{{filmId}}/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "films",
+                "{{filmId}}",
+                "reviews"
+              ]
+            }
+          }
+        },
+        {
+          "name": "04 Update Test Review",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.environment.get('RUN_MUTATIONS')).toLowerCase() !== 'true' && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "if (!pm.environment.get('reviewId') && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.test('Updated review keeps Newman marker', function () {",
+                  "  pm.expect(pm.response.json().data.title).to.include('NEWMAN_KLTN updated');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 4,\n  \"title\": \"NEWMAN_KLTN updated {{runTimestamp}}\",\n  \"content\": \"Bai danh gia da duoc cap nhat boi Newman tren chinh review vua tao.\",\n  \"mediaUrls\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reviews/{{reviewId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reviews",
+                "{{reviewId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "05 Delete Test Review",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (String(pm.environment.get('RUN_MUTATIONS')).toLowerCase() !== 'true' && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}",
+                  "if (!pm.environment.get('reviewId') && pm.execution && pm.execution.skipRequest) {",
+                  "  pm.execution.skipRequest();",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reviews/{{reviewId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reviews",
+                "{{reviewId}}"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

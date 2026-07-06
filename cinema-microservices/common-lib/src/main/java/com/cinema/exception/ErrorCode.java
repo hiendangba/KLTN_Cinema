@@ -16,6 +16,8 @@ public enum ErrorCode {
         INTERNAL_ERROR("9500", "Internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
         DATABASE_ERROR("9501", "Database error", HttpStatus.INTERNAL_SERVER_ERROR),
         EXTERNAL_SERVICE_ERROR("9502", "External service error", HttpStatus.SERVICE_UNAVAILABLE),
+        REVIEW_NOT_ELIGIBLE("4404", "Bạn chưa đủ điều kiện để đánh giá phim này!", HttpStatus.FORBIDDEN),
+        REVIEW_SHOWTIME_NOT_ENDED("4405", "Suất chiếu chưa kết thúc, chưa thể đánh giá phim này!", HttpStatus.CONFLICT),
         INVALID_INPUT("4000", "Dữ liệu đầu vào không hợp lệ", HttpStatus.BAD_REQUEST),
         NOT_CREATED("4000", "Không thể tạo thành công, vui lòng liên hệ quản trị viên để được hỗ trợ",
                         HttpStatus.BAD_REQUEST),

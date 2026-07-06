@@ -515,16 +515,16 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 request.getSelectedIds());
 
         return ExcelExportUtils.exportSingleSheet(
-                "Film Revenue",
-                "FILM REVENUE REPORT",
+                "Báo cáo doanh thu phim",
+                "BÁO CÁO DOANH THU THEO PHIM",
                 List.of(
-                        "Film ID",
-                        "Film Name",
-                        "Cinema Count",
-                        "Total Transactions",
-                        "Paid Count",
-                        "Refunded Count",
-                        "Paid Amount"),
+                        "Mã phim",
+                        "Tên phim",
+                        "Số rạp",
+                        "Tổng giao dịch",
+                        "Số giao dịch đã thanh toán",
+                        "Số giao dịch đã hoàn tiền",
+                        "Tiền đã thu"),
                 selectedItems.stream()
                         .map(item -> Arrays.asList(
                                 item.filmId(),

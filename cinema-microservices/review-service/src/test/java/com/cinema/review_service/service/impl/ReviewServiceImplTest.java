@@ -1,6 +1,8 @@
 package com.cinema.review_service.service.impl;
 
 import com.cinema.http.HeaderNames;
+import com.cinema.exception.BusinessException;
+import com.cinema.exception.ErrorCode;
 import com.cinema.review_service.dto.request.CreateReviewRequest;
 import com.cinema.review_service.dto.request.ReviewCursorPageRequest;
 import com.cinema.review_service.dto.response.ReviewResponse;
@@ -25,6 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -94,6 +97,31 @@ class ReviewServiceImplTest {
         assertThat(response.getName()).isEqualTo("Nguyễn Văn A");
         assertThat(response.getFilmId()).isEqualTo(filmId);
         assertThat(response.getRating()).isEqualTo(5);
+    }
+
+    @Test
+    void createReview_shouldPropagateShowtimeNotEndedReason() {
+        UUID userId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HeaderNames.X_USER_ID, userId.toString());
+
+        CreateReviewRequest body = CreateReviewRequest.builder()
+                .rating(5)
+                .title("Phim cá»±c hay")
+                .content("Ráº¥t tuyá»‡t vá»i")
+                .mediaUrls(List.of())
+                .build();
+
+        when(reviewRepository.findByUserIdAndFilmIdAndIsDeletedFalse(userId, filmId)).thenReturn(Optional.empty());
+        when(bookingGrpcClient.isUserEligibleForReview(userId, filmId))
+                .thenThrow(new BusinessException(ErrorCode.REVIEW_SHOWTIME_NOT_ENDED));
+
+        assertThatThrownBy(() -> service.createReview(filmId, body, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.REVIEW_SHOWTIME_NOT_ENDED);
     }
 
     @Test

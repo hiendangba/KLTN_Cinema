@@ -407,22 +407,22 @@ public class BookingServiceImpl implements BookingService {
                         request.getSelectedIds()));
 
         return ExcelExportUtils.exportSingleSheet(
-                "BÃ¡o cÃ¡o hiá»‡u suáº¥t suáº¥t chiáº¿u",
-                "BÃO CÃO HIá»†U SUáº¤T SUáº¤T CHIáº¾U",
+                "Báo cáo hiệu suất suất chiếu",
+                "BÁO CÁO HIỆU SUẤT SUẤT CHIẾU",
                 List.of(
-                        "MÃ£ suáº¥t chiáº¿u",
-                        "MÃ£ ráº¡p",
-                        "TÃªn ráº¡p",
-                        "MÃ£ phim",
-                        "TÃªn phim",
-                        "MÃ£ phÃ²ng",
-                        "TÃªn phÃ²ng",
-                        "Báº¯t Ä‘áº§u",
-                        "Káº¿t thÃºc",
-                        "Tá»•ng booking",
-                        "Tá»•ng ghÃ© Ä‘Ã£ bÃ¡n",
-                        "Tá»•ng sá»©c chá»©a",
-                        "Tá»· lá»‡ láº¥p Ä‘áº§y"),
+                        "Mã suất chiếu",
+                        "Mã rạp",
+                        "Tên rạp",
+                        "Mã phim",
+                        "Tên phim",
+                        "Mã phòng",
+                        "Tên phòng",
+                        "Bắt đầu",
+                        "Kết thúc",
+                        "Tổng booking",
+                        "Tổng ghế đã bán",
+                        "Tổng sức chứa",
+                        "Tỷ lệ lấp đầy"),
                 items.stream()
                         .map(item -> Arrays.asList(
                                 item.showtimeId(),

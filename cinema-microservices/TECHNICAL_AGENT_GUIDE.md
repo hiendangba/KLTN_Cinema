@@ -2317,5 +2317,32 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
 - Verification: `SeatSuggestionServiceImplTest` pass 12/12 sau khi đổi tie-break `J1/J2` + `J13/J14` sang `I14`.
 - Remaining risk: rule hiện tại vẫn dựa trên heuristic distance; nếu layout thực tế của rạp có mô hình ghế đặc biệt thì có thể cần tune lại trọng số.
 
+## Changelog ngắn (2026-07-06)
+
+- Thêm bộ Postman/Newman production smoke test trong `tools/postman` để phục vụ minh chứng kiểm thử luận văn:
+  - collection chạy trực tiếp qua `https://cinema-api.duckdns.org`, không dùng local/mock
+  - read-only smoke test login theo từng role trước nhóm API cần quyền đó vì auth dùng cookie `accessToken`/`refreshToken`
+  - collection tự search dữ liệu thật để lấy `filmId`, `showtimeId`, `cinemaId`, rồi kiểm tra catalog, booking, payment, review, report và Excel export
+  - mutation smoke test được khóa bởi `RUN_MUTATIONS=true`, chỉ tạo/sửa/xóa review test có prefix `NEWMAN_KLTN`
+- Files đã thêm:
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\tools\postman\CinemaStar.postman_collection.json`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\tools\postman\cinema-prod.example.postman_environment.json`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\tools\postman\cinema-prod.postman_environment.json`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\tools\postman\package.json`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\tools\postman\README.md`
+  - `C:\hoctap\Study\KLTN\CinemaStar\cinema-microservices\tools\postman\TEST_EVIDENCE.md`
+- Verification:
+  - JSON collection/environment parse OK bằng Node
+  - `npm run test:api:prod:readonly` pass trên production: 19 requests, 57 assertions, 0 failures
+  - Newman đã xuất `tools/postman/reports/report.html` và `tools/postman/reports/junit.xml`
+  - `TEST_EVIDENCE.md` tóm tắt số liệu từ JUnit/HTML report thành bảng API, assertion, lỗi và thời gian phản hồi để đưa vào luận văn
+- Remaining risk:
+  - `staff@gmail.com / 12345678aA@` hiện bị production trả `4007`, nên `staffEnabled=false` mặc định; sau khi sửa/tạo lại staff account thì bật `staffEnabled=true` để chạy thêm smoke test quyền staff.
+
+- `booking-service` và `review-service` đã tách rõ lý do không đủ điều kiện review thay vì đẩy hết về `FORBIDDEN` chung chung: `checkUserEligibleForReview` giờ trả `REVIEW_NOT_ELIGIBLE` khi không có booking confirmed/paid, còn `REVIEW_SHOWTIME_NOT_ENDED` khi user đã có booking nhưng suất chiếu chưa kết thúc; `review-service` nhận lỗi này qua gRPC rồi để `BusinessException` đi thẳng ra API.
+- Files chạm: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `booking-service/src/main/java/com/cinema/booking_service/grpc/BookingInternalGrpcService.java`, `booking-service/src/test/java/com/cinema/booking_service/grpc/BookingInternalGrpcServiceTest.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/ReviewServiceImpl.java`, `review-service/src/test/java/com/cinema/review_service/service/impl/ReviewServiceImplTest.java`.
+- Reason: API tạo review trước đó chỉ trả `9004` nên người dùng không biết là do chưa xem xong phim hay do không đủ điều kiện booking; luồng mới trả đúng thông điệp nghiệp vụ để FE/QA xử lý chính xác hơn.
+- Verification: `common-lib` test pass, `BookingInternalGrpcServiceTest` pass 8/8, và `review-service` `test-compile` pass sau khi thêm test propagate cho case `REVIEW_SHOWTIME_NOT_ENDED`.
+- Remaining risk: `booking-service` vẫn còn vài test integration/legacy đỏ trên môi trường này vì thiếu PostgreSQL `localhost:5433`, nên full reactor test vẫn chưa xanh toàn bộ dù logic review eligibility mới đã biên dịch và unit-test pass.
 
 

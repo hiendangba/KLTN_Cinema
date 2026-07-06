@@ -260,8 +260,33 @@ class BookingInternalGrpcServiceTest {
                 observer);
 
         assertTrue(observer.completed);
-        assertTrue(observer.value.getSuccess());
-        assertFalse(observer.value.getEligible());
+        assertFalse(observer.value.getSuccess());
+        assertEquals("REVIEW_SHOWTIME_NOT_ENDED", observer.value.getErrorKey());
+        assertEquals("Suất chiếu chưa kết thúc, chưa thể đánh giá phim này!", observer.value.getMessage());
+    }
+
+    @Test
+    void checkUserEligibleForReview_shouldReturnFalseWhenNoEligibleBookingFound() {
+        UUID userId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+
+        when(bookingRepository.findAllByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
+                eq(userId),
+                eq(filmId),
+                eq(BookingStatus.CONFIRMED),
+                eq(PaymentStatus.PAID))).thenReturn(List.of());
+
+        CapturingObserver<CheckUserEligibleForReviewReply> observer = new CapturingObserver<>();
+        grpcService.checkUserEligibleForReview(
+                CheckUserEligibleForReviewRequest.newBuilder()
+                        .setUserId(userId.toString())
+                        .setFilmId(filmId.toString())
+                        .build(),
+                observer);
+
+        assertTrue(observer.completed);
+        assertFalse(observer.value.getSuccess());
+        assertEquals("REVIEW_NOT_ELIGIBLE", observer.value.getErrorKey());
     }
 
     private Booking buildBooking(UUID bookingId) {

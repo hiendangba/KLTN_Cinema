@@ -1259,14 +1259,14 @@ class PaymentSessionServiceImplTest {
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
                      new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-            assertEquals("FILM REVENUE REPORT", sheet.getRow(0).getCell(0).getStringCellValue());
-            assertEquals("Film ID", sheet.getRow(1).getCell(0).getStringCellValue());
-            assertEquals("Film Name", sheet.getRow(1).getCell(1).getStringCellValue());
-            assertEquals("Cinema Count", sheet.getRow(1).getCell(2).getStringCellValue());
-            assertEquals("Total Transactions", sheet.getRow(1).getCell(3).getStringCellValue());
-            assertEquals("Paid Count", sheet.getRow(1).getCell(4).getStringCellValue());
-            assertEquals("Refunded Count", sheet.getRow(1).getCell(5).getStringCellValue());
-            assertEquals("Paid Amount", sheet.getRow(1).getCell(6).getStringCellValue());
+            assertEquals("BÁO CÁO DOANH THU THEO PHIM", sheet.getRow(0).getCell(0).getStringCellValue());
+            assertEquals("Mã phim", sheet.getRow(1).getCell(0).getStringCellValue());
+            assertEquals("Tên phim", sheet.getRow(1).getCell(1).getStringCellValue());
+            assertEquals("Số rạp", sheet.getRow(1).getCell(2).getStringCellValue());
+            assertEquals("Tổng giao dịch", sheet.getRow(1).getCell(3).getStringCellValue());
+            assertEquals("Số giao dịch đã thanh toán", sheet.getRow(1).getCell(4).getStringCellValue());
+            assertEquals("Số giao dịch đã hoàn tiền", sheet.getRow(1).getCell(5).getStringCellValue());
+            assertEquals("Tiền đã thu", sheet.getRow(1).getCell(6).getStringCellValue());
             assertEquals(2, sheet.getLastRowNum());
             assertEquals(film2.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
             assertEquals("Film Two", sheet.getRow(2).getCell(1).getStringCellValue());
@@ -1340,7 +1340,7 @@ class PaymentSessionServiceImplTest {
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
                      new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
             org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-            assertEquals("FILM REVENUE REPORT", sheet.getRow(0).getCell(0).getStringCellValue());
+            assertEquals("BÁO CÁO DOANH THU THEO PHIM", sheet.getRow(0).getCell(0).getStringCellValue());
             assertEquals(4, sheet.getLastRowNum());
             assertEquals(film1.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
             assertEquals(film2.toString(), sheet.getRow(3).getCell(0).getStringCellValue());

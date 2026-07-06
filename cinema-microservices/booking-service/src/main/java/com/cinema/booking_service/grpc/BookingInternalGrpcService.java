@@ -432,15 +432,38 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
         }
 
         try {
-            boolean eligible = bookingRepository.findAllByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
+            List<Booking> bookings = bookingRepository.findAllByUserIdAndFilmIdAndIsDeletedFalseAndBookingStatusAndPaymentStatus(
                             userId,
                             filmId,
                             BookingStatus.CONFIRMED,
                             PaymentStatus.PAID)
                     .stream()
+                    .toList();
+
+            if (bookings.isEmpty()) {
+                responseObserver.onNext(CheckUserEligibleForReviewReply.newBuilder()
+                        .setSuccess(false)
+                        .setErrorKey(ErrorCode.REVIEW_NOT_ELIGIBLE.name())
+                        .setMessage(ErrorCode.REVIEW_NOT_ELIGIBLE.getMessage())
+                        .build());
+                responseObserver.onCompleted();
+                return;
+            }
+
+            boolean eligible = bookings.stream()
                     .map(Booking::getShowtimeEndDateTime)
                     .filter(Objects::nonNull)
                     .anyMatch(endDateTime -> endDateTime.isBefore(LocalDateTime.now()));
+
+            if (!eligible) {
+                responseObserver.onNext(CheckUserEligibleForReviewReply.newBuilder()
+                        .setSuccess(false)
+                        .setErrorKey(ErrorCode.REVIEW_SHOWTIME_NOT_ENDED.name())
+                        .setMessage(ErrorCode.REVIEW_SHOWTIME_NOT_ENDED.getMessage())
+                        .build());
+                responseObserver.onCompleted();
+                return;
+            }
 
             responseObserver.onNext(CheckUserEligibleForReviewReply.newBuilder()
                     .setSuccess(true)

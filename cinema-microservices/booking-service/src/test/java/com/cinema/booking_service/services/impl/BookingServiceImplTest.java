@@ -682,7 +682,20 @@ class BookingServiceImplTest {
                 try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
                              new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
                         org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-                        assertTrue(sheet.getRow(0).getCell(0).getStringCellValue().length() > 0);
+                        assertEquals("BÁO CÁO HIỆU SUẤT SUẤT CHIẾU", sheet.getRow(0).getCell(0).getStringCellValue());
+                        assertEquals("Mã suất chiếu", sheet.getRow(1).getCell(0).getStringCellValue());
+                        assertEquals("Mã rạp", sheet.getRow(1).getCell(1).getStringCellValue());
+                        assertEquals("Tên rạp", sheet.getRow(1).getCell(2).getStringCellValue());
+                        assertEquals("Mã phim", sheet.getRow(1).getCell(3).getStringCellValue());
+                        assertEquals("Tên phim", sheet.getRow(1).getCell(4).getStringCellValue());
+                        assertEquals("Mã phòng", sheet.getRow(1).getCell(5).getStringCellValue());
+                        assertEquals("Tên phòng", sheet.getRow(1).getCell(6).getStringCellValue());
+                        assertEquals("Bắt đầu", sheet.getRow(1).getCell(7).getStringCellValue());
+                        assertEquals("Kết thúc", sheet.getRow(1).getCell(8).getStringCellValue());
+                        assertEquals("Tổng booking", sheet.getRow(1).getCell(9).getStringCellValue());
+                        assertEquals("Tổng ghế đã bán", sheet.getRow(1).getCell(10).getStringCellValue());
+                        assertEquals("Tổng sức chứa", sheet.getRow(1).getCell(11).getStringCellValue());
+                        assertEquals("Tỷ lệ lấp đầy", sheet.getRow(1).getCell(12).getStringCellValue());
                         assertEquals(3, sheet.getLastRowNum());
                         assertEquals(showtime2.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
                         assertEquals(showtime1.toString(), sheet.getRow(3).getCell(0).getStringCellValue());
@@ -760,7 +773,7 @@ class BookingServiceImplTest {
                 try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
                              new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
                         org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-                        assertTrue(sheet.getRow(0).getCell(0).getStringCellValue().length() > 0);
+                        assertEquals("BÁO CÁO HIỆU SUẤT SUẤT CHIẾU", sheet.getRow(0).getCell(0).getStringCellValue());
                         assertEquals(2, sheet.getLastRowNum());
                         assertEquals(showtime2.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
                 }
