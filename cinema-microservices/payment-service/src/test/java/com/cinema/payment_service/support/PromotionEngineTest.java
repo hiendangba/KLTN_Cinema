@@ -7,7 +7,9 @@ import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
+import com.cinema.payment_service.grpc.UserGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
+import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
 import com.cinema.payment_service.repository.PromotionFilmRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
@@ -44,6 +46,12 @@ class PromotionEngineTest {
 
     @Mock
     private BookingGrpcClient bookingGrpcClient;
+
+    @Mock
+    private PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
+
+    @Mock
+    private UserGrpcClient userGrpcClient;
 
     @Spy
     private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
@@ -104,7 +112,9 @@ class PromotionEngineTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(200000));
+                BigDecimal.valueOf(200000),
+                0L,
+                0L);
 
         PromotionPreviewRequest request = new PromotionPreviewRequest();
         request.setBookingId(bookingId);
@@ -113,6 +123,16 @@ class PromotionEngineTest {
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(promotionRepository.findById(promotionId)).thenReturn(java.util.Optional.of(promotion));
+        when(userGrpcClient.getUserBasicById(requesterUserId)).thenReturn(new UserGrpcClient.UserBasicInfo(
+                requesterUserId,
+                "Customer",
+                0L,
+                BigDecimal.ZERO,
+                "SILVER",
+                "Silver",
+                2,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE));
 
         PromotionPreviewResponse response = promotionEngine.previewPromotion(request, requesterUserId);
 
@@ -171,10 +191,22 @@ class PromotionEngineTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(200000));
+                BigDecimal.valueOf(200000),
+                0L,
+                0L);
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(promotionRepository.findAllByIsDeletedFalse()).thenReturn(List.of(activePromotion, scopedPromotion));
+        when(userGrpcClient.getUserBasicById(requesterUserId)).thenReturn(new UserGrpcClient.UserBasicInfo(
+                requesterUserId,
+                "Customer",
+                0L,
+                BigDecimal.ZERO,
+                "SILVER",
+                "Silver",
+                2,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE));
 
         PromotionSelectionResponse response = promotionEngine.listSelectablePromotions(bookingId, requesterUserId);
 
@@ -221,10 +253,22 @@ class PromotionEngineTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(200000));
+                BigDecimal.valueOf(200000),
+                0L,
+                0L);
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(promotionRepository.findAllByIsDeletedFalse()).thenReturn(List.of(activePromotion));
+        when(userGrpcClient.getUserBasicById(requesterUserId)).thenReturn(new UserGrpcClient.UserBasicInfo(
+                requesterUserId,
+                "Customer",
+                0L,
+                BigDecimal.ZERO,
+                "SILVER",
+                "Silver",
+                2,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE));
 
         PromotionSelectionResponse first = promotionEngine.listSelectablePromotions(bookingId, requesterUserId);
         PromotionSelectionResponse second = promotionEngine.listSelectablePromotions(bookingId, requesterUserId);
@@ -234,5 +278,124 @@ class PromotionEngineTest {
         assertTrue(first.promotions().get(0).applicable());
         org.mockito.Mockito.verify(bookingGrpcClient, org.mockito.Mockito.times(1)).getBookingPaymentContext(bookingId);
         org.mockito.Mockito.verify(promotionRepository, org.mockito.Mockito.times(1)).findAllByIsDeletedFalse();
+    }
+
+    @Test
+    void previewPromotion_shouldRejectWhenUserRankBelowMinimum() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID promotionId = UUID.randomUUID();
+
+        Promotion promotion = new Promotion();
+        promotion.setId(promotionId);
+        promotion.setCode("SILVER10");
+        promotion.setName("Silver 10%");
+        promotion.setDiscountType(PromotionDiscountType.PERCENT);
+        promotion.setDiscountValue(BigDecimal.TEN);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setIsDeleted(false);
+        promotion.setMinCustomerLifetimeAmount(BigDecimal.valueOf(100000));
+        promotion.setStartAt(LocalDateTime.now().minusDays(1));
+        promotion.setEndAt(LocalDateTime.now().plusDays(1));
+
+        PromotionPreviewRequest request = new PromotionPreviewRequest();
+        request.setPromotionId(promotionId);
+        request.setOrderAmount(BigDecimal.valueOf(200000));
+
+        when(promotionRepository.findById(promotionId)).thenReturn(java.util.Optional.of(promotion));
+        when(userGrpcClient.getUserBasicById(requesterUserId)).thenReturn(new UserGrpcClient.UserBasicInfo(
+                requesterUserId,
+                "Customer",
+                0L,
+                BigDecimal.ZERO,
+                "BRONZE",
+                "Bronze",
+                1,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE));
+
+        PromotionPreviewResponse response = promotionEngine.previewPromotion(request, requesterUserId);
+
+        assertEquals(BigDecimal.ZERO.setScale(0), response.discountAmount());
+        assertTrue(response.note().contains("lifetime spending"));
+    }
+
+    @Test
+    void previewPromotion_shouldRejectWhenUserAlreadyUsedPromotion() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID promotionId = UUID.randomUUID();
+
+        Promotion promotion = new Promotion();
+        promotion.setId(promotionId);
+        promotion.setCode("ONCEONLY");
+        promotion.setName("One time promo");
+        promotion.setDiscountType(PromotionDiscountType.PERCENT);
+        promotion.setDiscountValue(BigDecimal.TEN);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setIsDeleted(false);
+        promotion.setStartAt(LocalDateTime.now().minusDays(1));
+        promotion.setEndAt(LocalDateTime.now().plusDays(1));
+
+        PromotionPreviewRequest request = new PromotionPreviewRequest();
+        request.setPromotionId(promotionId);
+        request.setOrderAmount(BigDecimal.valueOf(200000));
+
+        when(promotionRepository.findById(promotionId)).thenReturn(java.util.Optional.of(promotion));
+        when(userGrpcClient.getUserBasicById(requesterUserId)).thenReturn(new UserGrpcClient.UserBasicInfo(
+                requesterUserId,
+                "Customer",
+                0L,
+                BigDecimal.ZERO,
+                "GOLD",
+                "Gold",
+                3,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE));
+        when(paymentTransactionPromotionRepository.existsReachedPaidUsageByPromotionIdAndUserId(promotionId, requesterUserId))
+                .thenReturn(true);
+
+        PromotionPreviewResponse response = promotionEngine.previewPromotion(request, requesterUserId);
+
+        assertEquals(BigDecimal.ZERO.setScale(0), response.discountAmount());
+        assertEquals("You have already used this promotion", response.note());
+    }
+
+    @Test
+    void previewPromotion_shouldRejectWhenGlobalUsageLimitReached() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID promotionId = UUID.randomUUID();
+
+        Promotion promotion = new Promotion();
+        promotion.setId(promotionId);
+        promotion.setCode("LIMITED");
+        promotion.setName("Limited promo");
+        promotion.setDiscountType(PromotionDiscountType.PERCENT);
+        promotion.setDiscountValue(BigDecimal.TEN);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setIsDeleted(false);
+        promotion.setMaxUsageCount(5);
+        promotion.setStartAt(LocalDateTime.now().minusDays(1));
+        promotion.setEndAt(LocalDateTime.now().plusDays(1));
+
+        PromotionPreviewRequest request = new PromotionPreviewRequest();
+        request.setPromotionId(promotionId);
+        request.setOrderAmount(BigDecimal.valueOf(200000));
+
+        when(promotionRepository.findById(promotionId)).thenReturn(java.util.Optional.of(promotion));
+        when(userGrpcClient.getUserBasicById(requesterUserId)).thenReturn(new UserGrpcClient.UserBasicInfo(
+                requesterUserId,
+                "Customer",
+                0L,
+                BigDecimal.ZERO,
+                "GOLD",
+                "Gold",
+                3,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE));
+        when(paymentTransactionPromotionRepository.countReachedPaidUsageByPromotionId(promotionId)).thenReturn(5L);
+
+        PromotionPreviewResponse response = promotionEngine.previewPromotion(request, requesterUserId);
+
+        assertEquals(BigDecimal.ZERO.setScale(0), response.discountAmount());
+        assertEquals("Promotion usage limit has been reached", response.note());
     }
 }

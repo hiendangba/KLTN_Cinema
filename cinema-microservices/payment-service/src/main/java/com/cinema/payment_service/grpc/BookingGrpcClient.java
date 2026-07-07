@@ -49,7 +49,9 @@ public class BookingGrpcClient {
                                                             BigDecimal amount,
                                                             String paymentMethod,
                                                             String providerRef,
-                                                            String orderInvoiceNumber) {
+                                                            String orderInvoiceNumber,
+                                                            Long loyaltyPointsUsed,
+                                                            Long loyaltyPointsEarned) {
         try {
             ConfirmBookingPaymentReply reply = bookingBlockingStub.confirmBookingPayment(
                     ConfirmBookingPaymentRequest.newBuilder()
@@ -58,6 +60,8 @@ public class BookingGrpcClient {
                             .setPaymentMethod(paymentMethod == null ? "" : paymentMethod)
                             .setProviderRef(providerRef == null ? "" : providerRef)
                             .setOrderInvoiceNumber(orderInvoiceNumber == null ? "" : orderInvoiceNumber)
+                            .setLoyaltyPointsUsed(normalizePoints(loyaltyPointsUsed))
+                            .setLoyaltyPointsEarned(normalizePoints(loyaltyPointsEarned))
                             .build());
 
             if (!reply.getSuccess()) {
@@ -75,7 +79,9 @@ public class BookingGrpcClient {
                                                                 String promotionCode,
                                                                 String promotionName,
                                                                 BigDecimal promotionDiscountAmount,
-                                                                BigDecimal payableAmount) {
+                                                                BigDecimal payableAmount,
+                                                                Long loyaltyPointsUsed,
+                                                                Long loyaltyPointsEarned) {
         try {
             UpsertBookingPromotionSnapshotReply reply = bookingBlockingStub.upsertBookingPromotionSnapshot(
                     UpsertBookingPromotionSnapshotRequest.newBuilder()
@@ -85,6 +91,8 @@ public class BookingGrpcClient {
                             .setPromotionName(promotionName == null ? "" : promotionName)
                             .setPromotionDiscountAmount(promotionDiscountAmount == null ? "0" : promotionDiscountAmount.toPlainString())
                             .setPayableAmount(payableAmount == null ? "0" : payableAmount.toPlainString())
+                            .setLoyaltyPointsUsed(normalizePoints(loyaltyPointsUsed))
+                            .setLoyaltyPointsEarned(normalizePoints(loyaltyPointsEarned))
                             .build());
 
             if (!reply.getSuccess()) {
@@ -119,7 +127,9 @@ public class BookingGrpcClient {
                     blankToNull(payload.getPromotionCode()),
                     blankToNull(payload.getPromotionName()),
                     parseAmount(payload.getPromotionDiscountAmount()),
-                    parseAmount(payload.getPayableAmount()));
+                    parseAmount(payload.getPayableAmount()),
+                    normalizePoints(payload.getLoyaltyPointsUsed()),
+                    normalizePoints(payload.getLoyaltyPointsEarned()));
         } catch (Exception ex) {
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
@@ -148,6 +158,14 @@ public class BookingGrpcClient {
         return value == null || value.isBlank() ? null : value;
     }
 
+    private long normalizePoints(Long points) {
+        return points == null || points < 0 ? 0L : points;
+    }
+
+    private long normalizePoints(long points) {
+        return Math.max(0L, points);
+    }
+
     public record BookingPaymentContext(
             UUID bookingId,
             UUID showtimeId,
@@ -164,7 +182,9 @@ public class BookingGrpcClient {
             String promotionCode,
             String promotionName,
             BigDecimal promotionDiscountAmount,
-            BigDecimal payableAmount) {
+            BigDecimal payableAmount,
+            long loyaltyPointsUsed,
+            long loyaltyPointsEarned) {
     }
 
     public record BookingPaymentConfirmation(BookingPaymentContext booking) {

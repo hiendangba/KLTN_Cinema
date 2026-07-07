@@ -12,7 +12,9 @@ import com.cinema.payment_service.entity.PromotionFilm;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
+import com.cinema.payment_service.grpc.UserGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
+import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
 import com.cinema.payment_service.repository.PromotionFilmRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
@@ -45,7 +47,9 @@ public class PromotionEngine {
     private final PromotionRepository promotionRepository;
     private final PromotionCinemaRepository promotionCinemaRepository;
     private final PromotionFilmRepository promotionFilmRepository;
+    private final PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
     private final BookingGrpcClient bookingGrpcClient;
+    private final UserGrpcClient userGrpcClient;
     private final PaymentMapper paymentMapper;
     private final ConcurrentHashMap<PromotionSelectionCacheKey, CachedPromotionSelection> selectionCache = new ConcurrentHashMap<>();
 
@@ -67,12 +71,14 @@ public class PromotionEngine {
         if (baseAmount.compareTo(ZERO) <= 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
+        UserGrpcClient.UserBasicInfo user = loadUser(requesterUserId);
 
         PromotionQuote quote = resolvePromotion(
                 request.getPromotionId(),
                 normalizePromotionCode(request.getPromotionCode()),
                 baseAmount,
                 bookingContext,
+                user,
                 requesterUserId,
                 false);
 
@@ -92,9 +98,10 @@ public class PromotionEngine {
         BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
         ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
         BigDecimal baseAmount = normalizeAmount(bookingContext.finalAmount());
+        UserGrpcClient.UserBasicInfo user = loadUser(requesterUserId);
         List<PromotionSelectionItemResponse> promotions = promotionRepository.findAllByIsDeletedFalse().stream()
                 .map(promotion -> {
-                    PromotionQuote quote = evaluatePromotion(promotion, baseAmount, bookingContext, requesterUserId);
+                    PromotionQuote quote = evaluatePromotion(promotion, baseAmount, bookingContext, user, requesterUserId);
                     boolean applicable = quote.discountAmount().compareTo(ZERO) > 0;
                     return paymentMapper.toPromotionSelectionItemResponse(quote, applicable, baseAmount);
                 })
@@ -121,6 +128,7 @@ public class PromotionEngine {
                 normalizePromotionCode(promotionCode),
                 normalizeAmount(baseAmount),
                 bookingContext,
+                loadUser(requesterUserId),
                 requesterUserId,
                 true);
     }
@@ -138,6 +146,7 @@ public class PromotionEngine {
             String promotionCode,
             BigDecimal baseAmount,
             BookingGrpcClient.BookingPaymentContext bookingContext,
+            UserGrpcClient.UserBasicInfo user,
             UUID requesterUserId,
             boolean strict) {
         if (promotionId == null && !StringUtils.hasText(promotionCode)) {
@@ -154,7 +163,7 @@ public class PromotionEngine {
             return new PromotionQuote(fallbackCode, "", ZERO, "Promotion code is not supported", null);
         }
 
-        PromotionQuote quote = evaluatePromotion(promotion, baseAmount, bookingContext, requesterUserId);
+        PromotionQuote quote = evaluatePromotion(promotion, baseAmount, bookingContext, user, requesterUserId);
         if (quote.discountAmount().compareTo(ZERO) <= 0) {
             if (strict) {
                 throw resolveStrictPromotionException(promotion, quote);
@@ -167,6 +176,7 @@ public class PromotionEngine {
     private PromotionQuote evaluatePromotion(Promotion promotion,
                                              BigDecimal baseAmount,
                                              BookingGrpcClient.BookingPaymentContext bookingContext,
+                                             UserGrpcClient.UserBasicInfo user,
                                              UUID requesterUserId) {
         if (promotion == null) {
             return new PromotionQuote("", "", ZERO, "Promotion code is not supported", null);
@@ -206,6 +216,30 @@ public class PromotionEngine {
                     promotion.getName(),
                     ZERO,
                     "Min order is " + normalizeAmount(promotion.getMinOrderAmount()),
+                    promotion.getId());
+        }
+        if (!matchesCustomerRank(promotion, user)) {
+            return new PromotionQuote(
+                    promotion.getCode(),
+                    promotion.getName(),
+                    ZERO,
+                    buildRankIneligibleNote(promotion),
+                    promotion.getId());
+        }
+        if (hasUserReachedPromotionUsageLimit(promotion.getId(), requesterUserId)) {
+            return new PromotionQuote(
+                    promotion.getCode(),
+                    promotion.getName(),
+                    ZERO,
+                    "You have already used this promotion",
+                    promotion.getId());
+        }
+        if (hasReachedGlobalPromotionUsageLimit(promotion)) {
+            return new PromotionQuote(
+                    promotion.getCode(),
+                    promotion.getName(),
+                    ZERO,
+                    "Promotion usage limit has been reached",
                     promotion.getId());
         }
 
@@ -314,6 +348,32 @@ public class PromotionEngine {
         return true;
     }
 
+    private boolean matchesCustomerRank(Promotion promotion, UserGrpcClient.UserBasicInfo user) {
+        if (promotion == null || promotion.getMinCustomerLifetimeAmount() == null) {
+            return true;
+        }
+        BigDecimal userLifetimePaidAmount = user == null
+                ? ZERO
+                : normalizeAmount(user.lifetimePaidAmount());
+        return userLifetimePaidAmount.compareTo(normalizeAmount(promotion.getMinCustomerLifetimeAmount())) >= 0;
+    }
+
+    private boolean hasUserReachedPromotionUsageLimit(UUID promotionId, UUID userId) {
+        if (promotionId == null || userId == null) {
+            return false;
+        }
+        return paymentTransactionPromotionRepository
+                .existsReachedPaidUsageByPromotionIdAndUserId(promotionId, userId);
+    }
+
+    private boolean hasReachedGlobalPromotionUsageLimit(Promotion promotion) {
+        if (promotion == null || promotion.getId() == null || promotion.getMaxUsageCount() == null) {
+            return false;
+        }
+        return paymentTransactionPromotionRepository.countReachedPaidUsageByPromotionId(promotion.getId())
+                >= promotion.getMaxUsageCount();
+    }
+
     private BigDecimal calculateDiscount(Promotion promotion, BigDecimal baseAmount) {
         BigDecimal normalizedBaseAmount = normalizeAmount(baseAmount);
         BigDecimal discount = ZERO;
@@ -340,6 +400,20 @@ public class PromotionEngine {
             case PERCENT -> "Applied " + normalizeAmount(promotion.getDiscountValue()) + "% discount";
             case FIXED -> "Applied fixed " + normalizeAmount(promotion.getDiscountValue()) + " VND discount";
         };
+    }
+
+    private String buildRankIneligibleNote(Promotion promotion) {
+        BigDecimal minAmount = promotion == null || promotion.getMinCustomerLifetimeAmount() == null
+                ? ZERO
+                : normalizeAmount(promotion.getMinCustomerLifetimeAmount());
+        return "Promotion requires lifetime spending of " + minAmount + " or higher";
+    }
+
+    private UserGrpcClient.UserBasicInfo loadUser(UUID requesterUserId) {
+        if (requesterUserId == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        return userGrpcClient.getUserBasicById(requesterUserId);
     }
 
     private String normalizePromotionCode(String code) {

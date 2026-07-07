@@ -21,6 +21,8 @@ public enum PromotionField {
     DISCOUNT_VALUE("discountValue", BigDecimal.class),
     MIN_ORDER_AMOUNT("minOrderAmount", BigDecimal.class),
     MAX_DISCOUNT_AMOUNT("maxDiscountAmount", BigDecimal.class),
+    MIN_CUSTOMER_LIFETIME_AMOUNT("minCustomerLifetimeAmount", BigDecimal.class),
+    MAX_USAGE_COUNT("maxUsageCount", Integer.class),
     STATUS("status", PromotionStatus.class),
     START_AT("startAt", LocalDateTime.class),
     END_AT("endAt", LocalDateTime.class),
@@ -80,6 +82,8 @@ public enum PromotionField {
             case DISCOUNT_VALUE -> promotion.getDiscountValue();
             case MIN_ORDER_AMOUNT -> promotion.getMinOrderAmount();
             case MAX_DISCOUNT_AMOUNT -> promotion.getMaxDiscountAmount();
+            case MIN_CUSTOMER_LIFETIME_AMOUNT -> promotion.getMinCustomerLifetimeAmount();
+            case MAX_USAGE_COUNT -> promotion.getMaxUsageCount();
             case STATUS -> promotion.getStatus();
             case START_AT -> promotion.getStartAt();
             case END_AT -> promotion.getEndAt();

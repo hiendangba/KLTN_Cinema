@@ -26,6 +26,10 @@ public class PromotionResponse {
     private BigDecimal discountValue;
     private BigDecimal minOrderAmount;
     private BigDecimal maxDiscountAmount;
+    private BigDecimal minCustomerLifetimeAmount;
+    private Integer maxUsageCount;
+    private Long usedCount;
+    private Long remainingUsageCount;
     private PromotionStatus status;
     private LocalDateTime startAt;
     private LocalDateTime endAt;

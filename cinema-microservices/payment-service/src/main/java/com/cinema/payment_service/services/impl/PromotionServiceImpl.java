@@ -22,6 +22,7 @@ import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
 import com.cinema.payment_service.repository.PromotionFilmRepository;
+import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
 import com.cinema.payment_service.services.PromotionService;
 import com.cinema.payment_service.support.PromotionEngine;
@@ -52,6 +53,7 @@ public class PromotionServiceImpl implements PromotionService {
     private final PromotionRepository promotionRepository;
     private final PromotionCinemaRepository promotionCinemaRepository;
     private final PromotionFilmRepository promotionFilmRepository;
+    private final PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
     private final CinemaGrpcClient cinemaGrpcClient;
     private final PaymentMapper paymentMapper;
     private final PromotionEngine promotionEngine;
@@ -121,10 +123,13 @@ public class PromotionServiceImpl implements PromotionService {
         UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
         Promotion promotion = getPromotionEntity(id);
         ensureCanViewPromotion(role, requesterUserId, promotion);
+        long usedCount = getUsedCount(promotion.getId());
         return paymentMapper.toPromotionResponse(
                 promotion,
                 loadCinemaIds(promotion.getId()),
-                loadFilmIds(promotion.getId()));
+                loadFilmIds(promotion.getId()),
+                usedCount,
+                calculateRemainingUsageCount(promotion, usedCount));
     }
 
     @Override
@@ -203,6 +208,13 @@ public class PromotionServiceImpl implements PromotionService {
         }
         if (request.getMaxDiscountAmount() != null
                 && request.getMaxDiscountAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        if (request.getMinCustomerLifetimeAmount() != null
+                && request.getMinCustomerLifetimeAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        if (request.getMaxUsageCount() != null && request.getMaxUsageCount() <= 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
     }
@@ -297,6 +309,8 @@ public class PromotionServiceImpl implements PromotionService {
         promotion.setDiscountValue(normalizeAmount(request.getDiscountValue()));
         promotion.setMinOrderAmount(normalizeNullableAmount(request.getMinOrderAmount()));
         promotion.setMaxDiscountAmount(normalizeNullableAmount(request.getMaxDiscountAmount()));
+        promotion.setMinCustomerLifetimeAmount(normalizeNullableAmount(request.getMinCustomerLifetimeAmount()));
+        promotion.setMaxUsageCount(request.getMaxUsageCount());
         promotion.setStartAt(request.getStartAt());
         promotion.setEndAt(request.getEndAt());
         promotion.setIsDeleted(false);
@@ -534,13 +548,51 @@ public class PromotionServiceImpl implements PromotionService {
                 .toList();
         Map<UUID, List<UUID>> cinemaMap = loadCinemaIdsByPromotionIds(promotionIds);
         Map<UUID, List<UUID>> filmMap = loadFilmIdsByPromotionIds(promotionIds);
+        Map<UUID, Long> usageMap = loadUsedCountByPromotionIds(promotionIds);
 
         return promotions.stream()
-                .map(promotion -> paymentMapper.toPromotionResponse(
-                        promotion,
-                        cinemaMap.getOrDefault(promotion.getId(), List.of()),
-                        filmMap.getOrDefault(promotion.getId(), List.of())))
+                .map(promotion -> {
+                    long usedCount = usageMap.getOrDefault(promotion.getId(), 0L);
+                    return paymentMapper.toPromotionResponse(
+                            promotion,
+                            cinemaMap.getOrDefault(promotion.getId(), List.of()),
+                            filmMap.getOrDefault(promotion.getId(), List.of()),
+                            usedCount,
+                            calculateRemainingUsageCount(promotion, usedCount));
+                })
                 .toList();
+    }
+
+    private Map<UUID, Long> loadUsedCountByPromotionIds(List<UUID> promotionIds) {
+        if (promotionIds == null || promotionIds.isEmpty()) {
+            return Map.of();
+        }
+        List<PaymentTransactionPromotionRepository.PromotionUsageSummary> usageSummaries =
+                paymentTransactionPromotionRepository.summarizeReachedPaidUsageByPromotionIds(promotionIds);
+        if (usageSummaries == null || usageSummaries.isEmpty()) {
+            return Map.of();
+        }
+        return usageSummaries.stream()
+                .filter(summary -> summary != null && summary.getPromotionId() != null)
+                .collect(Collectors.toMap(
+                        PaymentTransactionPromotionRepository.PromotionUsageSummary::getPromotionId,
+                        PaymentTransactionPromotionRepository.PromotionUsageSummary::getUsedCount,
+                        Long::max,
+                        LinkedHashMap::new));
+    }
+
+    private long getUsedCount(UUID promotionId) {
+        if (promotionId == null) {
+            return 0L;
+        }
+        return paymentTransactionPromotionRepository.countReachedPaidUsageByPromotionId(promotionId);
+    }
+
+    private Long calculateRemainingUsageCount(Promotion promotion, long usedCount) {
+        if (promotion == null || promotion.getMaxUsageCount() == null) {
+            return null;
+        }
+        return Math.max(0L, (long) promotion.getMaxUsageCount() - usedCount);
     }
 
     private List<UUID> loadCinemaIds(UUID promotionId) {

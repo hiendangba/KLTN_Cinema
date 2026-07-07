@@ -240,6 +240,10 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                             .setCustomerRankName(user.getCustomerRank() == null
                                     ? ""
                                     : blankToEmpty(user.getCustomerRank().name()))
+                            .setCustomerRankLevel(user.getCustomerRank() == null
+                                    || user.getCustomerRank().level() == null
+                                    ? 0
+                                    : user.getCustomerRank().level())
                             .setEarningAmountUnit(user.getCustomerRank() == null
                                     || user.getCustomerRank().earningAmountUnit() == null
                                     ? "1000"

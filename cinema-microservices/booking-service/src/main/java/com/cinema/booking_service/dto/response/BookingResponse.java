@@ -35,6 +35,10 @@ public class BookingResponse {
     private String promotionCode;
     private String promotionName;
     private BigDecimal promotionDiscountAmount;
+    @Setter
+    private Long loyaltyPointsUsed;
+    @Setter
+    private Long loyaltyPointsEarned;
     private BigDecimal payableAmount;
     private LocalDateTime reservedUntil;
     private List<BookingSeatItemResponse> seatItems;

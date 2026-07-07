@@ -149,6 +149,7 @@ class PaymentSessionServiceImplTest {
                 BigDecimal.ZERO,
                 "BRONZE",
                 "Bronze",
+                1,
                 BigDecimal.valueOf(1000),
                 BigDecimal.ONE);
     }
@@ -177,7 +178,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(180000));
+                BigDecimal.valueOf(180000),
+                0L,
+                0L);
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
@@ -210,7 +213,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO.setScale(0),
-                BigDecimal.valueOf(180000).setScale(0));
+                BigDecimal.valueOf(180000).setScale(0),
+                0L,
+                180L);
     }
 
     @Test
@@ -237,7 +242,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(180000));
+                BigDecimal.valueOf(180000),
+                0L,
+                0L);
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
@@ -285,7 +292,9 @@ class PaymentSessionServiceImplTest {
                 "CINEMASTAR10",
                 "CinemaStar 10%",
                 BigDecimal.valueOf(18000).setScale(0),
-                BigDecimal.valueOf(162000).setScale(0));
+                BigDecimal.valueOf(162000).setScale(0),
+                0L,
+                162L);
     }
 
     @Test
@@ -313,7 +322,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(180000));
+                BigDecimal.valueOf(180000),
+                0L,
+                0L);
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
@@ -351,7 +362,9 @@ class PaymentSessionServiceImplTest {
                 "CINEMASTAR10",
                 "CinemaStar 10%",
                 BigDecimal.valueOf(18000).setScale(0),
-                BigDecimal.valueOf(162000).setScale(0));
+                BigDecimal.valueOf(162000).setScale(0),
+                0L,
+                162L);
     }
 
     @Test
@@ -378,7 +391,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(180000));
+                BigDecimal.valueOf(180000),
+                0L,
+                0L);
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
@@ -391,6 +406,7 @@ class PaymentSessionServiceImplTest {
                         BigDecimal.ZERO,
                         "GOLD",
                         "Gold",
+                        3,
                         BigDecimal.valueOf(1000),
                         BigDecimal.valueOf(2)));
         stubSuccessfulCheckout();
@@ -420,7 +436,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO.setScale(0),
-                BigDecimal.valueOf(160000).setScale(0));
+                BigDecimal.valueOf(160000).setScale(0),
+                20000L,
+                320L);
     }
 
     @Test
@@ -447,7 +465,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(180001));
+                BigDecimal.valueOf(180001),
+                0L,
+                0L);
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
@@ -492,7 +512,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(180000));
+                BigDecimal.valueOf(180000),
+                0L,
+                0L);
 
         when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
@@ -505,6 +527,7 @@ class PaymentSessionServiceImplTest {
                         BigDecimal.ZERO,
                         "BRONZE",
                         "Bronze",
+                        1,
                         BigDecimal.valueOf(1000),
                         BigDecimal.ONE));
 
@@ -753,7 +776,9 @@ class PaymentSessionServiceImplTest {
                 transaction.getAmount(),
                 transaction.getPaymentMethod(),
                 null,
-                transaction.getOrderInvoiceNumber());
+                transaction.getOrderInvoiceNumber(),
+                0L,
+                180L);
     }
 
     @Test
@@ -789,7 +814,9 @@ class PaymentSessionServiceImplTest {
                 transaction.getAmount(),
                 transaction.getPaymentMethod(),
                 null,
-                transaction.getOrderInvoiceNumber());
+                transaction.getOrderInvoiceNumber(),
+                20000L,
+                160L);
         verify(paymentLoyaltyOutboxService).enqueueIfNeeded(transaction, "completeSession");
     }
 
@@ -818,7 +845,9 @@ class PaymentSessionServiceImplTest {
                 transaction.getAmount(),
                 transaction.getPaymentMethod(),
                 null,
-                transaction.getOrderInvoiceNumber());
+                transaction.getOrderInvoiceNumber(),
+                0L,
+                180L);
     }
 
     @Test
@@ -1415,7 +1444,9 @@ class PaymentSessionServiceImplTest {
                 transaction.getAmount(),
                 transaction.getPaymentMethod(),
                 transaction.getProviderRef(),
-                transaction.getOrderInvoiceNumber());
+                transaction.getOrderInvoiceNumber(),
+                20000L,
+                180L);
         verify(paymentLoyaltyOutboxService).enqueueIfNeeded(transaction, "webhook");
     }
 
@@ -1441,7 +1472,68 @@ class PaymentSessionServiceImplTest {
                 transaction.getAmount(),
                 transaction.getPaymentMethod(),
                 transaction.getProviderRef(),
-                transaction.getOrderInvoiceNumber());
+                transaction.getOrderInvoiceNumber(),
+                0L,
+                150L);
+    }
+
+    @Test
+    void completeSession_shouldRejectWhenPromotionAlreadyUsedByUser() {
+        UUID bookingId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID promotionId = UUID.randomUUID();
+
+        PaymentTransaction transaction = buildPendingTransaction("PAY-" + UUID.randomUUID(), BigDecimal.valueOf(200000));
+        transaction.setBookingId(bookingId);
+        transaction.setUserId(userId);
+        transaction.setPromotionCode("ONCEONLY");
+        transaction.setPromotionName("One time promo");
+        transaction.setPromotionDiscountAmount(BigDecimal.valueOf(20000));
+
+        PaymentTransactionPromotion snapshot = buildTransactionPromotion(transaction.getId(), promotionId, "ONCEONLY");
+        Promotion promotion = buildPromotion(promotionId, "ONCEONLY");
+
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(transaction));
+        when(paymentTransactionPromotionRepository.findAllByPaymentTransactionIdOrderByApplyOrderAsc(transaction.getId()))
+                .thenReturn(List.of(snapshot));
+        when(promotionRepository.findByIdForUpdate(promotionId)).thenReturn(Optional.of(promotion));
+        when(paymentTransactionPromotionRepository.existsReachedPaidUsageByPromotionIdAndUserId(promotionId, userId))
+                .thenReturn(true);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> paymentSessionService.completeSession(bookingId, userId, HeaderNames.ROLE_CUSTOMER));
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.getErrorCode());
+        verify(bookingGrpcClient, never()).confirmBookingPayment(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void handleMomoReturn_shouldRejectWhenPromotionUsageLimitReached() {
+        UUID promotionId = UUID.randomUUID();
+        PaymentTransaction transaction = buildPendingTransaction("PAY-" + UUID.randomUUID(), BigDecimal.valueOf(200000));
+        transaction.setPromotionCode("LIMITED");
+        transaction.setPromotionName("Limited promo");
+        transaction.setPromotionDiscountAmount(BigDecimal.valueOf(20000));
+        PaymentTransactionPromotion snapshot = buildTransactionPromotion(transaction.getId(), promotionId, "LIMITED");
+        Promotion promotion = buildPromotion(promotionId, "LIMITED");
+        promotion.setMaxUsageCount(1);
+        MomoIpnRequest request = buildSignedMomoRequest(transaction.getOrderInvoiceNumber(), 200000L, 0, "Successful.", 123456789L);
+
+        when(momoGatewayProperties.getAccessKey()).thenReturn("access-key");
+        when(momoGatewayProperties.getSecretKey()).thenReturn("secret-key");
+        when(paymentTransactionRepository.findByOrderInvoiceNumber(transaction.getOrderInvoiceNumber()))
+                .thenReturn(Optional.of(transaction));
+        when(paymentTransactionPromotionRepository.findAllByPaymentTransactionIdOrderByApplyOrderAsc(transaction.getId()))
+                .thenReturn(List.of(snapshot));
+        when(promotionRepository.findByIdForUpdate(promotionId)).thenReturn(Optional.of(promotion));
+        when(paymentTransactionPromotionRepository.countReachedPaidUsageByPromotionId(promotionId)).thenReturn(1L);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> paymentSessionService.handleMomoReturn(request));
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.getErrorCode());
+        verify(bookingGrpcClient, never()).confirmBookingPayment(any(), any(), any(), any(), any(), any(), any());
     }
 
     private PaymentTransaction buildPendingTransaction(String orderId, BigDecimal amount) {
@@ -1588,7 +1680,9 @@ class PaymentSessionServiceImplTest {
                 null,
                 null,
                 BigDecimal.ZERO,
-                BigDecimal.valueOf(180000));
+                BigDecimal.valueOf(180000),
+                0L,
+                0L);
     }
 
     private PaymentTransaction buildReusableTransaction(UUID bookingId, UUID userId) {

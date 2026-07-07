@@ -28,7 +28,7 @@ import com.cinema.booking_service.grpc.CinemaGrpcClient;
 import com.cinema.booking_service.grpc.FilmGrpcClient;
 import com.cinema.booking_service.grpc.IdentityGrpcClient;
 import com.cinema.booking_service.grpc.HallGrpcClient;
-import com.cinema.booking_service.http.PaymentServiceClient;
+import com.cinema.booking_service.grpc.PaymentGrpcClient;
 import com.cinema.booking_service.grpc.SeatGrpcClient;
 import com.cinema.booking_service.grpc.ShowtimeGrpcClient;
 import com.cinema.booking_service.mapper.BookingMapper;
@@ -103,7 +103,7 @@ public class BookingServiceImpl implements BookingService {
     private final ShowtimeGrpcClient showtimeGrpcClient;
     private final SeatGrpcClient seatGrpcClient;
     private final SeatLockService seatLockService;
-    private final PaymentServiceClient paymentServiceClient;
+    private final PaymentGrpcClient paymentGrpcClient;
     private final IdentityGrpcClient identityGrpcClient;
 
     @Value("${booking.seat-lock-minutes:5}")
@@ -232,7 +232,7 @@ public class BookingServiceImpl implements BookingService {
     public BookingResponse getBookingById(UUID id, HttpServletRequest httpRequest) {
         Booking booking = getActiveBookingOrThrow(id);
         authorizeBookingRead(booking, httpRequest);
-        return toBookingResponse(booking);
+        return toBookingResponse(booking, new LinkedHashMap<>(), new LinkedHashMap<>(), Map.of());
     }
 
     @Override
@@ -242,7 +242,11 @@ public class BookingServiceImpl implements BookingService {
             HttpServletRequest httpRequest) {
         validateCustomerRole(httpRequest);
         UUID userId = resolveUserId(httpRequest);
-        return searchBookingsByScope(userId, null, request, buildActiveBookingFilters(LocalDateTime.now()));
+        return searchBookingsByScope(
+                userId,
+                null,
+                request,
+                buildActiveBookingFilters(LocalDateTime.now()));
     }
 
     @Override
@@ -252,7 +256,11 @@ public class BookingServiceImpl implements BookingService {
             HttpServletRequest httpRequest) {
         validateCustomerRole(httpRequest);
         UUID userId = resolveUserId(httpRequest);
-        return searchBookingsByScope(userId, null, request, buildPurchasedBookingFilters());
+        return searchBookingsByScope(
+                userId,
+                null,
+                request,
+                buildPurchasedBookingFilters());
     }
 
     @Override
@@ -456,7 +464,7 @@ public class BookingServiceImpl implements BookingService {
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
             UUID requesterUserId = resolveUserId(httpRequest);
-            paymentSession = paymentServiceClient.getSessionByBookingId(id, requesterUserId);
+            paymentSession = paymentGrpcClient.getSessionByBookingId(id, requesterUserId, role);
         }
 
         boolean activeStatus = booking.getBookingStatus() == BookingStatus.PENDING
@@ -545,7 +553,11 @@ public class BookingServiceImpl implements BookingService {
 
         return PageResponse.<BookingResponse>builder()
                 .data(bookings.stream()
-                        .map(booking -> toBookingResponse(booking, cinemaNameCache, hallNameCache, showtimeCache))
+                        .map(booking -> toBookingResponse(
+                                booking,
+                                cinemaNameCache,
+                                hallNameCache,
+                                showtimeCache))
                         .toList())
                 .currentPage(page)
                 .totalPages(totalPages)

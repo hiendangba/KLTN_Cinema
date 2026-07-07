@@ -32,7 +32,14 @@ public interface PaymentMapper {
     @Mapping(target = "cinemaCount", expression = "java(normalizeUuidList(cinemaIds).size())")
     @Mapping(target = "filmCount", expression = "java(normalizeUuidList(filmIds).size())")
     @Mapping(target = "activeNow", expression = "java(isActiveNow(promotion))")
-    PromotionResponse toPromotionResponse(Promotion promotion, Collection<UUID> cinemaIds, Collection<UUID> filmIds);
+    @Mapping(target = "usedCount", source = "usedCount")
+    @Mapping(target = "remainingUsageCount", source = "remainingUsageCount")
+    PromotionResponse toPromotionResponse(
+            Promotion promotion,
+            Collection<UUID> cinemaIds,
+            Collection<UUID> filmIds,
+            Long usedCount,
+            Long remainingUsageCount);
 
     @Mapping(target = "amount", source = "transaction.amount", qualifiedByName = "normalizeAmount")
     @Mapping(target = "ticketSubtotalSnapshot", source = "transaction.ticketSubtotalSnapshot", qualifiedByName = "normalizeNullableAmount")

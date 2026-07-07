@@ -236,10 +236,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 .findFirstByBookingIdOrderByTimeCreatedDesc(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
         ensureRequesterCanViewSession(transaction, requesterUserId, requesterRole);
-        return paymentMapper.toPaymentSessionResponse(
-                transaction,
-                readCheckoutFields(transaction.getCheckoutPayloadJson()),
-                extractCheckoutResponseField(transaction.getResponsePayloadJson(), "qrCodeUrl"));
+        return toPaymentSessionResponse(transaction);
     }
 
     @Override
@@ -264,6 +261,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         if (transaction.getStatus() != PaymentTransactionStatus.PENDING) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
+        ensurePromotionUsageAvailable(transaction);
 
         String normalizedRole = normalizeRole(requesterRole);
         transaction.setStatus(PaymentTransactionStatus.PAID);
@@ -287,7 +285,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     transaction.getAmount(),
                     transaction.getPaymentMethod(),
                     transaction.getProviderRef(),
-                    transaction.getOrderInvoiceNumber());
+                    transaction.getOrderInvoiceNumber(),
+                    transaction.getLoyaltyPointsUsed(),
+                    transaction.getLoyaltyPointsEarned());
         } catch (BusinessException ex) {
             log.warn(
                     "PAYMENT_COMPLETE_CONFIRM_BOOKING_FAILED transactionId={} bookingId={} requesterUserId={} requesterRole={} errorCode={}",
@@ -813,6 +813,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "ignored", true,
                     "message", "Payment session expired"));
         }
+        ensurePromotionUsageAvailable(transaction);
 
         transaction.setStatus(PaymentTransactionStatus.PAID);
         transaction.setPaidAt(parseTransactionDate(request));
@@ -835,7 +836,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     transaction.getAmount(),
                     transaction.getPaymentMethod(),
                     transaction.getProviderRef(),
-                    transaction.getOrderInvoiceNumber());
+                    transaction.getOrderInvoiceNumber(),
+                    transaction.getLoyaltyPointsUsed(),
+                    transaction.getLoyaltyPointsEarned());
         } catch (BusinessException ex) {
             log.warn(
                     "{}_CONFIRM_BOOKING_FAILED orderId={} requestId={} transactionId={} bookingId={} errorCode={}",
@@ -942,6 +945,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         throw new BusinessException(ErrorCode.FORBIDDEN);
+    }
+
+    private PaymentSessionResponse toPaymentSessionResponse(PaymentTransaction transaction) {
+        return paymentMapper.toPaymentSessionResponse(
+                transaction,
+                readCheckoutFields(transaction.getCheckoutPayloadJson()),
+                extractCheckoutResponseField(transaction.getResponsePayloadJson(), "qrCodeUrl"));
     }
 
     private void ensureRequesterCanCompleteSession(PaymentTransaction transaction, UUID requesterUserId, String requesterRole) {
@@ -1195,6 +1205,42 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         transaction.setEarningPointsPerUnit(normalizePositiveAmount(user.earningPointsPerUnit(), BigDecimal.ONE));
     }
 
+    private void ensurePromotionUsageAvailable(PaymentTransaction transaction) {
+        if (transaction == null || transaction.getId() == null || transaction.getUserId() == null) {
+            return;
+        }
+
+        List<PaymentTransactionPromotion> snapshots = paymentTransactionPromotionRepository
+                .findAllByPaymentTransactionIdOrderByApplyOrderAsc(transaction.getId());
+        if (snapshots == null || snapshots.isEmpty()) {
+            return;
+        }
+
+        for (PaymentTransactionPromotion snapshot : snapshots) {
+            if (snapshot == null || snapshot.getPromotionId() == null) {
+                continue;
+            }
+
+            Promotion promotion = promotionRepository.findByIdForUpdate(snapshot.getPromotionId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST));
+            if (Boolean.TRUE.equals(promotion.getIsDeleted())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST);
+            }
+            if (paymentTransactionPromotionRepository.existsReachedPaidUsageByPromotionIdAndUserId(
+                    promotion.getId(),
+                    transaction.getUserId())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST);
+            }
+            if (promotion.getMaxUsageCount() != null) {
+                long usedCount = paymentTransactionPromotionRepository
+                        .countReachedPaidUsageByPromotionId(promotion.getId());
+                if (usedCount >= promotion.getMaxUsageCount()) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST);
+                }
+            }
+        }
+    }
+
     private BigDecimal normalizePositiveAmount(BigDecimal value, BigDecimal fallback) {
         if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
             return fallback;
@@ -1220,7 +1266,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 requestedPromotionCode,
                 baseAmount,
                 bookingContext,
-                requesterUserId);
+                bookingContext.userId());
         List<PromotionQuote> appliedPromotions = List.of(quote);
         transaction.setPromotionCode(joinPromotionCodes(appliedPromotions));
         transaction.setPromotionName(joinPromotionNames(appliedPromotions));
@@ -1242,7 +1288,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 transaction.getPromotionCode(),
                 transaction.getPromotionName(),
                 normalizeAmount(transaction.getPromotionDiscountAmount()),
-                normalizeAmount(transaction.getAmount()));
+                normalizeAmount(transaction.getAmount()),
+                transaction.getLoyaltyPointsUsed(),
+                transaction.getLoyaltyPointsEarned());
     }
 
     private UUID resolvePromotionIdForSnapshot(PaymentTransaction transaction, List<PromotionQuote> appliedPromotions) {

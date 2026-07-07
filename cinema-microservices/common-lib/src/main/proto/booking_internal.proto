@@ -76,6 +76,8 @@ message BookingPaymentContextPayload {
   string promotion_name = 14;
   string promotion_discount_amount = 15;
   string payable_amount = 16;
+  int64 loyalty_points_used = 17;
+  int64 loyalty_points_earned = 18;
 }
 
 message GetBookingPaymentContextReply {
@@ -92,6 +94,8 @@ message UpsertBookingPromotionSnapshotRequest {
   string promotion_name = 4;
   string promotion_discount_amount = 5;
   string payable_amount = 6;
+  int64 loyalty_points_used = 7;
+  int64 loyalty_points_earned = 8;
 }
 
 message UpsertBookingPromotionSnapshotReply {
@@ -107,6 +111,8 @@ message ConfirmBookingPaymentRequest {
   string payment_method = 3;
   string order_invoice_number = 4;
   string transaction_amount = 5;
+  int64 loyalty_points_used = 6;
+  int64 loyalty_points_earned = 7;
 }
 
 message ConfirmBookingPaymentReply {

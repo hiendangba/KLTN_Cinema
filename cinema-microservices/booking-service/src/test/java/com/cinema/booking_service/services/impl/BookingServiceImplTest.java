@@ -11,6 +11,7 @@ import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.booking_service.dto.response.BookingResponse;
 import com.cinema.booking_service.dto.response.BookingRevenueReportResponse;
+import com.cinema.booking_service.dto.response.PaymentSessionSnapshotResponse;
 import com.cinema.booking_service.dto.response.ShowtimePerformanceItemResponse;
 import com.cinema.booking_service.dto.response.ShowtimePerformanceReportResponse;
 import com.cinema.booking_service.entity.Booking;
@@ -22,9 +23,9 @@ import com.cinema.booking_service.grpc.CinemaGrpcClient;
 import com.cinema.booking_service.grpc.FilmGrpcClient;
 import com.cinema.booking_service.grpc.IdentityGrpcClient;
 import com.cinema.booking_service.grpc.HallGrpcClient;
+import com.cinema.booking_service.grpc.PaymentGrpcClient;
 import com.cinema.booking_service.grpc.SeatGrpcClient;
 import com.cinema.booking_service.grpc.ShowtimeGrpcClient;
-import com.cinema.booking_service.http.PaymentServiceClient;
 import com.cinema.booking_service.mapper.BookingMapper;
 import com.cinema.booking_service.mapper.BookingSeatItemMapper;
 import com.cinema.booking_service.repository.BookingRepository;
@@ -112,7 +113,7 @@ class BookingServiceImplTest {
         private SeatLockService seatLockService;
 
         @Mock
-        private PaymentServiceClient paymentServiceClient;
+        private PaymentGrpcClient paymentGrpcClient;
 
         @Mock
         private IdentityGrpcClient identityGrpcClient;
@@ -1276,6 +1277,49 @@ class BookingServiceImplTest {
         }
 
         @Test
+        void getBookingById_shouldIncludeLoyaltyPointsInResponse() {
+                UUID userId = UUID.randomUUID();
+                UUID bookingId = UUID.randomUUID();
+                UUID cinemaId = UUID.randomUUID();
+                UUID filmId = UUID.randomUUID();
+                UUID showtimeId = UUID.randomUUID();
+                UUID hallId = UUID.randomUUID();
+                Booking booking = buildBooking(
+                                cinemaId,
+                                filmId,
+                                BookingStatus.CONFIRMED,
+                                BigDecimal.valueOf(100000),
+                                BigDecimal.ZERO);
+                booking.setId(bookingId);
+                booking.setUserId(userId);
+                booking.setShowtimeId(showtimeId);
+                booking.setPaymentStatus(PaymentStatus.PAID);
+
+                when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+                when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+                when(bookingRepository.findByIdAndIsDeletedFalse(bookingId)).thenReturn(Optional.of(booking));
+                when(bookingMapper.toResponse(booking)).thenReturn(BookingResponse.builder()
+                                .id(bookingId)
+                                .cinemaId(cinemaId)
+                                .paymentStatus(PaymentStatus.PAID)
+                                .bookingStatus(BookingStatus.CONFIRMED)
+                                .loyaltyPointsUsed(3000L)
+                                .loyaltyPointsEarned(150L)
+                                .build());
+                when(cinemaGrpcClient.getCinemaById(cinemaId))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema Star"));
+                when(showtimeGrpcClient.getShowtimeById(showtimeId))
+                                .thenReturn(showtimeSummary(showtimeId, hallId, cinemaId, filmId));
+                when(hallGrpcClient.getHallById(hallId))
+                                .thenReturn(new HallGrpcClient.HallSummary(hallId, cinemaId, "Hall 1"));
+
+                BookingResponse response = bookingService.getBookingById(bookingId, httpRequest);
+
+                assertEquals(3000L, response.getLoyaltyPointsUsed());
+                assertEquals(150L, response.getLoyaltyPointsEarned());
+        }
+
+        @Test
         void searchMyActiveBookings_shouldIncludeHallNameInResponse() {
                 UUID userId = UUID.randomUUID();
                 UUID cinemaId = UUID.randomUUID();
@@ -1315,6 +1359,55 @@ class BookingServiceImplTest {
 
                 assertEquals(1, response.getData().size());
                 assertEquals("Hall A", response.getData().get(0).getHallName());
+        }
+
+        @Test
+        void searchMyActiveBookings_shouldIncludeLoyaltyPointsInResponse() {
+                UUID userId = UUID.randomUUID();
+                UUID bookingId = UUID.randomUUID();
+                UUID cinemaId = UUID.randomUUID();
+                UUID filmId = UUID.randomUUID();
+                UUID showtimeId = UUID.randomUUID();
+                UUID hallId = UUID.randomUUID();
+                Booking booking = buildBooking(
+                                cinemaId,
+                                filmId,
+                                BookingStatus.RESERVED,
+                                BigDecimal.valueOf(100000),
+                                BigDecimal.ZERO);
+                booking.setId(bookingId);
+                booking.setShowtimeId(showtimeId);
+                booking.setPaymentStatus(PaymentStatus.UNPAID);
+                booking.setReservedUntil(LocalDateTime.now().plusMinutes(10));
+
+                when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+                when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+                when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), isNull(), any()))
+                                .thenReturn(1L);
+                when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                                eq(userId), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                                .thenReturn(List.of(booking));
+                when(bookingMapper.toResponse(booking)).thenReturn(BookingResponse.builder()
+                                .id(bookingId)
+                                .cinemaId(cinemaId)
+                                .bookingStatus(BookingStatus.RESERVED)
+                                .paymentStatus(PaymentStatus.UNPAID)
+                                .loyaltyPointsUsed(1500L)
+                                .loyaltyPointsEarned(80L)
+                                .build());
+                when(cinemaGrpcClient.getCinemaById(cinemaId))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema Star"));
+                when(showtimeGrpcClient.getShowtimeById(showtimeId))
+                                .thenReturn(showtimeSummary(showtimeId, hallId, cinemaId, filmId));
+                when(hallGrpcClient.getHallById(hallId))
+                                .thenReturn(new HallGrpcClient.HallSummary(hallId, cinemaId, "Hall A"));
+
+                var response = bookingService.searchMyActiveBookings(
+                                PageRequest.<BookingField>builder().page(1).size(10).build(), httpRequest);
+
+                assertEquals(1, response.getData().size());
+                assertEquals(1500L, response.getData().get(0).getLoyaltyPointsUsed());
+                assertEquals(80L, response.getData().get(0).getLoyaltyPointsEarned());
         }
 
         @Test
@@ -1361,6 +1454,54 @@ class BookingServiceImplTest {
         }
 
         @Test
+        void searchMyBookingHistory_shouldIncludeLoyaltyPointsInResponse() {
+                UUID userId = UUID.randomUUID();
+                UUID bookingId = UUID.randomUUID();
+                UUID cinemaId = UUID.randomUUID();
+                UUID filmId = UUID.randomUUID();
+                UUID showtimeId = UUID.randomUUID();
+                UUID hallId = UUID.randomUUID();
+                Booking booking = buildBooking(
+                                cinemaId,
+                                filmId,
+                                BookingStatus.CONFIRMED,
+                                BigDecimal.valueOf(100000),
+                                BigDecimal.ZERO);
+                booking.setId(bookingId);
+                booking.setShowtimeId(showtimeId);
+                booking.setPaymentStatus(PaymentStatus.PAID);
+
+                when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
+                when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
+                when(bookingRepositoryImpl.countWithFilter(eq(userId), isNull(), isNull(), any()))
+                                .thenReturn(1L);
+                when(bookingRepositoryImpl.searchWithPageAndSortAndFilter(
+                                eq(userId), isNull(), isNull(), eq(1), eq(10), anyList(), any()))
+                                .thenReturn(List.of(booking));
+                when(bookingMapper.toResponse(booking)).thenReturn(BookingResponse.builder()
+                                .id(bookingId)
+                                .cinemaId(cinemaId)
+                                .bookingStatus(BookingStatus.CONFIRMED)
+                                .paymentStatus(PaymentStatus.PAID)
+                                .loyaltyPointsUsed(2000L)
+                                .loyaltyPointsEarned(120L)
+                                .build());
+                when(cinemaGrpcClient.getCinemaById(cinemaId))
+                                .thenReturn(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema Star"));
+                when(showtimeGrpcClient.getShowtimeById(showtimeId))
+                                .thenReturn(showtimeSummary(showtimeId, hallId, cinemaId, filmId));
+                when(hallGrpcClient.getHallById(hallId))
+                                .thenReturn(new HallGrpcClient.HallSummary(hallId, cinemaId, "Hall B"));
+
+                var response = bookingService.searchMyBookingHistory(
+                                PageRequest.<BookingField>builder().page(1).size(10).build(), httpRequest);
+
+                assertEquals(1, response.getData().size());
+                assertEquals(2000L, response.getData().get(0).getLoyaltyPointsUsed());
+                assertEquals(120L, response.getData().get(0).getLoyaltyPointsEarned());
+        }
+
+        @Test
         void getCheckoutContext_shouldAllowCustomerOwnerWhenBookingIsActiveAndUnpaid() {
                 UUID userId = UUID.randomUUID();
                 UUID bookingId = UUID.randomUUID();
@@ -1384,7 +1525,7 @@ class BookingServiceImplTest {
                 when(httpRequest.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_CUSTOMER);
                 when(httpRequest.getHeader(HeaderNames.X_USER_ID)).thenReturn(userId.toString());
                 when(bookingRepository.findByIdAndIsDeletedFalse(bookingId)).thenReturn(Optional.of(booking));
-                when(paymentServiceClient.getSessionByBookingId(eq(bookingId), eq(userId))).thenReturn(null);
+                when(paymentGrpcClient.getSessionByBookingId(eq(bookingId), eq(userId), eq(HeaderNames.ROLE_CUSTOMER))).thenReturn(null);
                 when(bookingMapper.toResponse(booking)).thenReturn(BookingResponse.builder()
                                 .id(bookingId)
                                 .cinemaId(cinemaId)

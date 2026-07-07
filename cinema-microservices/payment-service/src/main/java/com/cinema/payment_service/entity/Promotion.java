@@ -50,6 +50,12 @@ public class Promotion {
     @Column(name = "max_discount_amount", precision = 12, scale = 2)
     private BigDecimal maxDiscountAmount;
 
+    @Column(name = "min_customer_lifetime_amount", precision = 14, scale = 2)
+    private BigDecimal minCustomerLifetimeAmount;
+
+    @Column(name = "max_usage_count")
+    private Integer maxUsageCount;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private PromotionStatus status;

@@ -42,6 +42,10 @@ public class PromotionUpsertRequest {
 
     private BigDecimal maxDiscountAmount;
 
+    private BigDecimal minCustomerLifetimeAmount;
+
+    private Integer maxUsageCount;
+
     @NotNull(message = "Promotion start time is required")
     private LocalDateTime startAt;
 

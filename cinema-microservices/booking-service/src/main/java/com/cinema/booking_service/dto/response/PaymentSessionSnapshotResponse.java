@@ -21,6 +21,8 @@ public class PaymentSessionSnapshotResponse {
     private String promotionCode;
     private String promotionName;
     private BigDecimal promotionDiscountAmount;
+    private Long loyaltyPointsUsed;
+    private Long loyaltyPointsEarned;
     private LocalDateTime expiresAt;
     private LocalDateTime paidAt;
     private LocalDateTime expiredAt;

@@ -18,6 +18,8 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
   grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9198}
     client:
       channels:
         user:

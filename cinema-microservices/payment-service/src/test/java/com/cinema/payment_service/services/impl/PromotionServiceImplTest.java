@@ -13,6 +13,7 @@ import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
+import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
 import com.cinema.payment_service.repository.PromotionFilmRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
@@ -58,6 +59,9 @@ class PromotionServiceImplTest {
     private CinemaGrpcClient cinemaGrpcClient;
 
     @Mock
+    private PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
+
+    @Mock
     private PromotionEngine promotionEngine;
 
     @Spy
@@ -99,6 +103,8 @@ class PromotionServiceImplTest {
         assertEquals("ADMIN", saved.getCreatedByRole());
         assertEquals(userId, saved.getCreatedByUserId());
         assertEquals(PromotionStatus.ACTIVE, saved.getStatus());
+        assertEquals(null, saved.getMinCustomerLifetimeAmount());
+        assertEquals(null, saved.getMaxUsageCount());
         assertEquals(SuccessMessage.PROMOTION_CREATED.getMessage(), response.getMessage());
     }
 
@@ -226,5 +232,33 @@ class PromotionServiceImplTest {
         assertEquals(1, savedFilmMappings.size());
         assertEquals(filmId, savedFilmMappings.get(0).getFilmId());
         assertEquals(SuccessMessage.PROMOTION_UPDATED.getMessage(), response.getMessage());
+    }
+
+    @Test
+    void getPromotionById_shouldReturnUsageAndEligibilityFields() {
+        UUID promotionId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        Promotion promotion = new Promotion();
+        promotion.setId(promotionId);
+        promotion.setCode("VIP10");
+        promotion.setName("VIP promo");
+        promotion.setDiscountType(PromotionDiscountType.PERCENT);
+        promotion.setDiscountValue(BigDecimal.TEN);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setIsDeleted(false);
+        promotion.setMinCustomerLifetimeAmount(BigDecimal.valueOf(100000));
+        promotion.setMaxUsageCount(10);
+
+        when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
+        when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+        when(promotionRepository.findById(promotionId)).thenReturn(Optional.of(promotion));
+        when(paymentTransactionPromotionRepository.countReachedPaidUsageByPromotionId(promotionId)).thenReturn(4L);
+
+        PromotionResponse response = promotionService.getPromotionById(promotionId, httpRequest);
+
+        assertEquals(BigDecimal.valueOf(100000), response.getMinCustomerLifetimeAmount());
+        assertEquals(10, response.getMaxUsageCount());
+        assertEquals(4L, response.getUsedCount());
+        assertEquals(6L, response.getRemainingUsageCount());
     }
 }

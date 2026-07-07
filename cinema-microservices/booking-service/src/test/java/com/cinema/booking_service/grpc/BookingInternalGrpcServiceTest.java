@@ -74,6 +74,8 @@ class BookingInternalGrpcServiceTest {
                         .setPaymentMethod("MOMO_QR")
                         .setProviderRef("provider-ref")
                         .setOrderInvoiceNumber("PAY-001")
+                        .setLoyaltyPointsUsed(3000L)
+                        .setLoyaltyPointsEarned(150L)
                         .build(),
                 observer);
 
@@ -82,6 +84,8 @@ class BookingInternalGrpcServiceTest {
         assertEquals("Booking payment confirmed successfully", observer.value.getMessage());
         assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
         assertEquals(BookingStatus.CONFIRMED, booking.getBookingStatus());
+        assertEquals(3000L, booking.getLoyaltyPointsUsed());
+        assertEquals(150L, booking.getLoyaltyPointsEarned());
         verify(bookingRepository).save(booking);
         verify(seatLockService).releaseSeats(any(UUID.class), anyList());
     }
@@ -156,6 +160,8 @@ class BookingInternalGrpcServiceTest {
                         .setPromotionName("Sale 10%")
                         .setPromotionDiscountAmount("30000")
                         .setPayableAmount("270000")
+                        .setLoyaltyPointsUsed(2000L)
+                        .setLoyaltyPointsEarned(120L)
                         .build(),
                 observer);
 
@@ -166,6 +172,8 @@ class BookingInternalGrpcServiceTest {
         assertEquals("Sale 10%", booking.getPromotionName());
         assertEquals(0, booking.getPromotionDiscountAmount().compareTo(BigDecimal.valueOf(30000)));
         assertEquals(0, booking.getPayableAmount().compareTo(BigDecimal.valueOf(270000)));
+        assertEquals(2000L, booking.getLoyaltyPointsUsed());
+        assertEquals(120L, booking.getLoyaltyPointsEarned());
         verify(bookingRepository).save(booking);
     }
 
@@ -298,6 +306,8 @@ class BookingInternalGrpcServiceTest {
         booking.setPaymentStatus(PaymentStatus.UNPAID);
         booking.setFinalAmount(BigDecimal.valueOf(300000));
         booking.setPromotionDiscountAmount(BigDecimal.ZERO);
+        booking.setLoyaltyPointsUsed(0L);
+        booking.setLoyaltyPointsEarned(0L);
         booking.setPayableAmount(BigDecimal.valueOf(300000));
         booking.setIsDeleted(false);
         booking.setReservedUntil(LocalDateTime.now().plusMinutes(5));

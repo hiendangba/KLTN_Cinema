@@ -154,6 +154,8 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
 
             booking.setPaymentStatus(PaymentStatus.PAID);
             booking.setBookingStatus(BookingStatus.CONFIRMED);
+            booking.setLoyaltyPointsUsed(normalizePoints(request.getLoyaltyPointsUsed()));
+            booking.setLoyaltyPointsEarned(normalizePoints(request.getLoyaltyPointsEarned()));
             bookingRepository.save(booking);
             seatLockService.releaseSeats(booking.getShowtimeId(), extractSeatCodes(booking.getSeatItems()));
 
@@ -212,6 +214,8 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
             booking.setPromotionCode(blankToNull(request.getPromotionCode()));
             booking.setPromotionName(blankToNull(request.getPromotionName()));
             booking.setPromotionDiscountAmount(discountAmount);
+            booking.setLoyaltyPointsUsed(normalizePoints(request.getLoyaltyPointsUsed()));
+            booking.setLoyaltyPointsEarned(normalizePoints(request.getLoyaltyPointsEarned()));
             booking.setPayableAmount(payableAmount);
             bookingRepository.save(booking);
 
@@ -523,6 +527,8 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                 .setPromotionName(booking.getPromotionName() == null ? "" : booking.getPromotionName())
                 .setPromotionDiscountAmount(booking.getPromotionDiscountAmount() == null ? "0" : booking.getPromotionDiscountAmount().toPlainString())
                 .setPayableAmount(resolvePayableAmount(booking).toPlainString())
+                .setLoyaltyPointsUsed(normalizePoints(booking.getLoyaltyPointsUsed()))
+                .setLoyaltyPointsEarned(normalizePoints(booking.getLoyaltyPointsEarned()))
                 .build();
     }
 
@@ -536,6 +542,14 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
 
     private BigDecimal normalizeAmount(BigDecimal amount) {
         return amount == null ? BigDecimal.ZERO : amount.setScale(0, RoundingMode.HALF_UP);
+    }
+
+    private long normalizePoints(Long points) {
+        return points == null || points < 0 ? 0L : points;
+    }
+
+    private long normalizePoints(long points) {
+        return Math.max(0L, points);
     }
 
     private BigDecimal resolvePayableAmount(Booking booking) {

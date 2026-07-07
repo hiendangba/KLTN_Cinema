@@ -104,6 +104,7 @@ message UserBasicPayload {
   string customer_rank_name = 6;
   string earning_amount_unit = 7;
   string earning_points_per_unit = 8;
+  int32 customer_rank_level = 9;
 }
 
 message GetUserBasicByIdReply {

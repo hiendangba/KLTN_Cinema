@@ -25,6 +25,8 @@ public interface BookingMapper {
     @Mapping(target = "promotionCode", ignore = true)
     @Mapping(target = "promotionName", ignore = true)
     @Mapping(target = "promotionDiscountAmount", ignore = true)
+    @Mapping(target = "loyaltyPointsUsed", ignore = true)
+    @Mapping(target = "loyaltyPointsEarned", ignore = true)
     @Mapping(target = "payableAmount", ignore = true)
     @Mapping(target = "isDeleted", ignore = true)
     @Mapping(target = "reservedUntil", ignore = true)

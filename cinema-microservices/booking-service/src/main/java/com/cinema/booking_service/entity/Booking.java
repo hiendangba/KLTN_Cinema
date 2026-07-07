@@ -92,6 +92,12 @@ public class Booking {
     @Column(name = "promotion_discount_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal promotionDiscountAmount;
 
+    @Column(name = "loyalty_points_used", nullable = false)
+    private Long loyaltyPointsUsed;
+
+    @Column(name = "loyalty_points_earned", nullable = false)
+    private Long loyaltyPointsEarned;
+
     @Column(name = "payable_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal payableAmount;
 
@@ -135,6 +141,12 @@ public class Booking {
         }
         if (promotionDiscountAmount == null) {
             promotionDiscountAmount = BigDecimal.ZERO;
+        }
+        if (loyaltyPointsUsed == null) {
+            loyaltyPointsUsed = 0L;
+        }
+        if (loyaltyPointsEarned == null) {
+            loyaltyPointsEarned = 0L;
         }
         if (payableAmount == null) {
             payableAmount = finalAmount.subtract(promotionDiscountAmount);

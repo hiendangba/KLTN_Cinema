@@ -58,6 +58,8 @@ spring:
           address: "${SHOWTIME_GRPC_HOST:localhost}:${SHOWTIME_GRPC_PORT:9194}"
         seat:
           address: "${SEAT_GRPC_HOST:localhost}:${SEAT_GRPC_PORT:9199}"
+        payment:
+          address: "${PAYMENT_GRPC_HOST:localhost}:${PAYMENT_GRPC_PORT:9198}"
 
 server:
   port: ${SERVER_PORT:8095}
@@ -67,4 +69,3 @@ server:
 booking:
   seat-lock-minutes: ${BOOKING_SEAT_LOCK_MINUTES:5}
   expiration-scheduler-delay-ms: ${BOOKING_EXPIRATION_SCHEDULER_DELAY_MS:1800000}
-  payment-service-url: ${PAYMENT_SERVICE_URL:http://payment-service:8098/api/payments}

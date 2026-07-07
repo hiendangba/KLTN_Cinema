@@ -72,6 +72,7 @@ public class UserGrpcClient {
                     parseAmount(payload.getLifetimePaidAmount(), BigDecimal.ZERO),
                     payload.getCustomerRankCode(),
                     payload.getCustomerRankName(),
+                    payload.getCustomerRankLevel(),
                     parseAmount(payload.getEarningAmountUnit(), BigDecimal.valueOf(1000L)),
                     parseAmount(payload.getEarningPointsPerUnit(), BigDecimal.ONE));
         } catch (Exception ex) {
@@ -94,6 +95,7 @@ public class UserGrpcClient {
             BigDecimal lifetimePaidAmount,
             String customerRankCode,
             String customerRankName,
+            Integer customerRankLevel,
             BigDecimal earningAmountUnit,
             BigDecimal earningPointsPerUnit) {
     }
