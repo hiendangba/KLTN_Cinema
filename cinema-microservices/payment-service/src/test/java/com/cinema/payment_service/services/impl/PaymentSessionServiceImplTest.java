@@ -13,6 +13,7 @@ import com.cinema.Enum.SuccessMessage;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
+import com.cinema.payment_service.dto.response.PromotionSelectionResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.entity.PaymentTransactionPromotion;
 import com.cinema.payment_service.entity.Promotion;
@@ -755,6 +756,7 @@ class PaymentSessionServiceImplTest {
         transaction.setUserId(ownerId);
         transaction.setStatus(PaymentTransactionStatus.PENDING);
         transaction.setProviderRef("OLD_PROVIDER");
+        transaction.setLoyaltyPointsEarned(180L);
 
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
                 .thenReturn(Optional.of(transaction));
@@ -819,6 +821,80 @@ class PaymentSessionServiceImplTest {
                 20000L,
                 160L);
         verify(paymentLoyaltyOutboxService).enqueueIfNeeded(transaction, "completeSession");
+    }
+
+    @Test
+    void completeSession_shouldPreserveBookingBusinessErrorCode() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        PaymentTransaction transaction = buildPendingTransaction("PAY-" + UUID.randomUUID(), BigDecimal.valueOf(180000));
+        transaction.setBookingId(bookingId);
+        transaction.setCinemaId(cinemaId);
+        transaction.setUserId(ownerId);
+        transaction.setStatus(PaymentTransactionStatus.PENDING);
+        transaction.setLoyaltyPointsEarned(180L);
+
+        when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
+                .thenReturn(Optional.of(transaction));
+        when(paymentTransactionRepository.save(any(PaymentTransaction.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(cinemaGrpcClient.getCinemasByUserId(requesterId, HeaderNames.ROLE_STAFF))
+                .thenReturn(List.of(new CinemaGrpcClient.CinemaSummary(cinemaId, "Cinema 1")));
+        when(bookingGrpcClient.confirmBookingPayment(
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any(),
+                any())).thenThrow(new BusinessException(ErrorCode.BOOKING_EXPIRED));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> paymentSessionService.completeSession(bookingId, requesterId, HeaderNames.ROLE_STAFF));
+
+        assertEquals(ErrorCode.BOOKING_EXPIRED, exception.getErrorCode());
+        assertEquals(PaymentTransactionStatus.PAID, transaction.getStatus());
+        assertEquals("BOOKING_CONFIRM_FAILED:BOOKING_EXPIRED", transaction.getFailureReason());
+        verify(bookingGrpcClient, times(1)).confirmBookingPayment(
+                bookingId,
+                transaction.getAmount(),
+                transaction.getPaymentMethod(),
+                null,
+                transaction.getOrderInvoiceNumber(),
+                0L,
+                180L);
+    }
+
+    @Test
+    void listSelectablePromotions_shouldReuseBookingContextOnce() {
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = buildBookingContext(
+                bookingId,
+                cinemaId,
+                requesterId,
+                "PENDING",
+                "UNPAID");
+
+        PromotionSelectionResponse expected = PromotionSelectionResponse.builder()
+                .bookingId(bookingId)
+                .originalAmount(BigDecimal.valueOf(180000))
+                .promotions(List.of())
+                .build();
+
+        when(bookingGrpcClient.getBookingPaymentContext(bookingId)).thenReturn(bookingContext);
+        when(promotionEngine.listSelectablePromotions(bookingContext, requesterId)).thenReturn(expected);
+
+        PromotionSelectionResponse response = paymentSessionService.listSelectablePromotions(bookingId, requesterId);
+
+        assertEquals(expected, response);
+        verify(bookingGrpcClient, times(1)).getBookingPaymentContext(bookingId);
+        verify(promotionEngine, times(1)).listSelectablePromotions(bookingContext, requesterId);
     }
 
     @Test

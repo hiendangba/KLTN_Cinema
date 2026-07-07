@@ -56,11 +56,11 @@ public class User {
     @Column(name = "account_name")
     String accountName;
 
-    @Column(name = "loyalty_points", nullable = false)
+    @Column(name = "loyalty_points")
     @Builder.Default
     Long loyaltyPoints = 0L;
 
-    @Column(name = "lifetime_paid_amount", nullable = false, precision = 14, scale = 2)
+    @Column(name = "lifetime_paid_amount", precision = 14, scale = 2)
     @Builder.Default
     BigDecimal lifetimePaidAmount = BigDecimal.ZERO;
 
@@ -91,6 +91,16 @@ public class User {
         }
         timeCreated = LocalDateTime.now();
         timeUpdated = LocalDateTime.now();
+    }
+
+    @PostLoad
+    protected void normalizeSnapshotFields() {
+        if (this.loyaltyPoints == null) {
+            this.loyaltyPoints = 0L;
+        }
+        if (this.lifetimePaidAmount == null) {
+            this.lifetimePaidAmount = BigDecimal.ZERO;
+        }
     }
 
     @PreUpdate

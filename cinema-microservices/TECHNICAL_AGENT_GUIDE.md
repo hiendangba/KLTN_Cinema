@@ -2341,6 +2341,19 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
 
 ## Changelog ngắn (2026-07-07)
 
+- `payment-service` đã bỏ nhánh nuốt lỗi booking trong `completeSession`: nếu booking trả `BusinessException` cụ thể thì API giờ giữ nguyên mã đó thay vì luôn quăng `9104`; đồng thời `listSelectablePromotions` lấy booking context một lần rồi truyền thẳng sang `PromotionEngine` để tránh gọi gRPC booking lặp.
+- `scripts/sql/2026-07-07-booking-user-snapshot-columns.sql` và `scripts/apply-booking-user-snapshot-columns.ps1` đã được thêm để apply explicit migration cho `booking_db` và `user_db` trên stack đang chạy.
+- Files chạm: `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `payment-service/src/main/java/com/cinema/payment_service/support/PromotionEngine.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImplTest.java`, `scripts/sql/2026-07-07-booking-user-snapshot-columns.sql`, `scripts/apply-booking-user-snapshot-columns.ps1`.
+- Reason: log production cho thấy lỗi thật nằm ở `booking.loyalty_points_earned`, nhưng đường đi hiện tại còn che booking business errors thành `9104` và có thêm một lần gọi booking thừa ở luồng promotion selection.
+- Verification: test regression mới cần chạy sau khi reinstall/build module payment-service; migration script có thể chạy bằng `.\scripts\apply-booking-user-snapshot-columns.ps1` hoặc pipe SQL vào `psql` khi deploy.
+- Remaining risk: nếu DB production đã được migrate bằng tay rồi, script sẽ chỉ no-op nhờ `IF NOT EXISTS`; nếu container postgres không tên `pg` thì wrapper PowerShell cần đổi `-ContainerName`.
+
+- `booking-service` và `user-service` đã nới các cột snapshot mới sang nullable để `hibernate.ddl-auto=update` có thể tự tạo schema trên DB cũ khi deploy lại, đồng thời entity load sẽ normalize về `0` cho các field điểm/doanh thu còn thiếu dữ liệu.
+- Files chạm: `booking-service/src/main/java/com/cinema/booking_service/entity/Booking.java`, `user-service/src/main/java/com/cinema/user_service/entity/User.java`.
+- Reason: log production cho thấy `booking_service` vấp `booking.loyalty_points_earned` còn `user_service` từng vấp `users.lifetime_paid_amount`; đây là dấu hiệu DB cũ chưa kịp có các cột snapshot mới, nên cần cho schema update chạy được thay vì giữ `nullable = false` ở các cột này.
+- Verification: code đọc vẫn tự normalize `null` về `0`, nên response loyalty/rank không đổi contract; cần redeploy/restart service để Hibernate apply schema update lên DB hiện tại.
+- Remaining risk: nếu DB production đã bị khóa quyền ALTER hoặc container không restart sau deploy, cần chạy migration một lần bằng tay trên `booking_db`/`user_db`.
+
 - `envoy/envoy.prod.yaml` và `envoy/envoy.local.yaml` đã thêm route `/api/customer-ranks` vào `user-service`.
 - Lý do: gateway trước đó chỉ có `/api/users`, nên request `https://cinema-api.duckdns.org/api/customer-ranks` bị 404 ở lớp Envoy dù `CustomerRankController` trong `user-service` đã map sẵn `@RequestMapping("/api/customer-ranks")`.
 - Files chạm: `envoy/envoy.prod.yaml`, `envoy/envoy.local.yaml`, `TECHNICAL_AGENT_GUIDE.md`.

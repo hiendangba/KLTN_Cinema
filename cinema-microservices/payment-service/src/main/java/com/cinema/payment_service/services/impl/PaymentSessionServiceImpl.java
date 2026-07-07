@@ -298,7 +298,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     ex.getErrorCode().name());
             transaction.setFailureReason("BOOKING_CONFIRM_FAILED:" + ex.getErrorCode().name());
             paymentTransactionRepository.save(transaction);
-            throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
+            throw ex;
         }
 
         enqueueLoyaltySync(transaction, "completeSession");
@@ -594,7 +594,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
         BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
         ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
-        return promotionEngine.listSelectablePromotions(bookingId, requesterUserId);
+        return promotionEngine.listSelectablePromotions(bookingContext, requesterUserId);
     }
 
     @Override

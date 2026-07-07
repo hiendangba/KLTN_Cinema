@@ -281,6 +281,53 @@ class PromotionEngineTest {
     }
 
     @Test
+    void listSelectablePromotions_withProvidedBookingContext_shouldNotCallBookingGrpc() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID bookingId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        UUID filmId = UUID.randomUUID();
+
+        BookingGrpcClient.BookingPaymentContext bookingContext = new BookingGrpcClient.BookingPaymentContext(
+                bookingId,
+                UUID.randomUUID(),
+                cinemaId,
+                filmId,
+                requesterUserId,
+                BigDecimal.valueOf(200000),
+                LocalDateTime.now().plusMinutes(30),
+                "PENDING",
+                "UNPAID",
+                BigDecimal.valueOf(150000),
+                BigDecimal.valueOf(50000),
+                null,
+                null,
+                null,
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(200000),
+                0L,
+                0L);
+
+        when(promotionRepository.findAllByIsDeletedFalse()).thenReturn(List.of());
+        when(userGrpcClient.getUserBasicById(requesterUserId)).thenReturn(new UserGrpcClient.UserBasicInfo(
+                requesterUserId,
+                "Customer",
+                0L,
+                BigDecimal.ZERO,
+                "SILVER",
+                "Silver",
+                2,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE));
+
+        PromotionSelectionResponse response = promotionEngine.listSelectablePromotions(bookingContext, requesterUserId);
+
+        assertEquals(bookingId, response.bookingId());
+        assertTrue(response.promotions().isEmpty());
+        org.mockito.Mockito.verifyNoInteractions(bookingGrpcClient);
+        org.mockito.Mockito.verify(promotionRepository, org.mockito.Mockito.times(1)).findAllByIsDeletedFalse();
+    }
+
+    @Test
     void previewPromotion_shouldRejectWhenUserRankBelowMinimum() {
         UUID requesterUserId = UUID.randomUUID();
         UUID promotionId = UUID.randomUUID();

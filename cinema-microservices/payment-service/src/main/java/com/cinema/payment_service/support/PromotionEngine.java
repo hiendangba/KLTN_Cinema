@@ -95,7 +95,22 @@ public class PromotionEngine {
         if (cachedResponse != null) {
             return cachedResponse;
         }
+
         BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
+        return listSelectablePromotions(bookingContext, requesterUserId);
+    }
+
+    public PromotionSelectionResponse listSelectablePromotions(BookingGrpcClient.BookingPaymentContext bookingContext,
+                                                               UUID requesterUserId) {
+        if (bookingContext == null || requesterUserId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        PromotionSelectionCacheKey cacheKey = PromotionSelectionCacheKey.of(bookingContext.bookingId(), requesterUserId);
+        PromotionSelectionResponse cachedResponse = getCachedSelection(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
         ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
         BigDecimal baseAmount = normalizeAmount(bookingContext.finalAmount());
         UserGrpcClient.UserBasicInfo user = loadUser(requesterUserId);
@@ -107,11 +122,11 @@ public class PromotionEngine {
                 })
                 .sorted(Comparator
                         .comparing(PromotionSelectionItemResponse::applicable).reversed()
-                        .thenComparing(PromotionSelectionItemResponse::discountAmount, Comparator.reverseOrder())
+                .thenComparing(PromotionSelectionItemResponse::discountAmount, Comparator.reverseOrder())
                 .thenComparing(PromotionSelectionItemResponse::promotionCode, String.CASE_INSENSITIVE_ORDER))
                 .toList();
 
-        PromotionSelectionResponse response = paymentMapper.toPromotionSelectionResponse(bookingId, baseAmount, promotions);
+        PromotionSelectionResponse response = paymentMapper.toPromotionSelectionResponse(bookingContext.bookingId(), baseAmount, promotions);
         selectionCache.put(cacheKey, new CachedPromotionSelection(response, Instant.now().plus(PROMOTION_SELECTION_CACHE_TTL)));
         cleanupExpiredSelectionCache();
         return response;

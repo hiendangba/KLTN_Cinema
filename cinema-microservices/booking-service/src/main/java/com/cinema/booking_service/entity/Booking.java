@@ -89,16 +89,16 @@ public class Booking {
     @Column(name = "promotion_name", length = 120)
     private String promotionName;
 
-    @Column(name = "promotion_discount_amount", nullable = false, precision = 12, scale = 2)
+    @Column(name = "promotion_discount_amount", precision = 12, scale = 2)
     private BigDecimal promotionDiscountAmount;
 
-    @Column(name = "loyalty_points_used", nullable = false)
+    @Column(name = "loyalty_points_used")
     private Long loyaltyPointsUsed;
 
-    @Column(name = "loyalty_points_earned", nullable = false)
+    @Column(name = "loyalty_points_earned")
     private Long loyaltyPointsEarned;
 
-    @Column(name = "payable_amount", nullable = false, precision = 12, scale = 2)
+    @Column(name = "payable_amount", precision = 12, scale = 2)
     private BigDecimal payableAmount;
 
     @Column(name = "is_deleted", nullable = false)
@@ -157,6 +157,22 @@ public class Booking {
         LocalDateTime now = LocalDateTime.now();
         timeCreated = now;
         timeUpdated = now;
+    }
+
+    @jakarta.persistence.PostLoad
+    public void postLoad() {
+        if (promotionDiscountAmount == null) {
+            promotionDiscountAmount = BigDecimal.ZERO;
+        }
+        if (loyaltyPointsUsed == null) {
+            loyaltyPointsUsed = 0L;
+        }
+        if (loyaltyPointsEarned == null) {
+            loyaltyPointsEarned = 0L;
+        }
+        if (payableAmount == null) {
+            payableAmount = finalAmount == null ? BigDecimal.ZERO : finalAmount.subtract(promotionDiscountAmount);
+        }
     }
 
     @PreUpdate
