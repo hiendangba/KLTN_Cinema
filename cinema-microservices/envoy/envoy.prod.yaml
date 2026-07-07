@@ -158,6 +158,11 @@
                               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthzPerRoute
                               disabled: true
                         - match:
+                            prefix: /api/customer-ranks
+                          route:
+                            cluster: user-service
+                            timeout: 30s
+                        - match:
                             prefix: /api/users
                           route:
                             cluster: user-service

@@ -707,6 +707,9 @@ public class UserServiceImpl implements UserService {
             return;
         }
         CustomerRankSnapshot rank = customerRankService.resolveRank(user.getLifetimePaidAmount());
+        if (rank == null) {
+            return;
+        }
         response.setCustomerRank(CustomerRankResponse.builder()
                 .id(rank.id())
                 .code(rank.code())

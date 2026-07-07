@@ -92,6 +92,19 @@ class UserServiceImplLoyaltyPointsTest {
     }
 
     @Test
+    void getUserById_shouldLeaveCustomerRankNullWhenNoRankIsConfigured() {
+        UUID userId = UUID.randomUUID();
+        User user = buildUser(userId, 2500L);
+
+        when(userRepository.findByIdAndIsDeletedFalse(userId)).thenReturn(Optional.of(user));
+        when(customerRankService.resolveRank(any())).thenReturn(null);
+
+        UserResponse response = service.getUserById(userId);
+
+        assertThat(response.getCustomerRank()).isNull();
+    }
+
+    @Test
     void addLoyaltyPoints_shouldIncreaseBalance() {
         UUID userId = UUID.randomUUID();
         User user = buildUser(userId, 2500L);

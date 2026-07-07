@@ -2339,10 +2339,23 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
 - Remaining risk:
   - `staff@gmail.com / 12345678aA@` hiện bị production trả `4007`, nên `staffEnabled=false` mặc định; sau khi sửa/tạo lại staff account thì bật `staffEnabled=true` để chạy thêm smoke test quyền staff.
 
+## Changelog ngắn (2026-07-07)
+
+- `envoy/envoy.prod.yaml` và `envoy/envoy.local.yaml` đã thêm route `/api/customer-ranks` vào `user-service`.
+- Lý do: gateway trước đó chỉ có `/api/users`, nên request `https://cinema-api.duckdns.org/api/customer-ranks` bị 404 ở lớp Envoy dù `CustomerRankController` trong `user-service` đã map sẵn `@RequestMapping("/api/customer-ranks")`.
+- Files chạm: `envoy/envoy.prod.yaml`, `envoy/envoy.local.yaml`, `TECHNICAL_AGENT_GUIDE.md`.
+- Verification: route mới nằm cùng block `user-service`, không đụng các route khác; cần reload/redeploy Envoy để config mới có hiệu lực.
+- Remaining risk: nếu client gọi nhầm `/api/users/customer-ranks` thì backend vẫn không khớp, vì controller giữ nguyên path gốc `/api/customer-ranks`.
+
+- `user-service` đã bỏ fallback hardcode `BRONZE` trong `CustomerRankServiceImpl.resolveRank(...)`.
+- Nếu user chưa có rank nào khớp trong bảng `customer_rank`, service giờ trả `null` và `UserServiceImpl` sẽ không set `customerRank` lên response nữa.
+- Files chạm: `user-service/src/main/java/com/cinema/user_service/services/impl/CustomerRankServiceImpl.java`, `user-service/src/main/java/com/cinema/user_service/services/impl/UserServiceImpl.java`, `user-service/src/test/java/com/cinema/user_service/services/impl/CustomerRankServiceImplTest.java`.
+- Reason: rank mặc định phải đến từ dữ liệu cấu hình trong DB, không phải từ giá trị fallback code.
+- Verification: static review cho thấy `UserInternalGrpcService` đã guard `user.getCustomerRank() == null`, nên response gRPC không bị NPE; chưa chạy Maven test trong môi trường này vì không có Maven wrapper/CLI sẵn.
+- Remaining risk: nếu DB chưa seed rank mặc định, customer profile sẽ trả `customerRank = null` đúng theo rule mới.
+
 - `booking-service` và `review-service` đã tách rõ lý do không đủ điều kiện review thay vì đẩy hết về `FORBIDDEN` chung chung: `checkUserEligibleForReview` giờ trả `REVIEW_NOT_ELIGIBLE` khi không có booking confirmed/paid, còn `REVIEW_SHOWTIME_NOT_ENDED` khi user đã có booking nhưng suất chiếu chưa kết thúc; `review-service` nhận lỗi này qua gRPC rồi để `BusinessException` đi thẳng ra API.
 - Files chạm: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `booking-service/src/main/java/com/cinema/booking_service/grpc/BookingInternalGrpcService.java`, `booking-service/src/test/java/com/cinema/booking_service/grpc/BookingInternalGrpcServiceTest.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/ReviewServiceImpl.java`, `review-service/src/test/java/com/cinema/review_service/service/impl/ReviewServiceImplTest.java`.
 - Reason: API tạo review trước đó chỉ trả `9004` nên người dùng không biết là do chưa xem xong phim hay do không đủ điều kiện booking; luồng mới trả đúng thông điệp nghiệp vụ để FE/QA xử lý chính xác hơn.
 - Verification: `common-lib` test pass, `BookingInternalGrpcServiceTest` pass 8/8, và `review-service` `test-compile` pass sau khi thêm test propagate cho case `REVIEW_SHOWTIME_NOT_ENDED`.
 - Remaining risk: `booking-service` vẫn còn vài test integration/legacy đỏ trên môi trường này vì thiếu PostgreSQL `localhost:5433`, nên full reactor test vẫn chưa xanh toàn bộ dù logic review eligibility mới đã biên dịch và unit-test pass.
-
-

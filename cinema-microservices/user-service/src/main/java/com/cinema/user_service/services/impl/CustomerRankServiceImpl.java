@@ -27,8 +27,6 @@ import java.util.UUID;
 public class CustomerRankServiceImpl implements CustomerRankService {
 
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(0, RoundingMode.HALF_UP);
-    private static final BigDecimal DEFAULT_EARNING_UNIT = BigDecimal.valueOf(1000L);
-    private static final BigDecimal DEFAULT_EARNING_POINTS = BigDecimal.ONE;
 
     private final CustomerRankRepository customerRankRepository;
 
@@ -110,7 +108,7 @@ public class CustomerRankServiceImpl implements CustomerRankService {
                         CustomerRankStatus.ACTIVE,
                         amount)
                 .map(this::toSnapshot)
-                .orElse(defaultSnapshot());
+                .orElse(null);
     }
 
     private CustomerRank getEntity(UUID id) {
@@ -183,17 +181,6 @@ public class CustomerRankServiceImpl implements CustomerRankService {
                 normalizeAmount(rank.getEarningAmountUnit()),
                 rank.getEarningPointsPerUnit(),
                 rank.getLevel());
-    }
-
-    private CustomerRankSnapshot defaultSnapshot() {
-        return new CustomerRankSnapshot(
-                null,
-                "BRONZE",
-                "Bronze",
-                ZERO,
-                DEFAULT_EARNING_UNIT,
-                DEFAULT_EARNING_POINTS,
-                1);
     }
 
     private String normalizeCode(String code) {
