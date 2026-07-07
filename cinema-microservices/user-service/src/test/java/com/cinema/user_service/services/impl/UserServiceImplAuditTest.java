@@ -7,6 +7,7 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.user_service.dto.request.UpdateCustomerRequest;
 import com.cinema.user_service.dto.request.UpdateManagerRequest;
 import com.cinema.user_service.dto.request.UpdateStaffRequest;
+import com.cinema.user_service.dto.response.CustomerRankSnapshot;
 import com.cinema.user_service.entity.User;
 import com.cinema.user_service.grpc.CinemaGrpcClient;
 import com.cinema.user_service.grpc.IdentityGrpcClient;
@@ -14,6 +15,7 @@ import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.user_service.mapper.UserMapper;
 import com.cinema.user_service.repository.UserRepository;
+import com.cinema.user_service.services.CustomerRankService;
 import com.cinema.user_service.services.audit.UserAuditEmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,6 +58,9 @@ class UserServiceImplAuditTest {
     @Mock
     private InternalEmailDispatchService internalEmailDispatchService;
 
+    @Mock
+    private CustomerRankService customerRankService;
+
     private UserAuditEmailService userAuditEmailService;
 
     private UserServiceImpl service;
@@ -67,7 +74,21 @@ class UserServiceImplAuditTest {
                 cinemaGrpcClient,
                 identityGrpcClient,
                 internalEmailDispatchService,
-                userAuditEmailService);
+                userAuditEmailService,
+                customerRankService);
+        lenient().when(customerRankService.resolveRank(any()))
+                .thenReturn(defaultRank());
+    }
+
+    private CustomerRankSnapshot defaultRank() {
+        return new CustomerRankSnapshot(
+                null,
+                "BRONZE",
+                "Bronze",
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE,
+                1);
     }
 
     @Test

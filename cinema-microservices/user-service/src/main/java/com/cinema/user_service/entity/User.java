@@ -8,6 +8,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.UUID;
 import java.time.LocalDate;
 
@@ -59,6 +60,10 @@ public class User {
     @Builder.Default
     Long loyaltyPoints = 0L;
 
+    @Column(name = "lifetime_paid_amount", nullable = false, precision = 14, scale = 2)
+    @Builder.Default
+    BigDecimal lifetimePaidAmount = BigDecimal.ZERO;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserEnum.UserRole role;
@@ -80,6 +85,9 @@ public class User {
         this.isDeleted = false;
         if (this.loyaltyPoints == null) {
             this.loyaltyPoints = 0L;
+        }
+        if (this.lifetimePaidAmount == null) {
+            this.lifetimePaidAmount = BigDecimal.ZERO;
         }
         timeCreated = LocalDateTime.now();
         timeUpdated = LocalDateTime.now();

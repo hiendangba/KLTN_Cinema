@@ -34,6 +34,8 @@ public interface PaymentSessionService {
 
     ActionMessageResponse requestRefund(UUID bookingId, UUID requesterUserId, RefundPaymentRequest request);
 
+    ActionMessageResponse completeRefund(UUID bookingId);
+
     CinemaRevenueReportResponse getAllCinemaRevenueReport(CinemaRevenueReportRequest request);
 
     CinemaRevenueReportResponse getMyCinemaRevenueReport(CinemaRevenueReportRequest request, UUID requesterUserId);

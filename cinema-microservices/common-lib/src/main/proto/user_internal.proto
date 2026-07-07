@@ -99,6 +99,11 @@ message UserBasicPayload {
   string id = 1;
   string name = 2;
   int64 loyalty_points = 3;
+  string lifetime_paid_amount = 4;
+  string customer_rank_code = 5;
+  string customer_rank_name = 6;
+  string earning_amount_unit = 7;
+  string earning_points_per_unit = 8;
 }
 
 message GetUserBasicByIdReply {

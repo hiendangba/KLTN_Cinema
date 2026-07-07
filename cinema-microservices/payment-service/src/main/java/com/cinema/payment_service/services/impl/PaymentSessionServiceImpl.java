@@ -42,6 +42,7 @@ import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.repository.PromotionRepository;
+import com.cinema.payment_service.services.PaymentCustomerRankSettlementOutboxService;
 import com.cinema.payment_service.services.PaymentSessionService;
 import com.cinema.payment_service.services.PaymentLoyaltyOutboxService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
@@ -100,6 +101,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     private final PaymentMapper paymentMapper;
     private final ObjectMapper objectMapper;
     private final PaymentLoyaltyOutboxService paymentLoyaltyOutboxService;
+    private final PaymentCustomerRankSettlementOutboxService paymentCustomerRankSettlementOutboxService;
 
     @Override
     @Transactional
@@ -254,6 +256,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
             enqueueLoyaltySync(transaction, "completeSession:alreadyPaid");
+            enqueuePaymentSettlement(transaction, "completeSession:alreadyPaid");
             return ActionMessageResponse.builder()
                     .message(SuccessMessage.PAYMENT_SESSION_COMPLETED.getMessage())
                     .build();
@@ -299,6 +302,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         enqueueLoyaltySync(transaction, "completeSession");
+        enqueuePaymentSettlement(transaction, "completeSession");
 
         log.info(
                 "PAYMENT_COMPLETE_CONFIRMED transactionId={} bookingId={} requesterUserId={} requesterRole={} status={}",
@@ -393,6 +397,44 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         paymentTransactionRepository.save(transaction);
         return ActionMessageResponse.builder()
                 .message(SuccessMessage.PAYMENT_REFUND_REQUESTED.getMessage())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public ActionMessageResponse completeRefund(UUID bookingId) {
+        if (bookingId == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        PaymentTransaction transaction = paymentTransactionRepository
+                .findFirstByBookingIdOrderByTimeCreatedDesc(bookingId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+
+        if (transaction.getStatus() == PaymentTransactionStatus.REFUNDED) {
+            enqueueRefundSettlement(transaction, "completeRefund:alreadyRefunded");
+            return ActionMessageResponse.builder()
+                    .message(SuccessMessage.PAYMENT_REFUND_COMPLETED.getMessage())
+                    .build();
+        }
+        if (transaction.getStatus() != PaymentTransactionStatus.REFUND_PENDING) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        BigDecimal refundAmount = normalizeAmount(
+                transaction.getRefundAmount() == null ? transaction.getAmount() : transaction.getRefundAmount());
+        if (refundAmount.compareTo(ZERO) <= 0 || refundAmount.compareTo(normalizeAmount(transaction.getAmount())) > 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        transaction.setStatus(PaymentTransactionStatus.REFUNDED);
+        transaction.setRefundAmount(refundAmount);
+        transaction.setRefundedAt(LocalDateTime.now());
+        transaction.setFailureReason(null);
+        paymentTransactionRepository.save(transaction);
+        enqueueRefundSettlement(transaction, "completeRefund");
+        return ActionMessageResponse.builder()
+                .message(SuccessMessage.PAYMENT_REFUND_COMPLETED.getMessage())
                 .build();
     }
 
@@ -714,6 +756,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             String logPrefix) {
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
             enqueueLoyaltySync(transaction, "webhook:alreadyPaid");
+            enqueuePaymentSettlement(transaction, "webhook:alreadyPaid");
             markWebhookMeta(transaction, webhookEventKey);
             paymentTransactionRepository.save(transaction);
             return new WebhookProcessingResult(HttpStatus.NO_CONTENT, Map.of(
@@ -811,6 +854,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         enqueueLoyaltySync(transaction, "webhook");
+        enqueuePaymentSettlement(transaction, "webhook");
 
         log.info(
                 "{}_CONFIRMED orderId={} requestId={} transactionId={} bookingId={} status={}",
@@ -1051,17 +1095,18 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
         long normalizedRequestedPoints = normalizeRequestedLoyaltyPoints(requestedLoyaltyPointsUsed);
         BigDecimal normalizedAmount = normalizeAmount(transaction.getAmount());
-        if (normalizedRequestedPoints <= 0) {
-            transaction.setLoyaltyPointsUsed(0L);
-            transaction.setLoyaltyPointsEarned(calculateEarnedLoyaltyPoints(normalizedAmount));
-            return;
-        }
-
         if (transaction.getUserId() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
 
         UserGrpcClient.UserBasicInfo user = userGrpcClient.getUserBasicById(transaction.getUserId());
+        applyCustomerRankSnapshot(transaction, user);
+        if (normalizedRequestedPoints <= 0) {
+            transaction.setLoyaltyPointsUsed(0L);
+            transaction.setLoyaltyPointsEarned(calculateEarnedLoyaltyPoints(normalizedAmount, user));
+            return;
+        }
+
         long availablePoints = normalizeLongValue(user.loyaltyPoints());
         if (normalizedRequestedPoints > availablePoints) {
             throw new BusinessException(ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
@@ -1073,7 +1118,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 BigDecimal.valueOf(appliedPoints));
         transaction.setLoyaltyPointsUsed(appliedPoints);
         transaction.setAmount(normalizeAmount(payableAmount));
-        transaction.setLoyaltyPointsEarned(calculateEarnedLoyaltyPoints(payableAmount));
+        transaction.setLoyaltyPointsEarned(calculateEarnedLoyaltyPoints(payableAmount, user));
     }
 
     private void enqueueLoyaltySync(PaymentTransaction transaction, String source) {
@@ -1082,6 +1127,30 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         paymentLoyaltyOutboxService.enqueueIfNeeded(transaction, source);
+    }
+
+    private void enqueuePaymentSettlement(PaymentTransaction transaction, String source) {
+        if (transaction == null) {
+            return;
+        }
+        paymentCustomerRankSettlementOutboxService.enqueueIfNeeded(
+                transaction,
+                normalizeAmount(transaction.getAmount()),
+                "PAID",
+                source);
+    }
+
+    private void enqueueRefundSettlement(PaymentTransaction transaction, String source) {
+        if (transaction == null) {
+            return;
+        }
+        BigDecimal refundAmount = normalizeAmount(
+                transaction.getRefundAmount() == null ? transaction.getAmount() : transaction.getRefundAmount());
+        paymentCustomerRankSettlementOutboxService.enqueueIfNeeded(
+                transaction,
+                refundAmount.negate(),
+                "REFUNDED",
+                source);
     }
 
     private void validateRequestedLoyaltyPoints(UUID userId, Long requestedLoyaltyPointsUsed) {
@@ -1101,9 +1170,36 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
     }
 
-    private long calculateEarnedLoyaltyPoints(BigDecimal amount) {
+    private long calculateEarnedLoyaltyPoints(BigDecimal amount, UserGrpcClient.UserBasicInfo user) {
         BigDecimal normalizedAmount = normalizeAmount(amount);
-        return normalizedAmount.divide(LOYALTY_POINT_VALUE, 0, RoundingMode.CEILING).longValueExact();
+        BigDecimal earningAmountUnit = user == null
+                ? LOYALTY_POINT_VALUE
+                : normalizePositiveAmount(user.earningAmountUnit(), LOYALTY_POINT_VALUE);
+        BigDecimal earningPointsPerUnit = user == null
+                ? BigDecimal.ONE
+                : normalizePositiveAmount(user.earningPointsPerUnit(), BigDecimal.ONE);
+        return normalizedAmount
+                .divide(earningAmountUnit, 8, RoundingMode.CEILING)
+                .multiply(earningPointsPerUnit)
+                .setScale(0, RoundingMode.CEILING)
+                .longValueExact();
+    }
+
+    private void applyCustomerRankSnapshot(PaymentTransaction transaction, UserGrpcClient.UserBasicInfo user) {
+        if (transaction == null || user == null) {
+            return;
+        }
+        transaction.setCustomerRankCode(normalizeStringValue(user.customerRankCode()));
+        transaction.setCustomerRankName(normalizeStringValue(user.customerRankName()));
+        transaction.setEarningAmountUnit(normalizePositiveAmount(user.earningAmountUnit(), LOYALTY_POINT_VALUE));
+        transaction.setEarningPointsPerUnit(normalizePositiveAmount(user.earningPointsPerUnit(), BigDecimal.ONE));
+    }
+
+    private BigDecimal normalizePositiveAmount(BigDecimal value, BigDecimal fallback) {
+        if (value == null || value.compareTo(BigDecimal.ZERO) <= 0) {
+            return fallback;
+        }
+        return value;
     }
 
     private List<PromotionQuote> applyPromotionIfNeeded(PaymentTransaction transaction,

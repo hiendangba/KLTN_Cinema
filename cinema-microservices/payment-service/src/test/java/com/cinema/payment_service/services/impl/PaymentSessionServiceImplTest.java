@@ -29,6 +29,7 @@ import com.cinema.payment_service.repository.PaymentTransactionRepository;
 import com.cinema.payment_service.repository.PaymentTransactionRepositoryImpl;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.services.PaymentSessionService;
+import com.cinema.payment_service.services.PaymentCustomerRankSettlementOutboxService;
 import com.cinema.payment_service.services.PaymentLoyaltyOutboxService;
 import com.cinema.payment_service.support.MomoPaymentGatewayClient;
 import com.cinema.payment_service.support.PromotionEngine;
@@ -39,6 +40,7 @@ import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.http.HeaderNames;
 import jakarta.servlet.http.HttpServletRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -70,6 +72,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -114,6 +117,9 @@ class PaymentSessionServiceImplTest {
     @Mock
     private PaymentLoyaltyOutboxService paymentLoyaltyOutboxService;
 
+    @Mock
+    private PaymentCustomerRankSettlementOutboxService paymentCustomerRankSettlementOutboxService;
+
     @Spy
     private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
 
@@ -128,6 +134,24 @@ class PaymentSessionServiceImplTest {
 
     @InjectMocks
     private PaymentSessionServiceImpl paymentSessionService;
+
+    @BeforeEach
+    void setUpUserRankDefaults() {
+        lenient().when(userGrpcClient.getUserBasicById(any(UUID.class)))
+                .thenAnswer(invocation -> defaultUserBasicInfo(invocation.getArgument(0)));
+    }
+
+    private UserGrpcClient.UserBasicInfo defaultUserBasicInfo(UUID userId) {
+        return new UserGrpcClient.UserBasicInfo(
+                userId,
+                "Customer",
+                50000L,
+                BigDecimal.ZERO,
+                "BRONZE",
+                "Bronze",
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE);
+    }
 
     @Test
     void createSession_shouldPersistFilmIdSnapshotFromBookingContext() {
@@ -360,7 +384,15 @@ class PaymentSessionServiceImplTest {
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
                 .thenReturn(Optional.empty());
         when(userGrpcClient.getUserBasicById(userId))
-                .thenReturn(new UserGrpcClient.UserBasicInfo(userId, "Customer", 50000L));
+                .thenReturn(new UserGrpcClient.UserBasicInfo(
+                        userId,
+                        "Customer",
+                        50000L,
+                        BigDecimal.ZERO,
+                        "GOLD",
+                        "Gold",
+                        BigDecimal.valueOf(1000),
+                        BigDecimal.valueOf(2)));
         stubSuccessfulCheckout();
 
         CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
@@ -376,8 +408,11 @@ class PaymentSessionServiceImplTest {
         assertNotNull(response);
         assertEquals(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage(), response.getMessage());
         assertEquals(Long.valueOf(20000L), saved.getLoyaltyPointsUsed());
-        assertEquals(Long.valueOf(160L), saved.getLoyaltyPointsEarned());
+        assertEquals(Long.valueOf(320L), saved.getLoyaltyPointsEarned());
         assertEquals(BigDecimal.valueOf(160000), saved.getAmount());
+        assertEquals("GOLD", saved.getCustomerRankCode());
+        assertEquals(BigDecimal.valueOf(1000), saved.getEarningAmountUnit());
+        assertEquals(BigDecimal.valueOf(2), saved.getEarningPointsPerUnit());
         verify(userGrpcClient).getUserBasicById(userId);
         verify(bookingGrpcClient).upsertBookingPromotionSnapshot(
                 bookingId,
@@ -463,7 +498,15 @@ class PaymentSessionServiceImplTest {
         when(paymentTransactionRepository.findFirstByBookingIdOrderByTimeCreatedDesc(bookingId))
                 .thenReturn(Optional.empty());
         when(userGrpcClient.getUserBasicById(userId))
-                .thenReturn(new UserGrpcClient.UserBasicInfo(userId, "Customer", 10000L));
+                .thenReturn(new UserGrpcClient.UserBasicInfo(
+                        userId,
+                        "Customer",
+                        10000L,
+                        BigDecimal.ZERO,
+                        "BRONZE",
+                        "Bronze",
+                        BigDecimal.valueOf(1000),
+                        BigDecimal.ONE));
 
         CreatePaymentSessionRequest request = new CreatePaymentSessionRequest();
         request.setBookingId(bookingId);

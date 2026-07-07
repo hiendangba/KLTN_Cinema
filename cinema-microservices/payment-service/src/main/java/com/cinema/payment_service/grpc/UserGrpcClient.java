@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Component
@@ -67,12 +68,33 @@ public class UserGrpcClient {
             return new UserBasicInfo(
                     UUID.fromString(payload.getId()),
                     payload.getName(),
-                    payload.getLoyaltyPoints());
+                    payload.getLoyaltyPoints(),
+                    parseAmount(payload.getLifetimePaidAmount(), BigDecimal.ZERO),
+                    payload.getCustomerRankCode(),
+                    payload.getCustomerRankName(),
+                    parseAmount(payload.getEarningAmountUnit(), BigDecimal.valueOf(1000L)),
+                    parseAmount(payload.getEarningPointsPerUnit(), BigDecimal.ONE));
         } catch (Exception ex) {
             throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
         }
     }
 
-    public record UserBasicInfo(UUID id, String name, long loyaltyPoints) {
+    private BigDecimal parseAmount(String value, BigDecimal fallback) {
+        try {
+            return value == null || value.isBlank() ? fallback : new BigDecimal(value);
+        } catch (Exception ex) {
+            return fallback;
+        }
+    }
+
+    public record UserBasicInfo(
+            UUID id,
+            String name,
+            long loyaltyPoints,
+            BigDecimal lifetimePaidAmount,
+            String customerRankCode,
+            String customerRankName,
+            BigDecimal earningAmountUnit,
+            BigDecimal earningPointsPerUnit) {
     }
 }

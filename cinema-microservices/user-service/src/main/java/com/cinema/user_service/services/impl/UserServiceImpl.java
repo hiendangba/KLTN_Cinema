@@ -13,12 +13,15 @@ import com.cinema.http.RequestAuthUtils;
 import com.cinema.user_service.grpc.CinemaGrpcClient;
 import com.cinema.user_service.dto.request.*;
 import com.cinema.user_service.dto.response.CustomerInfoResponse;
+import com.cinema.user_service.dto.response.CustomerRankResponse;
+import com.cinema.user_service.dto.response.CustomerRankSnapshot;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.entity.User;
 import com.cinema.user_service.mapper.UserMapper;
 import com.cinema.user_service.repository.UserRepository;
 import com.cinema.user_service.messaging.publisher.InternalEmailDispatchService;
+import com.cinema.user_service.services.CustomerRankService;
 import com.cinema.user_service.services.UserService;
 import com.cinema.user_service.services.audit.UserAuditEmailService;
 import com.cinema.user_service.grpc.IdentityGrpcClient;
@@ -54,6 +57,7 @@ public class UserServiceImpl implements UserService {
     IdentityGrpcClient identityGrpcClient;
     InternalEmailDispatchService internalEmailDispatchService;
     UserAuditEmailService userAuditEmailService;
+    CustomerRankService customerRankService;
 
     @Override
     public ActionMessageResponse createCustomerProfile(RegisterCustomerRequest request) {
@@ -569,7 +573,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
         log.info("User profile loaded: userId={}", userUUID);
-        UserResponse response = userMapper.toUserResponse(user);
+        UserResponse response = toRankedUserResponse(user);
         response.setIdentityAccount(identityGrpcClient.getAccountByUserId(userUUID));
         return response;
     }
@@ -593,7 +597,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("User profile loaded by id: requesterId={}, requesterRole={}, targetUserId={}, targetRole={}",
                 requesterUserId, requesterRole, userId, targetUser.getRole());
-        UserResponse response = userMapper.toUserResponse(targetUser);
+        UserResponse response = toRankedUserResponse(targetUser);
         response.setIdentityAccount(identityGrpcClient.getAccountByUserId(userId));
         return response;
     }
@@ -602,7 +606,7 @@ public class UserServiceImpl implements UserService {
     public UserResponse getUserById(UUID userId) {
         User user = userRepository.findByIdAndIsDeletedFalse(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
-        return userMapper.toUserResponse(user);
+        return toRankedUserResponse(user);
     }
 
     @Override
@@ -634,7 +638,7 @@ public class UserServiceImpl implements UserService {
         Page<User> userPage = userRepository.searchByRoleAndKeyword(UserEnum.UserRole.STAFF, keyword, pageable);
 
         return PageResponse.<UserResponse>builder()
-                .data(userMapper.toUserResponseList(userPage.getContent()))
+                .data(toRankedUserResponses(userPage.getContent()))
                 .currentPage(pageRequest.getPageOrDefault())
                 .totalPages(userPage.getTotalPages())
                 .totalElements(userPage.getTotalElements())
@@ -654,7 +658,7 @@ public class UserServiceImpl implements UserService {
         Page<User> userPage = userRepository.searchByRoleAndKeyword(UserEnum.UserRole.CUSTOMER, keyword, pageable);
 
         return PageResponse.<UserResponse>builder()
-                .data(userMapper.toUserResponseList(userPage.getContent()))
+                .data(toRankedUserResponses(userPage.getContent()))
                 .currentPage(pageRequest.getPageOrDefault())
                 .totalPages(userPage.getTotalPages())
                 .totalElements(userPage.getTotalElements())
@@ -673,7 +677,7 @@ public class UserServiceImpl implements UserService {
         Page<User> userPage = userRepository.searchByRoleAndKeyword(UserEnum.UserRole.MANAGER, keyword, pageable);
 
         return PageResponse.<UserResponse>builder()
-                .data(userMapper.toUserResponseList(userPage.getContent()))
+                .data(toRankedUserResponses(userPage.getContent()))
                 .currentPage(pageRequest.getPageOrDefault())
                 .totalPages(userPage.getTotalPages())
                 .totalElements(userPage.getTotalElements())
@@ -681,6 +685,37 @@ public class UserServiceImpl implements UserService {
                 .hasNext(userPage.hasNext())
                 .hasPrevious(userPage.hasPrevious())
                 .build();
+    }
+
+    private UserResponse toRankedUserResponse(User user) {
+        UserResponse response = userMapper.toUserResponse(user);
+        enrichCustomerRank(response, user);
+        return response;
+    }
+
+    private List<UserResponse> toRankedUserResponses(List<User> users) {
+        if (users == null || users.isEmpty()) {
+            return List.of();
+        }
+        return users.stream()
+                .map(this::toRankedUserResponse)
+                .toList();
+    }
+
+    private void enrichCustomerRank(UserResponse response, User user) {
+        if (response == null || user == null) {
+            return;
+        }
+        CustomerRankSnapshot rank = customerRankService.resolveRank(user.getLifetimePaidAmount());
+        response.setCustomerRank(CustomerRankResponse.builder()
+                .id(rank.id())
+                .code(rank.code())
+                .name(rank.name())
+                .minLifetimeAmount(rank.minLifetimeAmount())
+                .earningAmountUnit(rank.earningAmountUnit())
+                .earningPointsPerUnit(rank.earningPointsPerUnit())
+                .level(rank.level())
+                .build());
     }
 
     private void requireAdminOnly(UserEnum.UserRole actorRole, String action) {

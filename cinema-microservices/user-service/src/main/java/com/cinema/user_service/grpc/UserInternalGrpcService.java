@@ -231,6 +231,23 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
                             .setId(user.getId().toString())
                             .setName(blankToEmpty(user.getName()))
                             .setLoyaltyPoints(user.getLoyaltyPoints() == null ? 0L : user.getLoyaltyPoints())
+                            .setLifetimePaidAmount(user.getLifetimePaidAmount() == null
+                                    ? "0"
+                                    : user.getLifetimePaidAmount().toPlainString())
+                            .setCustomerRankCode(user.getCustomerRank() == null
+                                    ? ""
+                                    : blankToEmpty(user.getCustomerRank().code()))
+                            .setCustomerRankName(user.getCustomerRank() == null
+                                    ? ""
+                                    : blankToEmpty(user.getCustomerRank().name()))
+                            .setEarningAmountUnit(user.getCustomerRank() == null
+                                    || user.getCustomerRank().earningAmountUnit() == null
+                                    ? "1000"
+                                    : user.getCustomerRank().earningAmountUnit().toPlainString())
+                            .setEarningPointsPerUnit(user.getCustomerRank() == null
+                                    || user.getCustomerRank().earningPointsPerUnit() == null
+                                    ? "1"
+                                    : user.getCustomerRank().earningPointsPerUnit().toPlainString())
                             .build())
                     .build());
             responseObserver.onCompleted();

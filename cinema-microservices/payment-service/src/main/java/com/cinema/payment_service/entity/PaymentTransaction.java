@@ -118,6 +118,18 @@ public class PaymentTransaction {
     @Column(name = "loyalty_points_earned")
     private Long loyaltyPointsEarned;
 
+    @Column(name = "customer_rank_code", length = 30)
+    private String customerRankCode;
+
+    @Column(name = "customer_rank_name", length = 80)
+    private String customerRankName;
+
+    @Column(name = "earning_amount_unit", precision = 14, scale = 2)
+    private BigDecimal earningAmountUnit;
+
+    @Column(name = "earning_points_per_unit", precision = 8, scale = 2)
+    private BigDecimal earningPointsPerUnit;
+
     @Column(name = "webhook_event_key", length = 255)
     private String webhookEventKey;
 

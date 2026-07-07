@@ -101,6 +101,14 @@ public class PaymentController extends BaseController {
                 paymentSessionService.requestRefund(bookingId, requesterUserId, request));
     }
 
+    @PostMapping("/sessions/{bookingId}/refund/complete")
+    public ResponseEntity<APIResponse<ActionMessageResponse>> completeRefund(
+            HttpServletRequest servletRequest,
+            @PathVariable UUID bookingId) {
+        RequestAuthUtils.requireRole(servletRequest, HeaderNames.ROLE_ADMIN);
+        return ok(SuccessMessage.PAYMENT_REFUND_COMPLETED, paymentSessionService.completeRefund(bookingId));
+    }
+
     @PostMapping("/revenues/cinemas/search")
     public ResponseEntity<APIResponse<CinemaRevenueReportResponse>> getAllCinemaRevenueReport(
             HttpServletRequest servletRequest,

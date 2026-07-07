@@ -11,6 +11,7 @@ import com.cinema.user_service.grpc.IdentityGrpcClient;
 import com.cinema.user_service.mapper.UserMapper;
 import com.cinema.user_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.user_service.repository.UserRepository;
+import com.cinema.user_service.services.CustomerRankService;
 import com.cinema.user_service.services.audit.UserAuditEmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +48,9 @@ class UserServiceImplPhoneLookupTest {
     @Mock
     private InternalEmailDispatchService internalEmailDispatchService;
 
+    @Mock
+    private CustomerRankService customerRankService;
+
     private UserServiceImpl service;
 
     @BeforeEach
@@ -57,7 +61,8 @@ class UserServiceImplPhoneLookupTest {
                 cinemaGrpcClient,
                 identityGrpcClient,
                 internalEmailDispatchService,
-                new UserAuditEmailService());
+                new UserAuditEmailService(),
+                customerRankService);
     }
 
     @Test

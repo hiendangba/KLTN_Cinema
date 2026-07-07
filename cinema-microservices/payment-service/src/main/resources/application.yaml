@@ -60,3 +60,5 @@ payment:
   expiration-scheduler-delay-ms: ${PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS:60000}
   loyalty-outbox:
     publisher-delay-ms: ${PAYMENT_LOYALTY_OUTBOX_PUBLISHER_DELAY_MS:15000}
+  customer-rank-outbox:
+    publisher-delay-ms: ${PAYMENT_CUSTOMER_RANK_OUTBOX_PUBLISHER_DELAY_MS:15000}

@@ -2,6 +2,7 @@ package com.cinema.user_service.services.impl;
 
 import com.cinema.Enum.UserEnum;
 import com.cinema.user_service.dto.request.UpdateCustomerRequest;
+import com.cinema.user_service.dto.response.CustomerRankSnapshot;
 import com.cinema.user_service.dto.response.UserResponse;
 import com.cinema.user_service.entity.User;
 import com.cinema.user_service.grpc.CinemaGrpcClient;
@@ -9,6 +10,7 @@ import com.cinema.user_service.grpc.IdentityGrpcClient;
 import com.cinema.user_service.mapper.UserMapper;
 import com.cinema.user_service.messaging.publisher.InternalEmailDispatchService;
 import com.cinema.user_service.repository.UserRepository;
+import com.cinema.user_service.services.CustomerRankService;
 import com.cinema.user_service.services.audit.UserAuditEmailService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mapstruct.factory.Mappers;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +27,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -43,6 +47,9 @@ class UserServiceImplLoyaltyPointsTest {
     @Mock
     private InternalEmailDispatchService internalEmailDispatchService;
 
+    @Mock
+    private CustomerRankService customerRankService;
+
     private UserMapper userMapper;
     private UserServiceImpl service;
 
@@ -55,7 +62,21 @@ class UserServiceImplLoyaltyPointsTest {
                 cinemaGrpcClient,
                 identityGrpcClient,
                 internalEmailDispatchService,
-                new UserAuditEmailService());
+                new UserAuditEmailService(),
+                customerRankService);
+        lenient().when(customerRankService.resolveRank(any()))
+                .thenReturn(defaultRank());
+    }
+
+    private CustomerRankSnapshot defaultRank() {
+        return new CustomerRankSnapshot(
+                null,
+                "BRONZE",
+                "Bronze",
+                BigDecimal.ZERO,
+                BigDecimal.valueOf(1000),
+                BigDecimal.ONE,
+                1);
     }
 
     @Test
