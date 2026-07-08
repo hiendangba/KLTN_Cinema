@@ -11,6 +11,7 @@ import com.cinema.payment_service.entity.PromotionCinema;
 import com.cinema.payment_service.entity.PromotionFilm;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
+import com.cinema.payment_service.grpc.CustomerRankGrpcClient;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.UserGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
@@ -29,9 +30,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -50,6 +53,7 @@ public class PromotionEngine {
     private final PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
     private final BookingGrpcClient bookingGrpcClient;
     private final UserGrpcClient userGrpcClient;
+    private final CustomerRankGrpcClient customerRankGrpcClient;
     private final PaymentMapper paymentMapper;
     private final ConcurrentHashMap<PromotionSelectionCacheKey, CachedPromotionSelection> selectionCache = new ConcurrentHashMap<>();
 
@@ -80,7 +84,8 @@ public class PromotionEngine {
                 bookingContext,
                 user,
                 requesterUserId,
-                false);
+                false,
+                new HashMap<>());
 
         return paymentMapper.toPromotionPreviewResponse(quote, baseAmount);
     }
@@ -114,9 +119,16 @@ public class PromotionEngine {
         ensureRequesterOwnsBooking(requesterUserId, bookingContext.userId());
         BigDecimal baseAmount = normalizeAmount(bookingContext.finalAmount());
         UserGrpcClient.UserBasicInfo user = loadUser(requesterUserId);
+        Map<UUID, CustomerRankGrpcClient.CustomerRankInfo> customerRankCache = new HashMap<>();
         List<PromotionSelectionItemResponse> promotions = promotionRepository.findAllByIsDeletedFalse().stream()
                 .map(promotion -> {
-                    PromotionQuote quote = evaluatePromotion(promotion, baseAmount, bookingContext, user, requesterUserId);
+                    PromotionQuote quote = evaluatePromotion(
+                            promotion,
+                            baseAmount,
+                            bookingContext,
+                            user,
+                            requesterUserId,
+                            customerRankCache);
                     boolean applicable = quote.discountAmount().compareTo(ZERO) > 0;
                     return paymentMapper.toPromotionSelectionItemResponse(quote, applicable, baseAmount);
                 })
@@ -145,7 +157,8 @@ public class PromotionEngine {
                 bookingContext,
                 loadUser(requesterUserId),
                 requesterUserId,
-                true);
+                true,
+                new HashMap<>());
     }
 
     public PromotionQuote resolvePromotionForCheckout(
@@ -163,7 +176,8 @@ public class PromotionEngine {
             BookingGrpcClient.BookingPaymentContext bookingContext,
             UserGrpcClient.UserBasicInfo user,
             UUID requesterUserId,
-            boolean strict) {
+            boolean strict,
+            Map<UUID, CustomerRankGrpcClient.CustomerRankInfo> customerRankCache) {
         if (promotionId == null && !StringUtils.hasText(promotionCode)) {
             return new PromotionQuote("", "", ZERO, "No promotion code", null);
         }
@@ -178,7 +192,13 @@ public class PromotionEngine {
             return new PromotionQuote(fallbackCode, "", ZERO, "Promotion code is not supported", null);
         }
 
-        PromotionQuote quote = evaluatePromotion(promotion, baseAmount, bookingContext, user, requesterUserId);
+        PromotionQuote quote = evaluatePromotion(
+                promotion,
+                baseAmount,
+                bookingContext,
+                user,
+                requesterUserId,
+                customerRankCache);
         if (quote.discountAmount().compareTo(ZERO) <= 0) {
             if (strict) {
                 throw resolveStrictPromotionException(promotion, quote);
@@ -192,7 +212,8 @@ public class PromotionEngine {
                                              BigDecimal baseAmount,
                                              BookingGrpcClient.BookingPaymentContext bookingContext,
                                              UserGrpcClient.UserBasicInfo user,
-                                             UUID requesterUserId) {
+                                             UUID requesterUserId,
+                                             Map<UUID, CustomerRankGrpcClient.CustomerRankInfo> customerRankCache) {
         if (promotion == null) {
             return new PromotionQuote("", "", ZERO, "Promotion code is not supported", null);
         }
@@ -233,12 +254,12 @@ public class PromotionEngine {
                     "Min order is " + normalizeAmount(promotion.getMinOrderAmount()),
                     promotion.getId());
         }
-        if (!matchesCustomerRank(promotion, user)) {
+        if (!matchesCustomerRank(promotion, user, customerRankCache)) {
             return new PromotionQuote(
                     promotion.getCode(),
                     promotion.getName(),
                     ZERO,
-                    buildRankIneligibleNote(promotion),
+                    buildRankIneligibleNote(promotion, customerRankCache),
                     promotion.getId());
         }
         if (hasUserReachedPromotionUsageLimit(promotion.getId(), requesterUserId)) {
@@ -363,8 +384,24 @@ public class PromotionEngine {
         return true;
     }
 
-    private boolean matchesCustomerRank(Promotion promotion, UserGrpcClient.UserBasicInfo user) {
-        if (promotion == null || promotion.getMinCustomerLifetimeAmount() == null) {
+    private boolean matchesCustomerRank(Promotion promotion,
+                                        UserGrpcClient.UserBasicInfo user,
+                                        Map<UUID, CustomerRankGrpcClient.CustomerRankInfo> customerRankCache) {
+        if (promotion == null) {
+            return true;
+        }
+        if (promotion.getMinCustomerRankId() != null) {
+            CustomerRankGrpcClient.CustomerRankInfo requiredRank =
+                    resolveCustomerRank(promotion.getMinCustomerRankId(), customerRankCache);
+            if (requiredRank == null) {
+                return false;
+            }
+            BigDecimal userLifetimePaidAmount = user == null
+                    ? ZERO
+                    : normalizeAmount(user.lifetimePaidAmount());
+            return userLifetimePaidAmount.compareTo(normalizeAmount(requiredRank.minLifetimeAmount())) >= 0;
+        }
+        if (promotion.getMinCustomerLifetimeAmount() == null) {
             return true;
         }
         BigDecimal userLifetimePaidAmount = user == null
@@ -417,11 +454,58 @@ public class PromotionEngine {
         };
     }
 
-    private String buildRankIneligibleNote(Promotion promotion) {
+    private String buildRankIneligibleNote(Promotion promotion,
+                                          Map<UUID, CustomerRankGrpcClient.CustomerRankInfo> customerRankCache) {
+        if (promotion != null && promotion.getMinCustomerRankId() != null) {
+            CustomerRankGrpcClient.CustomerRankInfo requiredRank =
+                    resolveCustomerRank(promotion.getMinCustomerRankId(), customerRankCache);
+            if (requiredRank != null && StringUtils.hasText(requiredRank.name())) {
+                return "Promotion requires customer rank " + requiredRank.name() + " or higher";
+            }
+            if (requiredRank != null && StringUtils.hasText(requiredRank.code())) {
+                return "Promotion requires customer rank " + requiredRank.code() + " or higher";
+            }
+            return "Promotion requires a valid customer rank";
+        }
         BigDecimal minAmount = promotion == null || promotion.getMinCustomerLifetimeAmount() == null
                 ? ZERO
                 : normalizeAmount(promotion.getMinCustomerLifetimeAmount());
         return "Promotion requires lifetime spending of " + minAmount + " or higher";
+    }
+
+    private CustomerRankGrpcClient.CustomerRankInfo resolveCustomerRank(
+            UUID rankId,
+            Map<UUID, CustomerRankGrpcClient.CustomerRankInfo> customerRankCache) {
+        if (rankId == null) {
+            return null;
+        }
+        if (customerRankCache != null && customerRankCache.containsKey(rankId)) {
+            return customerRankCache.get(rankId);
+        }
+        try {
+            CustomerRankGrpcClient.CustomerRankInfo rankInfo = customerRankGrpcClient.getCustomerRankById(rankId);
+            if (!isActiveRank(rankInfo)) {
+                if (customerRankCache != null) {
+                    customerRankCache.put(rankId, null);
+                }
+                return null;
+            }
+            if (customerRankCache != null) {
+                customerRankCache.put(rankId, rankInfo);
+            }
+            return rankInfo;
+        } catch (BusinessException ex) {
+            if (customerRankCache != null) {
+                customerRankCache.put(rankId, null);
+            }
+            return null;
+        }
+    }
+
+    private boolean isActiveRank(CustomerRankGrpcClient.CustomerRankInfo rankInfo) {
+        return rankInfo != null
+                && rankInfo.status() != null
+                && "ACTIVE".equalsIgnoreCase(rankInfo.status());
     }
 
     private UserGrpcClient.UserBasicInfo loadUser(UUID requesterUserId) {

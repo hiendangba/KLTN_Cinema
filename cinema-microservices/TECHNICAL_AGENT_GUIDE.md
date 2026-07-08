@@ -23,6 +23,19 @@
 - Verification: đã thêm unit test cho 4 case chính của `CustomerRankServiceImpl` gồm success, trùng code, trùng level, và thiếu default rank active.
 - Remaining risk: nếu FE vẫn chỉ map mọi mã 44xx về một popup chung thì người dùng vẫn chưa thấy hết chi tiết, nhưng backend đã đủ thông tin để hiển thị riêng từng case.
 
+## Changelog ngắn (2026-07-08 - promotion rank uuid)
+
+- `payment-service` vẫn lưu promotion target bằng `minCustomerRankId`, nhưng response `GET /api/promotions/{id}` và `searchPromotions` giờ trả thêm `customerRank` object thay vì đẩy raw UUID ra FE.
+- `customerRank` trong response mang `id`, `code`, `name`; promotion không gắn rank thì field này là `null`, còn legacy `minCustomerLifetimeAmount` vẫn giữ nguyên để không gãy dữ liệu cũ.
+- Luồng so điều kiện khuyến mãi tiếp tục tra `customer rank` qua gRPC `GetCustomerRankById` từ `user-service`, lấy `minLifetimeAmount` của rank đó rồi mới so với lifetime paid amount của khách.
+- Backend đã siết validate ở `create/update promotion`: nếu payload vừa có `minCustomerRankId` vừa có `minCustomerLifetimeAmount` thì trả `400`, để không tin rule ràng buộc từ FE.
+- `GET /api/bookings/{id}/checkout-context` giờ có trace log `CHECKOUT_CONTEXT_*` ở booking-service và `PAYMENT_SESSION_GRPC_*` ở payment-service để soi đúng điểm lỗi khi checkout-context trả `9502`; booking-service cũng log riêng cinema/hall/showtime lookup để biết call nào bị rớt.
+- `user-service` đã thêm RPC mới trong `common-lib/src/main/proto/user_internal.proto` và implement trong `UserInternalGrpcService` để trả rank snapshot theo UUID.
+- Files touched: `common-lib/src/main/proto/user_internal.proto`, `user-service/src/main/java/com/cinema/user_service/grpc/UserInternalGrpcService.java`, `user-service/src/test/java/com/cinema/user_service/grpc/UserInternalGrpcServiceTest.java`, `payment-service/src/main/java/com/cinema/payment_service/entity/Promotion.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/request/PromotionUpsertRequest.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/response/PromotionResponse.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/response/CustomerRankSummaryResponse.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/request/PromotionField.java`, `payment-service/src/main/java/com/cinema/payment_service/grpc/CustomerRankGrpcClient.java`, `payment-service/src/main/java/com/cinema/payment_service/mapper/PaymentMapper.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PromotionServiceImpl.java`, `payment-service/src/main/java/com/cinema/payment_service/support/PromotionEngine.java`, `payment-service/src/test/java/com/cinema/payment_service/support/PromotionEngineTest.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PromotionServiceImplTest.java`.
+- Reason: bạn muốn FE nhận được object rank đọc được ngay khi fetch promotion by id, không phải raw UUID khó map.
+- Verification: `mvnw.cmd -f ..\\pom.xml -pl payment-service -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=PromotionServiceImplTest,PromotionEngineTest test` pass toàn bộ sau khi đổi mapper và response shape.
+- Remaining risk: nếu FE vẫn đọc field cũ `minCustomerRankId` thì cần cập nhật contract phía UI, vì backend giờ chỉ trả object `customerRank` cho phần response này.
+
 - `payment-service` đã bỏ pin cứng `grpc-netty-shaded:1.80.0` trong `payment-service/pom.xml` để dùng cùng bộ version do `spring-grpc-dependencies` quản lý.
 - Lý do fix: log runtime cho thấy `grpc-netty-shaded 1.80.0` đi chung với `grpc-core 1.77.1` làm channel panic bằng `NoClassDefFoundError: KeepAliveManager$ClientKeepAlivePinger$TransportWithDisconnectReason`, từ đó payment-service trả `9104`.
 - Verification: `./mvnw.cmd -f pom.xml -pl payment-service -am -DskipTests compile` pass sau khi bỏ version pin, nên classpath gRPC đã đồng bộ lại ở mức compile.

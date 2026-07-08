@@ -20,6 +20,7 @@ service UserInternalService {
   rpc AddUserLoyaltyPoints(AdjustUserLoyaltyPointsRequest) returns (AdjustUserLoyaltyPointsReply);
   rpc DeductUserLoyaltyPoints(AdjustUserLoyaltyPointsRequest) returns (AdjustUserLoyaltyPointsReply);
   rpc GetUserBasicById(GetUserBasicByIdRequest) returns (GetUserBasicByIdReply);
+  rpc GetCustomerRankById(GetCustomerRankByIdRequest) returns (GetCustomerRankByIdReply);
 }
 
 message CreateCustomerProfileRequest {
@@ -112,4 +113,26 @@ message GetUserBasicByIdReply {
   string error_key = 2;
   string message = 3;
   UserBasicPayload user = 4;
+}
+
+message GetCustomerRankByIdRequest {
+  string rank_id = 1;
+}
+
+message CustomerRankPayload {
+  string id = 1;
+  string code = 2;
+  string name = 3;
+  string min_lifetime_amount = 4;
+  string earning_amount_unit = 5;
+  string earning_points_per_unit = 6;
+  int32 level = 7;
+  string status = 8;
+}
+
+message GetCustomerRankByIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  CustomerRankPayload rank = 4;
 }

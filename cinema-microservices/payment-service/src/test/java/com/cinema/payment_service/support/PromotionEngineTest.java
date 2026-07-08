@@ -6,6 +6,7 @@ import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
 import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
+import com.cinema.payment_service.grpc.CustomerRankGrpcClient;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.UserGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
@@ -52,6 +53,9 @@ class PromotionEngineTest {
 
     @Mock
     private UserGrpcClient userGrpcClient;
+
+    @Mock
+    private CustomerRankGrpcClient customerRankGrpcClient;
 
     @Spy
     private PaymentMapper paymentMapper = Mappers.getMapper(PaymentMapper.class);
@@ -340,7 +344,7 @@ class PromotionEngineTest {
         promotion.setDiscountValue(BigDecimal.TEN);
         promotion.setStatus(PromotionStatus.ACTIVE);
         promotion.setIsDeleted(false);
-        promotion.setMinCustomerLifetimeAmount(BigDecimal.valueOf(100000));
+        promotion.setMinCustomerRankId(UUID.randomUUID());
         promotion.setStartAt(LocalDateTime.now().minusDays(1));
         promotion.setEndAt(LocalDateTime.now().plusDays(1));
 
@@ -359,11 +363,21 @@ class PromotionEngineTest {
                 1,
                 BigDecimal.valueOf(1000),
                 BigDecimal.ONE));
+        when(customerRankGrpcClient.getCustomerRankById(promotion.getMinCustomerRankId())).thenReturn(
+                new CustomerRankGrpcClient.CustomerRankInfo(
+                        promotion.getMinCustomerRankId(),
+                        "SILVER",
+                        "Silver",
+                        BigDecimal.valueOf(100000),
+                        BigDecimal.valueOf(1000),
+                        BigDecimal.ONE,
+                        2,
+                        "ACTIVE"));
 
         PromotionPreviewResponse response = promotionEngine.previewPromotion(request, requesterUserId);
 
         assertEquals(BigDecimal.ZERO.setScale(0), response.discountAmount());
-        assertTrue(response.note().contains("lifetime spending"));
+        assertTrue(response.note().contains("customer rank"));
     }
 
     @Test

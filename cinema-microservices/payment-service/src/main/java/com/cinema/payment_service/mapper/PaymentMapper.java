@@ -1,6 +1,7 @@
 package com.cinema.payment_service.mapper;
 
 import com.cinema.payment_service.dto.response.PaymentSessionResponse;
+import com.cinema.payment_service.dto.response.CustomerRankSummaryResponse;
 import com.cinema.payment_service.dto.response.PromotionSelectionItemResponse;
 import com.cinema.payment_service.dto.response.PromotionSelectionResponse;
 import com.cinema.payment_service.dto.response.PromotionPreviewResponse;
@@ -25,6 +26,9 @@ import java.util.UUID;
 public interface PaymentMapper {
 
     @Mapping(target = "discountValue", expression = "java(normalizeNullableAmount(promotion.getDiscountValue()))")
+    @Mapping(target = "id", source = "promotion.id")
+    @Mapping(target = "code", source = "promotion.code")
+    @Mapping(target = "name", source = "promotion.name")
     @Mapping(target = "minOrderAmount", source = "promotion.minOrderAmount", qualifiedByName = "normalizeNullableAmount")
     @Mapping(target = "maxDiscountAmount", source = "promotion.maxDiscountAmount", qualifiedByName = "normalizeNullableAmount")
     @Mapping(target = "cinemaIds", expression = "java(normalizeUuidList(cinemaIds))")
@@ -32,12 +36,14 @@ public interface PaymentMapper {
     @Mapping(target = "cinemaCount", expression = "java(normalizeUuidList(cinemaIds).size())")
     @Mapping(target = "filmCount", expression = "java(normalizeUuidList(filmIds).size())")
     @Mapping(target = "activeNow", expression = "java(isActiveNow(promotion))")
+    @Mapping(target = "customerRank", source = "customerRank")
     @Mapping(target = "usedCount", source = "usedCount")
     @Mapping(target = "remainingUsageCount", source = "remainingUsageCount")
     PromotionResponse toPromotionResponse(
             Promotion promotion,
             Collection<UUID> cinemaIds,
             Collection<UUID> filmIds,
+            CustomerRankSummaryResponse customerRank,
             Long usedCount,
             Long remainingUsageCount);
 

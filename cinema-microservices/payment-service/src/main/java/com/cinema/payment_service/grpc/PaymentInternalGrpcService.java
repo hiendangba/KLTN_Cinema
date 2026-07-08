@@ -30,12 +30,22 @@ public class PaymentInternalGrpcService extends PaymentInternalServiceGrpc.Payme
     public void getPaymentSessionByBookingId(
             GetPaymentSessionByBookingIdRequest request,
             StreamObserver<GetPaymentSessionByBookingIdReply> responseObserver) {
+        log.info(
+                "PAYMENT_SESSION_GRPC_REQUEST bookingId={} requesterUserId={} requesterRole={}",
+                request.getBookingId(),
+                request.getRequesterUserId(),
+                request.getRequesterRole());
         UUID bookingId;
         UUID requesterUserId;
         try {
             bookingId = UUID.fromString(request.getBookingId());
             requesterUserId = UUID.fromString(request.getRequesterUserId());
         } catch (IllegalArgumentException ex) {
+            log.warn(
+                    "PAYMENT_SESSION_GRPC_INVALID_FORMAT bookingId={} requesterUserId={} requesterRole={}",
+                    request.getBookingId(),
+                    request.getRequesterUserId(),
+                    request.getRequesterRole());
             responseObserver.onNext(errorReply(ErrorCode.INVALID_FORMAT));
             responseObserver.onCompleted();
             return;
@@ -46,6 +56,13 @@ public class PaymentInternalGrpcService extends PaymentInternalServiceGrpc.Payme
                     bookingId,
                     requesterUserId,
                     request.getRequesterRole());
+            log.info(
+                    "PAYMENT_SESSION_GRPC_SUCCESS bookingId={} requesterUserId={} requesterRole={} sessionId={} status={}",
+                    bookingId,
+                    requesterUserId,
+                    request.getRequesterRole(),
+                    session == null ? null : session.getId(),
+                    session == null || session.getStatus() == null ? null : session.getStatus().name());
             responseObserver.onNext(GetPaymentSessionByBookingIdReply.newBuilder()
                     .setSuccess(true)
                     .setMessage("Payment session fetched successfully")
@@ -53,10 +70,22 @@ public class PaymentInternalGrpcService extends PaymentInternalServiceGrpc.Payme
                     .build());
             responseObserver.onCompleted();
         } catch (BusinessException ex) {
+            log.warn(
+                    "PAYMENT_SESSION_GRPC_BUSINESS_ERROR bookingId={} requesterUserId={} requesterRole={} errorCode={} message={}",
+                    bookingId,
+                    requesterUserId,
+                    request.getRequesterRole(),
+                    ex.getErrorCode().name(),
+                    ex.getMessage());
             responseObserver.onNext(errorReply(ex.getErrorCode()));
             responseObserver.onCompleted();
         } catch (Exception ex) {
-            log.error("Unexpected gRPC error while fetching payment session by booking id", ex);
+            log.error(
+                    "PAYMENT_SESSION_GRPC_UNEXPECTED_ERROR bookingId={} requesterUserId={} requesterRole={}",
+                    bookingId,
+                    requesterUserId,
+                    request.getRequesterRole(),
+                    ex);
             responseObserver.onNext(errorReply(ErrorCode.INTERNAL_ERROR));
             responseObserver.onCompleted();
         }

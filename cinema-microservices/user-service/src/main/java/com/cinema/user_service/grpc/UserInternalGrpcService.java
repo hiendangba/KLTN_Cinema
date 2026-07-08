@@ -6,6 +6,8 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.grpc.common.OperationReply;
 import com.cinema.grpc.user.CheckUserExistsReply;
 import com.cinema.grpc.user.CheckUserExistsRequest;
+import com.cinema.grpc.user.GetCustomerRankByIdReply;
+import com.cinema.grpc.user.GetCustomerRankByIdRequest;
 import com.cinema.grpc.user.DeleteProfileRequest;
 import com.cinema.grpc.user.DeleteCustomerProfileForBookingRequest;
 import com.cinema.grpc.user.CreateCustomerProfileRequest;
@@ -20,8 +22,10 @@ import com.cinema.grpc.user.UserInternalServiceGrpc;
 import com.cinema.user_service.dto.request.RegisterCustomerRequest;
 import com.cinema.user_service.dto.request.RegisterManagerRequest;
 import com.cinema.user_service.dto.request.RegisterStaffRequest;
+import com.cinema.user_service.dto.response.CustomerRankResponse;
 import com.cinema.user_service.dto.response.UserExistenceResponse;
 import com.cinema.user_service.dto.response.UserResponse;
+import com.cinema.user_service.services.CustomerRankService;
 import com.cinema.user_service.services.UserService;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +41,7 @@ import java.util.UUID;
 public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInternalServiceImplBase {
 
     private final UserService userService;
+    private final CustomerRankService customerRankService;
 
     @Override
     public void createCustomerProfile(
@@ -277,6 +282,62 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
         } catch (Exception ex) {
             log.error("Unexpected gRPC error while fetching user by id", ex);
             responseObserver.onNext(GetUserBasicByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void getCustomerRankById(
+            GetCustomerRankByIdRequest request,
+            StreamObserver<GetCustomerRankByIdReply> responseObserver) {
+        try {
+            CustomerRankResponse rank = customerRankService.getRankById(UUID.fromString(request.getRankId()));
+            log.info("CUSTOMER_RANK_RESPONSE rankId={} code={} level={}",
+                    rank.id(),
+                    rank.code(),
+                    rank.level());
+            responseObserver.onNext(GetCustomerRankByIdReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Customer rank fetched successfully")
+                    .setRank(com.cinema.grpc.user.CustomerRankPayload.newBuilder()
+                            .setId(rank.id().toString())
+                            .setCode(blankToEmpty(rank.code()))
+                            .setName(blankToEmpty(rank.name()))
+                            .setMinLifetimeAmount(rank.minLifetimeAmount() == null
+                                    ? "0"
+                                    : rank.minLifetimeAmount().toPlainString())
+                            .setEarningAmountUnit(rank.earningAmountUnit() == null
+                                    ? "0"
+                                    : rank.earningAmountUnit().toPlainString())
+                            .setEarningPointsPerUnit(rank.earningPointsPerUnit() == null
+                                    ? "0"
+                                    : rank.earningPointsPerUnit().toPlainString())
+                            .setLevel(rank.level() == null ? 0 : rank.level())
+                            .setStatus(rank.status() == null ? "" : rank.status().name())
+                            .build())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(GetCustomerRankByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(GetCustomerRankByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching customer rank by id", ex);
+            responseObserver.onNext(GetCustomerRankByIdReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
                     .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())

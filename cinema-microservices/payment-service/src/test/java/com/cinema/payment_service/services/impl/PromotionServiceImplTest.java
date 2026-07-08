@@ -8,6 +8,7 @@ import com.cinema.exception.ErrorCode;
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.payment_service.dto.request.PromotionField;
 import com.cinema.payment_service.dto.request.PromotionUpsertRequest;
+import com.cinema.payment_service.dto.response.CustomerRankSummaryResponse;
 import com.cinema.payment_service.dto.response.PromotionResponse;
 import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.entity.PromotionCinema;
@@ -15,6 +16,7 @@ import com.cinema.payment_service.entity.PromotionFilm;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
+import com.cinema.payment_service.grpc.CustomerRankGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PaymentTransactionPromotionRepository;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
@@ -62,6 +64,9 @@ class PromotionServiceImplTest {
 
     @Mock
     private CinemaGrpcClient cinemaGrpcClient;
+
+    @Mock
+    private CustomerRankGrpcClient customerRankGrpcClient;
 
     @Mock
     private PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
@@ -143,6 +148,32 @@ class PromotionServiceImplTest {
     }
 
     @Test
+    void createPromotion_shouldRejectWhenRankAndLifetimeAmountAreProvidedTogether() {
+        UUID userId = UUID.randomUUID();
+        UUID rankId = UUID.randomUUID();
+
+        PromotionUpsertRequest request = PromotionUpsertRequest.builder()
+                .code("VIP10")
+                .name("VIP promo")
+                .discountType(PromotionDiscountType.PERCENT)
+                .discountValue(BigDecimal.TEN)
+                .minCustomerRankId(rankId)
+                .minCustomerLifetimeAmount(BigDecimal.valueOf(500000))
+                .startAt(LocalDateTime.now().minusDays(1))
+                .endAt(LocalDateTime.now().plusDays(7))
+                .build();
+
+        when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
+        when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> promotionService.createPromotion(request, httpRequest));
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.getErrorCode());
+        verify(promotionRepository, never()).save(any());
+    }
+
+    @Test
     void updatePromotion_shouldToggleStatus() {
         UUID promotionId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
@@ -179,6 +210,33 @@ class PromotionServiceImplTest {
 
         assertEquals(PromotionStatus.INACTIVE, promotion.getStatus());
         assertEquals(SuccessMessage.PROMOTION_UPDATED.getMessage(), response.getMessage());
+    }
+
+    @Test
+    void updatePromotion_shouldRejectWhenRankAndLifetimeAmountAreProvidedTogether() {
+        UUID promotionId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID rankId = UUID.randomUUID();
+
+        when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
+        when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+
+        PromotionUpsertRequest request = PromotionUpsertRequest.builder()
+                .code("SALE10")
+                .name("Sale")
+                .discountType(PromotionDiscountType.PERCENT)
+                .discountValue(BigDecimal.TEN)
+                .minCustomerRankId(rankId)
+                .minCustomerLifetimeAmount(BigDecimal.valueOf(500000))
+                .startAt(LocalDateTime.now().minusDays(1))
+                .endAt(LocalDateTime.now().plusDays(7))
+                .build();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> promotionService.updatePromotion(promotionId, request, httpRequest));
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.getErrorCode());
+        verify(promotionRepository, never()).save(any());
     }
 
     @Test
@@ -243,6 +301,7 @@ class PromotionServiceImplTest {
     void getPromotionById_shouldReturnUsageAndEligibilityFields() {
         UUID promotionId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
+        UUID rankId = UUID.randomUUID();
         Promotion promotion = new Promotion();
         promotion.setId(promotionId);
         promotion.setCode("VIP10");
@@ -251,17 +310,31 @@ class PromotionServiceImplTest {
         promotion.setDiscountValue(BigDecimal.TEN);
         promotion.setStatus(PromotionStatus.ACTIVE);
         promotion.setIsDeleted(false);
-        promotion.setMinCustomerLifetimeAmount(BigDecimal.valueOf(100000));
+        promotion.setMinCustomerRankId(rankId);
         promotion.setMaxUsageCount(10);
 
         when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
         when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
         when(promotionRepository.findById(promotionId)).thenReturn(Optional.of(promotion));
         when(paymentTransactionPromotionRepository.countReachedPaidUsageByPromotionId(promotionId)).thenReturn(4L);
+        when(customerRankGrpcClient.getCustomerRankById(rankId)).thenReturn(
+                new CustomerRankGrpcClient.CustomerRankInfo(
+                        rankId,
+                        "GOLD",
+                        "Gold",
+                        BigDecimal.valueOf(1000000),
+                        BigDecimal.valueOf(1000),
+                        BigDecimal.ONE,
+                        3,
+                        "ACTIVE"));
 
         PromotionResponse response = promotionService.getPromotionById(promotionId, httpRequest);
 
-        assertEquals(BigDecimal.valueOf(100000), response.getMinCustomerLifetimeAmount());
+        assertEquals(CustomerRankSummaryResponse.builder()
+                .id(rankId)
+                .code("GOLD")
+                .name("Gold")
+                .build(), response.getCustomerRank());
         assertEquals(10, response.getMaxUsageCount());
         assertEquals(4L, response.getUsedCount());
         assertEquals(6L, response.getRemainingUsageCount());

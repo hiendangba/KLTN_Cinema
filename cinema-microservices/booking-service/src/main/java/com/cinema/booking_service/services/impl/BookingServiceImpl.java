@@ -452,7 +452,20 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional(readOnly = true)
     public CheckoutContextResponse getCheckoutContext(UUID id, HttpServletRequest httpRequest) {
+        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+        UUID requesterUserId = HeaderNames.ROLE_CUSTOMER.equals(role) ? resolveUserId(httpRequest) : null;
+        log.info("CHECKOUT_CONTEXT_START bookingId={} requesterUserId={} requesterRole={}", id, requesterUserId, role);
+
         Booking booking = getActiveBookingOrThrow(id);
+        log.info(
+                "CHECKOUT_CONTEXT_BOOKING_LOADED bookingId={} bookingStatus={} paymentStatus={} userId={} cinemaId={} showtimeId={} reservedUntil={}",
+                id,
+                booking.getBookingStatus(),
+                booking.getPaymentStatus(),
+                booking.getUserId(),
+                booking.getCinemaId(),
+                booking.getShowtimeId(),
+                booking.getReservedUntil());
         authorizeBookingCheckoutRead(booking, httpRequest);
 
         LocalDateTime now = LocalDateTime.now();
@@ -461,24 +474,33 @@ public class BookingServiceImpl implements BookingService {
                 : Math.max(0L, ChronoUnit.SECONDS.between(now, booking.getReservedUntil()));
 
         PaymentSessionSnapshotResponse paymentSession = null;
-        String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
-            UUID requesterUserId = resolveUserId(httpRequest);
+            log.info("CHECKOUT_CONTEXT_PAYMENT_LOOKUP_START bookingId={} requesterUserId={} requesterRole={}", id, requesterUserId, role);
             try {
                 paymentSession = paymentGrpcClient.getSessionByBookingId(id, requesterUserId, role);
-            } catch (BusinessException ex) {
-                log.warn(
-                        "CHECKOUT_CONTEXT_PAYMENT_SESSION_FALLBACK bookingId={} requesterUserId={} errorCode={} message={}",
+                log.info(
+                        "CHECKOUT_CONTEXT_PAYMENT_LOOKUP_OK bookingId={} requesterUserId={} requesterRole={} sessionStatus={} sessionId={} payUrl={}",
                         id,
                         requesterUserId,
+                        role,
+                        paymentSession == null ? null : paymentSession.getStatus(),
+                        paymentSession == null ? null : paymentSession.getId(),
+                        paymentSession == null ? null : paymentSession.getPayUrl());
+            } catch (BusinessException ex) {
+                log.warn(
+                        "CHECKOUT_CONTEXT_PAYMENT_LOOKUP_FALLBACK bookingId={} requesterUserId={} requesterRole={} errorCode={} message={}",
+                        id,
+                        requesterUserId,
+                        role,
                         ex.getErrorCode().name(),
                         ex.getMessage());
                 paymentSession = null;
             } catch (RuntimeException ex) {
                 log.error(
-                        "CHECKOUT_CONTEXT_PAYMENT_SESSION_LOOKUP_FAILED bookingId={} requesterUserId={}",
+                        "CHECKOUT_CONTEXT_PAYMENT_LOOKUP_RUNTIME_FAILED bookingId={} requesterUserId={} requesterRole={}",
                         id,
                         requesterUserId,
+                        role,
                         ex);
                 paymentSession = null;
             }
@@ -490,12 +512,21 @@ public class BookingServiceImpl implements BookingService {
         boolean unpaid = booking.getPaymentStatus() != PaymentStatus.PAID;
         boolean paymentSessionAllowsPay = paymentSession == null || isPayableSessionStatus(paymentSession.getStatus());
 
-        return CheckoutContextResponse.builder()
+        CheckoutContextResponse response = CheckoutContextResponse.builder()
                 .booking(toBookingResponse(booking))
                 .paymentSession(paymentSession)
                 .secondsToExpire(secondsToExpire)
                 .canPay(activeStatus && notExpired && unpaid && paymentSessionAllowsPay)
                 .build();
+        log.info(
+                "CHECKOUT_CONTEXT_READY bookingId={} requesterUserId={} requesterRole={} canPay={} paymentSessionPresent={} secondsToExpire={}",
+                id,
+                requesterUserId,
+                role,
+                response.isCanPay(),
+                response.getPaymentSession() != null,
+                response.getSecondsToExpire());
+        return response;
     }
 
     @Override
@@ -598,9 +629,29 @@ public class BookingServiceImpl implements BookingService {
         if (response == null) {
             return null;
         }
-        response.setCinemaName(resolveCinemaName(booking == null ? null : booking.getCinemaId(), cinemaNameCache));
-        response.setHallName(resolveHallName(booking, hallNameCache, showtimeCache));
-        return response;
+        UUID bookingId = booking == null ? null : booking.getId();
+        UUID cinemaId = booking == null ? null : booking.getCinemaId();
+        UUID showtimeId = booking == null ? null : booking.getShowtimeId();
+        try {
+            response.setCinemaName(resolveCinemaName(cinemaId, cinemaNameCache));
+            response.setHallName(resolveHallName(booking, hallNameCache, showtimeCache));
+            log.debug(
+                    "BOOKING_RESPONSE_ENRICHED bookingId={} cinemaId={} showtimeId={} cinemaName={} hallName={}",
+                    bookingId,
+                    cinemaId,
+                    showtimeId,
+                    response.getCinemaName(),
+                    response.getHallName());
+            return response;
+        } catch (RuntimeException ex) {
+            log.error(
+                    "BOOKING_RESPONSE_ENRICHMENT_FAILED bookingId={} cinemaId={} showtimeId={}",
+                    bookingId,
+                    cinemaId,
+                    showtimeId,
+                    ex);
+            throw ex;
+        }
     }
 
     private String resolveCinemaName(UUID cinemaId, Map<UUID, String> cinemaNameCache) {
@@ -612,16 +663,27 @@ public class BookingServiceImpl implements BookingService {
             return cache.get(cinemaId);
         }
         try {
+            log.debug("CHECKOUT_CONTEXT_CINEMA_LOOKUP_START cinemaId={}", cinemaId);
             CinemaGrpcClient.CinemaSummary cinema = cinemaGrpcClient.getCinemaById(cinemaId);
             if (cinema == null) {
                 cache.put(cinemaId, null);
+                log.warn("CHECKOUT_CONTEXT_CINEMA_LOOKUP_EMPTY cinemaId={}", cinemaId);
                 return null;
             }
             String cinemaName = cinema.name();
             cache.put(cinemaId, cinemaName);
+            log.debug("CHECKOUT_CONTEXT_CINEMA_LOOKUP_OK cinemaId={} cinemaName={}", cinemaId, cinemaName);
             return cinemaName;
         } catch (BusinessException ex) {
             cache.put(cinemaId, null);
+            log.warn(
+                    "CHECKOUT_CONTEXT_CINEMA_LOOKUP_BUSINESS_FAILED cinemaId={} errorCode={} message={}",
+                    cinemaId,
+                    ex.getErrorCode().name(),
+                    ex.getMessage());
+            return null;
+        } catch (RuntimeException ex) {
+            log.error("CHECKOUT_CONTEXT_CINEMA_LOOKUP_RUNTIME_FAILED cinemaId={}", cinemaId, ex);
             return null;
         }
     }
@@ -688,7 +750,12 @@ public class BookingServiceImpl implements BookingService {
 
         try {
             if (!hasPrefetchedShowtime && showtime == null) {
+                log.debug("CHECKOUT_CONTEXT_SHOWTIME_LOOKUP_START bookingShowtimeId={}", booking.getShowtimeId());
                 showtime = showtimeGrpcClient.getShowtimeById(booking.getShowtimeId());
+                log.debug(
+                        "CHECKOUT_CONTEXT_SHOWTIME_LOOKUP_OK bookingShowtimeId={} hallId={}",
+                        booking.getShowtimeId(),
+                        showtime == null ? null : showtime.getHallId());
             }
             if (showtime == null || showtime.getHallId() == null) {
                 return null;
@@ -700,13 +767,30 @@ public class BookingServiceImpl implements BookingService {
                 return cache.get(hallId);
             }
 
+            log.debug("CHECKOUT_CONTEXT_HALL_LOOKUP_START hallId={} bookingShowtimeId={}", hallId, booking.getShowtimeId());
             String hallName = hallGrpcClient.getHallById(hallId).name();
             cache.put(hallId, hallName);
+            log.debug(
+                    "CHECKOUT_CONTEXT_HALL_LOOKUP_OK hallId={} bookingShowtimeId={} hallName={}",
+                    hallId,
+                    booking.getShowtimeId(),
+                    hallName);
             return hallName;
         } catch (BusinessException ex) {
             if (hallNameCache != null && showtime != null && showtime.getHallId() != null) {
                 hallNameCache.put(showtime.getHallId(), null);
             }
+            log.warn(
+                    "CHECKOUT_CONTEXT_HALL_LOOKUP_BUSINESS_FAILED bookingShowtimeId={} errorCode={} message={}",
+                    booking.getShowtimeId(),
+                    ex.getErrorCode().name(),
+                    ex.getMessage());
+            return null;
+        } catch (RuntimeException ex) {
+            log.error(
+                    "CHECKOUT_CONTEXT_HALL_LOOKUP_RUNTIME_FAILED bookingShowtimeId={}",
+                    booking.getShowtimeId(),
+                    ex);
             return null;
         }
     }

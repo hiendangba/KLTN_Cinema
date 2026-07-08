@@ -12,6 +12,7 @@ import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.cinema.payment_service.dto.request.PromotionField;
 import com.cinema.payment_service.dto.request.PromotionUpsertRequest;
+import com.cinema.payment_service.dto.response.CustomerRankSummaryResponse;
 import com.cinema.payment_service.dto.response.PromotionResponse;
 import com.cinema.payment_service.entity.Promotion;
 import com.cinema.payment_service.entity.PromotionCinema;
@@ -19,6 +20,7 @@ import com.cinema.payment_service.entity.PromotionFilm;
 import com.cinema.payment_service.enums.PromotionDiscountType;
 import com.cinema.payment_service.enums.PromotionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
+import com.cinema.payment_service.grpc.CustomerRankGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PromotionCinemaRepository;
 import com.cinema.payment_service.repository.PromotionFilmRepository;
@@ -55,6 +57,7 @@ public class PromotionServiceImpl implements PromotionService {
     private final PromotionFilmRepository promotionFilmRepository;
     private final PaymentTransactionPromotionRepository paymentTransactionPromotionRepository;
     private final CinemaGrpcClient cinemaGrpcClient;
+    private final CustomerRankGrpcClient customerRankGrpcClient;
     private final PaymentMapper paymentMapper;
     private final PromotionEngine promotionEngine;
 
@@ -124,10 +127,12 @@ public class PromotionServiceImpl implements PromotionService {
         Promotion promotion = getPromotionEntity(id);
         ensureCanViewPromotion(role, requesterUserId, promotion);
         long usedCount = getUsedCount(promotion.getId());
+        CustomerRankSummaryResponse customerRank = resolveCustomerRankSummary(promotion.getMinCustomerRankId(), new LinkedHashMap<>());
         return paymentMapper.toPromotionResponse(
                 promotion,
                 loadCinemaIds(promotion.getId()),
                 loadFilmIds(promotion.getId()),
+                customerRank,
                 usedCount,
                 calculateRemainingUsageCount(promotion, usedCount));
     }
@@ -212,6 +217,10 @@ public class PromotionServiceImpl implements PromotionService {
         }
         if (request.getMinCustomerLifetimeAmount() != null
                 && request.getMinCustomerLifetimeAmount().compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+        if (request.getMinCustomerRankId() != null
+                && request.getMinCustomerLifetimeAmount() != null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
         if (request.getMaxUsageCount() != null && request.getMaxUsageCount() <= 0) {
@@ -309,6 +318,7 @@ public class PromotionServiceImpl implements PromotionService {
         promotion.setDiscountValue(normalizeAmount(request.getDiscountValue()));
         promotion.setMinOrderAmount(normalizeNullableAmount(request.getMinOrderAmount()));
         promotion.setMaxDiscountAmount(normalizeNullableAmount(request.getMaxDiscountAmount()));
+        promotion.setMinCustomerRankId(request.getMinCustomerRankId());
         promotion.setMinCustomerLifetimeAmount(normalizeNullableAmount(request.getMinCustomerLifetimeAmount()));
         promotion.setMaxUsageCount(request.getMaxUsageCount());
         promotion.setStartAt(request.getStartAt());
@@ -350,6 +360,11 @@ public class PromotionServiceImpl implements PromotionService {
             PageRequest<PromotionField> request,
             String role,
             UUID requesterUserId) {
+        List<FilterField<PromotionField>> filters = request.getFilterBy();
+        if (filters != null && !filters.isEmpty()) {
+            validatePromotionSearchFilters(filters, role, requesterUserId);
+        }
+
         if (items == null || items.isEmpty()) {
             return List.of();
         }
@@ -362,9 +377,7 @@ public class PromotionServiceImpl implements PromotionService {
                     .collect(Collectors.toCollection(ArrayList::new));
         }
 
-        List<FilterField<PromotionField>> filters = request.getFilterBy();
         if (filters != null && !filters.isEmpty()) {
-            validatePromotionSearchFilters(filters, role, requesterUserId);
             filtered = filtered.stream()
                     .filter(item -> matchesAllFilters(item, filters))
                     .collect(Collectors.toCollection(ArrayList::new));
@@ -654,14 +667,18 @@ public class PromotionServiceImpl implements PromotionService {
         Map<UUID, List<UUID>> cinemaMap = loadCinemaIdsByPromotionIds(promotionIds);
         Map<UUID, List<UUID>> filmMap = loadFilmIdsByPromotionIds(promotionIds);
         Map<UUID, Long> usageMap = loadUsedCountByPromotionIds(promotionIds);
+        Map<UUID, CustomerRankSummaryResponse> customerRankMap = new LinkedHashMap<>();
 
         return promotions.stream()
                 .map(promotion -> {
                     long usedCount = usageMap.getOrDefault(promotion.getId(), 0L);
+                    CustomerRankSummaryResponse customerRank =
+                            resolveCustomerRankSummary(promotion.getMinCustomerRankId(), customerRankMap);
                     return paymentMapper.toPromotionResponse(
                             promotion,
                             cinemaMap.getOrDefault(promotion.getId(), List.of()),
                             filmMap.getOrDefault(promotion.getId(), List.of()),
+                            customerRank,
                             usedCount,
                             calculateRemainingUsageCount(promotion, usedCount));
                 })
@@ -698,6 +715,40 @@ public class PromotionServiceImpl implements PromotionService {
             return null;
         }
         return Math.max(0L, (long) promotion.getMaxUsageCount() - usedCount);
+    }
+
+    private CustomerRankSummaryResponse resolveCustomerRankSummary(
+            UUID rankId,
+            Map<UUID, CustomerRankSummaryResponse> customerRankCache) {
+        if (rankId == null) {
+            return null;
+        }
+        if (customerRankCache != null && customerRankCache.containsKey(rankId)) {
+            return customerRankCache.get(rankId);
+        }
+        try {
+            CustomerRankGrpcClient.CustomerRankInfo rankInfo = customerRankGrpcClient.getCustomerRankById(rankId);
+            if (rankInfo == null) {
+                if (customerRankCache != null) {
+                    customerRankCache.put(rankId, null);
+                }
+                return null;
+            }
+            CustomerRankSummaryResponse customerRank = CustomerRankSummaryResponse.builder()
+                    .id(rankInfo.id())
+                    .code(rankInfo.code())
+                    .name(rankInfo.name())
+                    .build();
+            if (customerRankCache != null) {
+                customerRankCache.put(rankId, customerRank);
+            }
+            return customerRank;
+        } catch (BusinessException ex) {
+            if (customerRankCache != null) {
+                customerRankCache.put(rankId, null);
+            }
+            return null;
+        }
     }
 
     private List<UUID> loadCinemaIds(UUID promotionId) {

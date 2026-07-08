@@ -9,6 +9,7 @@ import com.cinema.grpc.payment.PaymentInternalServiceGrpc;
 import com.cinema.grpc.payment.PaymentSessionPayload;
 import com.cinema.booking_service.dto.response.PaymentSessionSnapshotResponse;
 import io.grpc.StatusRuntimeException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Component
+@Slf4j
 public class PaymentGrpcClient {
 
     private final PaymentInternalServiceGrpc.PaymentInternalServiceBlockingStub paymentBlockingStub;
@@ -26,6 +28,11 @@ public class PaymentGrpcClient {
     }
 
     public PaymentSessionSnapshotResponse getSessionByBookingId(UUID bookingId, UUID requesterUserId, String requesterRole) {
+        log.info(
+                "CHECKOUT_CONTEXT_PAYMENT_GRPC_REQUEST bookingId={} requesterUserId={} requesterRole={}",
+                bookingId,
+                requesterUserId,
+                requesterRole);
         try {
             GetPaymentSessionByBookingIdReply reply = paymentBlockingStub.getPaymentSessionByBookingId(
                     GetPaymentSessionByBookingIdRequest.newBuilder()
@@ -35,17 +42,41 @@ public class PaymentGrpcClient {
                             .build());
 
             if (!reply.getSuccess()) {
+                log.warn(
+                        "CHECKOUT_CONTEXT_PAYMENT_GRPC_REPLY_FAILED bookingId={} requesterUserId={} requesterRole={} errorKey={} message={}",
+                        bookingId,
+                        requesterUserId,
+                        requesterRole,
+                        reply.getErrorKey(),
+                        reply.getMessage());
                 throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.EXTERNAL_SERVICE_ERROR));
             }
 
-            return toSnapshot(reply.getSession());
+            PaymentSessionSnapshotResponse snapshot = toSnapshot(reply.getSession());
+            log.info(
+                    "CHECKOUT_CONTEXT_PAYMENT_GRPC_REPLY_OK bookingId={} requesterUserId={} requesterRole={} sessionId={} status={}",
+                    bookingId,
+                    requesterUserId,
+                    requesterRole,
+                    snapshot.getId(),
+                    snapshot.getStatus());
+            return snapshot;
         } catch (StatusRuntimeException ex) {
+            log.error(
+                    "CHECKOUT_CONTEXT_PAYMENT_GRPC_TRANSPORT_FAILED bookingId={} requesterUserId={} requesterRole={}",
+                    bookingId,
+                    requesterUserId,
+                    requesterRole,
+                    ex);
             throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
         }
     }
 
     private PaymentSessionSnapshotResponse toSnapshot(PaymentSessionPayload payload) {
         if (payload == null || payload.getBookingId().isBlank()) {
+            log.warn(
+                    "CHECKOUT_CONTEXT_PAYMENT_GRPC_INVALID_PAYLOAD bookingId={} reason=blank_booking_id",
+                    payload == null ? null : payload.getBookingId());
             throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
         }
         try {
@@ -71,6 +102,13 @@ public class PaymentGrpcClient {
             response.setFailureReason(blankToNull(payload.getFailureReason()));
             return response;
         } catch (Exception ex) {
+            log.error(
+                    "CHECKOUT_CONTEXT_PAYMENT_GRPC_PARSE_FAILED bookingId={} payloadStatus={} payloadId={} payloadUserId={}",
+                    payload.getBookingId(),
+                    payload.getStatus(),
+                    payload.getId(),
+                    payload.getUserId(),
+                    ex);
             throw new BusinessException(ErrorCode.EXTERNAL_SERVICE_ERROR);
         }
     }

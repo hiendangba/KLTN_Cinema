@@ -42,6 +42,8 @@ public class PromotionUpsertRequest {
 
     private BigDecimal maxDiscountAmount;
 
+    private UUID minCustomerRankId;
+
     private BigDecimal minCustomerLifetimeAmount;
 
     private Integer maxUsageCount;
