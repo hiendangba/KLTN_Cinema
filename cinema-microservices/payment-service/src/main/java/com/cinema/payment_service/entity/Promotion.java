@@ -53,9 +53,6 @@ public class Promotion {
     @Column(name = "min_customer_rank_id", columnDefinition = "uuid")
     private UUID minCustomerRankId;
 
-    @Column(name = "min_customer_lifetime_amount", precision = 14, scale = 2)
-    private BigDecimal minCustomerLifetimeAmount;
-
     @Column(name = "max_usage_count")
     private Integer maxUsageCount;
 

@@ -390,24 +390,19 @@ public class PromotionEngine {
         if (promotion == null) {
             return true;
         }
-        if (promotion.getMinCustomerRankId() != null) {
-            CustomerRankGrpcClient.CustomerRankInfo requiredRank =
-                    resolveCustomerRank(promotion.getMinCustomerRankId(), customerRankCache);
-            if (requiredRank == null) {
-                return false;
-            }
-            BigDecimal userLifetimePaidAmount = user == null
-                    ? ZERO
-                    : normalizeAmount(user.lifetimePaidAmount());
-            return userLifetimePaidAmount.compareTo(normalizeAmount(requiredRank.minLifetimeAmount())) >= 0;
-        }
-        if (promotion.getMinCustomerLifetimeAmount() == null) {
+        UUID minCustomerRankId = promotion.getMinCustomerRankId();
+        if (minCustomerRankId == null) {
             return true;
+        }
+        CustomerRankGrpcClient.CustomerRankInfo requiredRank =
+                resolveCustomerRank(minCustomerRankId, customerRankCache);
+        if (requiredRank == null) {
+            return false;
         }
         BigDecimal userLifetimePaidAmount = user == null
                 ? ZERO
                 : normalizeAmount(user.lifetimePaidAmount());
-        return userLifetimePaidAmount.compareTo(normalizeAmount(promotion.getMinCustomerLifetimeAmount())) >= 0;
+        return userLifetimePaidAmount.compareTo(normalizeAmount(requiredRank.minLifetimeAmount())) >= 0;
     }
 
     private boolean hasUserReachedPromotionUsageLimit(UUID promotionId, UUID userId) {
@@ -467,10 +462,7 @@ public class PromotionEngine {
             }
             return "Promotion requires a valid customer rank";
         }
-        BigDecimal minAmount = promotion == null || promotion.getMinCustomerLifetimeAmount() == null
-                ? ZERO
-                : normalizeAmount(promotion.getMinCustomerLifetimeAmount());
-        return "Promotion requires lifetime spending of " + minAmount + " or higher";
+        return "Promotion requires customer rank";
     }
 
     private CustomerRankGrpcClient.CustomerRankInfo resolveCustomerRank(

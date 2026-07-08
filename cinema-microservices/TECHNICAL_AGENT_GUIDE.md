@@ -28,7 +28,7 @@
 - `payment-service` vẫn lưu promotion target bằng `minCustomerRankId`, nhưng response `GET /api/promotions/{id}` và `searchPromotions` chỉ trả `customerRank` object thay vì đẩy raw UUID hay cột amount ra FE.
 - `customerRank` trong response mang `id`, `code`, `name`; promotion không gắn rank thì field này là `null`.
 - Luồng so điều kiện khuyến mãi tiếp tục tra `customer rank` qua gRPC `GetCustomerRankById` từ `user-service`, lấy `minLifetimeAmount` của rank đó rồi mới so với lifetime paid amount của khách.
-- `POST/PUT /api/promotions` giờ chỉ nhận `minCustomerRankId` cho rule khách hàng; cột `minCustomerLifetimeAmount` đã bỏ khỏi request/response để FE không phải nhập số tiền riêng nữa.
+- `POST/PUT /api/promotions` giờ chỉ nhận `minCustomerRankId` cho rule khách hàng; `minCustomerLifetimeAmount` đã bị xoá khỏi entity/request/response và DB cần drop cột tương ứng để schema khớp model mới.
 - `GET /api/bookings/{id}/checkout-context` giờ có trace log `CHECKOUT_CONTEXT_*` ở booking-service và `PAYMENT_SESSION_GRPC_*` ở payment-service để soi đúng điểm lỗi khi checkout-context trả `9502`; booking-service cũng log riêng cinema/hall/showtime lookup để biết call nào bị rớt.
 - `compose.prod.yaml` của `booking-service` đã bổ sung `PAYMENT_GRPC_HOST=payment-service` và `PAYMENT_GRPC_PORT=9198`; thiếu 2 biến này thì container booking-service sẽ fallback về `localhost:9198` và checkout-context dễ gọi nhầm vào chính nó thay vì payment-service.
 - `payment-service` `PaymentPublicController` đã nhận thêm alias GET `/api/payments/public/result` để khớp route Envoy cũ, còn `envoy.local.yaml` và `envoy.prod.yaml` đã whitelist thêm exact path `/api/payments/public/payment/result` và rewrite alias `/payment/result` / `/ipn` về đúng backend path public.

@@ -183,7 +183,6 @@ class PromotionServiceImplTest {
         verify(promotionRepository).save(captor.capture());
         Promotion saved = captor.getValue();
         assertEquals(rankId, saved.getMinCustomerRankId());
-        assertEquals(null, saved.getMinCustomerLifetimeAmount());
         assertEquals(SuccessMessage.PROMOTION_CREATED.getMessage(), response.getMessage());
     }
 
@@ -273,7 +272,6 @@ class PromotionServiceImplTest {
         verify(promotionRepository).save(captor.capture());
         Promotion saved = captor.getValue();
         assertEquals(rankId, saved.getMinCustomerRankId());
-        assertEquals(null, saved.getMinCustomerLifetimeAmount());
         assertEquals(SuccessMessage.PROMOTION_UPDATED.getMessage(), response.getMessage());
     }
 

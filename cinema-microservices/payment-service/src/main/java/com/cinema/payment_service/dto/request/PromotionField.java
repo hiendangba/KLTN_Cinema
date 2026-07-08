@@ -24,7 +24,6 @@ public enum PromotionField {
     MIN_ORDER_AMOUNT("minOrderAmount", BigDecimal.class),
     MAX_DISCOUNT_AMOUNT("maxDiscountAmount", BigDecimal.class),
     MIN_CUSTOMER_RANK_ID("minCustomerRankId", UUID.class),
-    MIN_CUSTOMER_LIFETIME_AMOUNT("minCustomerLifetimeAmount", BigDecimal.class),
     MAX_USAGE_COUNT("maxUsageCount", Integer.class),
     STATUS("status", PromotionStatus.class),
     START_AT("startAt", LocalDateTime.class),
@@ -88,7 +87,6 @@ public enum PromotionField {
             case MIN_ORDER_AMOUNT -> promotion.getMinOrderAmount();
             case MAX_DISCOUNT_AMOUNT -> promotion.getMaxDiscountAmount();
             case MIN_CUSTOMER_RANK_ID -> promotion.getMinCustomerRankId();
-            case MIN_CUSTOMER_LIFETIME_AMOUNT -> promotion.getMinCustomerLifetimeAmount();
             case MAX_USAGE_COUNT -> promotion.getMaxUsageCount();
             case STATUS -> promotion.getStatus();
             case START_AT -> promotion.getStartAt();

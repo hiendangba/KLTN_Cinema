@@ -311,7 +311,6 @@ public class PromotionServiceImpl implements PromotionService {
         promotion.setMinOrderAmount(normalizeNullableAmount(request.getMinOrderAmount()));
         promotion.setMaxDiscountAmount(normalizeNullableAmount(request.getMaxDiscountAmount()));
         promotion.setMinCustomerRankId(request.getMinCustomerRankId());
-        promotion.setMinCustomerLifetimeAmount(null);
         promotion.setMaxUsageCount(request.getMaxUsageCount());
         promotion.setStartAt(request.getStartAt());
         promotion.setEndAt(request.getEndAt());
