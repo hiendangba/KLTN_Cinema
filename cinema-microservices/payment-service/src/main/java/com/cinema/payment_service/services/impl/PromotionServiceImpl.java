@@ -428,6 +428,9 @@ public class PromotionServiceImpl implements PromotionService {
         if (filter.getField() == PromotionField.CINEMA_ID) {
             return matchesCinemaFilter(item, filter);
         }
+        if (filter.getField() == PromotionField.FILM_ID) {
+            return matchesFilmFilter(item, filter);
+        }
 
         String operator = filter.getOperator().trim().toUpperCase(Locale.ROOT);
         Object rawValue = filter.getValue();
@@ -459,33 +462,39 @@ public class PromotionServiceImpl implements PromotionService {
         }
 
         for (FilterField<PromotionField> filter : filters) {
-            if (filter == null || filter.getField() != PromotionField.CINEMA_ID) {
+            if (filter == null) {
                 continue;
             }
 
-            List<UUID> requestedCinemaIds = convertToUuidList(filter.getValue());
-            if (requestedCinemaIds.isEmpty()) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
-            }
-
-            String operator = filter.getOperator() == null ? "" : filter.getOperator().trim().toUpperCase(Locale.ROOT);
-            if (!"IN".equals(operator) && !"EQ".equals(operator)) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
-            }
-
-            if (HeaderNames.ROLE_ADMIN.equals(role)) {
+            if (filter.getField() == PromotionField.FILM_ID) {
                 continue;
             }
-            if (!HeaderNames.ROLE_MANAGER.equals(role) && !HeaderNames.ROLE_STAFF.equals(role)) {
-                throw new BusinessException(ErrorCode.FORBIDDEN);
-            }
 
-            List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId, role);
-            if (accessibleCinemaIds.isEmpty()) {
-                throw new BusinessException(ErrorCode.FORBIDDEN);
-            }
-            if (!accessibleCinemaIds.containsAll(requestedCinemaIds)) {
-                throw new BusinessException(ErrorCode.FORBIDDEN);
+            if (filter.getField() == PromotionField.CINEMA_ID) {
+                List<UUID> requestedCinemaIds = convertToUuidList(filter.getValue());
+                if (requestedCinemaIds.isEmpty()) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST);
+                }
+
+                String operator = filter.getOperator() == null ? "" : filter.getOperator().trim().toUpperCase(Locale.ROOT);
+                if (!"IN".equals(operator) && !"EQ".equals(operator)) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST);
+                }
+
+                if (HeaderNames.ROLE_ADMIN.equals(role)) {
+                    continue;
+                }
+                if (!HeaderNames.ROLE_MANAGER.equals(role) && !HeaderNames.ROLE_STAFF.equals(role)) {
+                    throw new BusinessException(ErrorCode.FORBIDDEN);
+                }
+
+                List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId, role);
+                if (accessibleCinemaIds.isEmpty()) {
+                    throw new BusinessException(ErrorCode.FORBIDDEN);
+                }
+                if (!accessibleCinemaIds.containsAll(requestedCinemaIds)) {
+                    throw new BusinessException(ErrorCode.FORBIDDEN);
+                }
             }
         }
     }
@@ -505,6 +514,26 @@ public class PromotionServiceImpl implements PromotionService {
             case "EQ", "IN" -> {
                 List<UUID> requestedCinemaIds = convertToUuidList(filter.getValue());
                 yield requestedCinemaIds.stream().anyMatch(promotionCinemaIds::contains);
+            }
+            default -> throw new BusinessException(ErrorCode.BAD_REQUEST);
+        };
+    }
+
+    private boolean matchesFilmFilter(Promotion item, FilterField<PromotionField> filter) {
+        if (item == null || filter == null || filter.getValue() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        String operator = filter.getOperator().trim().toUpperCase(Locale.ROOT);
+        List<UUID> promotionFilmIds = loadFilmIds(item.getId());
+        if (promotionFilmIds.isEmpty()) {
+            return false;
+        }
+
+        return switch (operator) {
+            case "EQ", "IN" -> {
+                List<UUID> requestedFilmIds = convertToUuidList(filter.getValue());
+                yield requestedFilmIds.stream().anyMatch(promotionFilmIds::contains);
             }
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST);
         };

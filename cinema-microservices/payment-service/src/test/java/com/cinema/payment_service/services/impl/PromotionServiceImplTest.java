@@ -338,6 +338,48 @@ class PromotionServiceImplTest {
         verify(cinemaGrpcClient).getCinemasByUserId(eq(userId), eq("MANAGER"));
     }
 
+    @Test
+    void searchPromotions_shouldFilterByMultipleFilmIds() {
+        UUID userId = UUID.randomUUID();
+        UUID promotionAId = UUID.randomUUID();
+        UUID promotionBId = UUID.randomUUID();
+        UUID filmAId = UUID.randomUUID();
+        UUID filmBId = UUID.randomUUID();
+        UUID filmOtherId = UUID.randomUUID();
+
+        Promotion promotionA = promotion(promotionAId, "PROMO-A");
+        Promotion promotionB = promotion(promotionBId, "PROMO-B");
+
+        PageRequest<PromotionField> request = PageRequest.<PromotionField>builder()
+                .page(1)
+                .size(20)
+                .filterBy(List.of(FilterField.<PromotionField>builder()
+                        .field(PromotionField.FILM_ID)
+                        .operator("IN")
+                        .value(List.of(filmAId, filmBId))
+                        .build()))
+                .build();
+
+        when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
+        when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+        when(promotionRepository.findAllByIsDeletedFalse()).thenReturn(List.of(promotionA, promotionB));
+        when(promotionFilmRepository.findAllByPromotionId(promotionAId))
+                .thenReturn(List.of(promotionFilm(promotionAId, filmAId)));
+        when(promotionFilmRepository.findAllByPromotionId(promotionBId))
+                .thenReturn(List.of(promotionFilm(promotionBId, filmOtherId)));
+        when(promotionCinemaRepository.findAllByPromotionIdIn(List.of(promotionAId))).thenReturn(List.of());
+        when(promotionFilmRepository.findAllByPromotionIdIn(List.of(promotionAId)))
+                .thenReturn(List.of(promotionFilm(promotionAId, filmAId)));
+        when(paymentTransactionPromotionRepository.summarizeReachedPaidUsageByPromotionIds(List.of(promotionAId)))
+                .thenReturn(List.of());
+
+        var response = promotionService.searchPromotions(request, httpRequest);
+
+        assertEquals(1, response.getData().size());
+        assertEquals(promotionAId, response.getData().get(0).getId());
+        assertTrue(response.getData().get(0).getFilmIds().contains(filmAId));
+    }
+
     private Promotion promotion(UUID promotionId, String code) {
         Promotion promotion = new Promotion();
         promotion.setId(promotionId);
@@ -355,6 +397,13 @@ class PromotionServiceImplTest {
         PromotionCinema mapping = new PromotionCinema();
         mapping.setPromotionId(promotionId);
         mapping.setCinemaId(cinemaId);
+        return mapping;
+    }
+
+    private PromotionFilm promotionFilm(UUID promotionId, UUID filmId) {
+        PromotionFilm mapping = new PromotionFilm();
+        mapping.setPromotionId(promotionId);
+        mapping.setFilmId(filmId);
         return mapping;
     }
 }
