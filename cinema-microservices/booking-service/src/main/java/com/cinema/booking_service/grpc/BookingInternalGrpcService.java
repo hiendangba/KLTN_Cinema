@@ -66,8 +66,20 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
         }
 
         try {
+            log.info("BOOKING_CONTEXT_LOOKUP bookingId={}", bookingId);
             Booking booking = bookingRepository.findByIdAndIsDeletedFalse(bookingId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+            log.info(
+                    "BOOKING_CONTEXT_READY bookingId={} userId={} showtimeId={} cinemaId={} bookingStatus={} paymentStatus={} reservedUntil={} finalAmount={} loyaltyPointsEarned={}",
+                    booking.getId(),
+                    booking.getUserId(),
+                    booking.getShowtimeId(),
+                    booking.getCinemaId(),
+                    booking.getBookingStatus(),
+                    booking.getPaymentStatus(),
+                    booking.getReservedUntil(),
+                    booking.getFinalAmount(),
+                    booking.getLoyaltyPointsEarned());
             responseObserver.onNext(GetBookingPaymentContextReply.newBuilder()
                     .setSuccess(true)
                     .setMessage("Booking payment context fetched successfully")
@@ -75,6 +87,10 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
                     .build());
             responseObserver.onCompleted();
         } catch (BusinessException ex) {
+            log.warn("BOOKING_CONTEXT_FAILED bookingId={} errorCode={} message={}",
+                    bookingId,
+                    ex.getErrorCode().name(),
+                    ex.getMessage());
             responseObserver.onNext(GetBookingPaymentContextReply.newBuilder()
                     .setSuccess(false)
                     .setErrorKey(ex.getErrorCode().name())

@@ -35,10 +35,8 @@ public class CustomerRankServiceImpl implements CustomerRankService {
     public ActionMessageResponse createRank(CustomerRankUpsertRequest request) {
         validateRequest(request);
         String code = normalizeCode(request.getCode());
-        if (customerRankRepository.existsByCodeIgnoreCaseAndIsDeletedFalse(code)
-                || customerRankRepository.existsByLevelAndIsDeletedFalse(request.getLevel())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
+        ensureCodeIsAvailable(code);
+        ensureLevelIsAvailable(request.getLevel());
 
         CustomerRank rank = new CustomerRank();
         applyRequest(rank, request, code);
@@ -57,10 +55,8 @@ public class CustomerRankServiceImpl implements CustomerRankService {
         }
         validateRequest(request);
         String code = normalizeCode(request.getCode());
-        if (customerRankRepository.existsByCodeIgnoreCaseAndIsDeletedFalseAndIdNot(code, id)
-                || customerRankRepository.existsByLevelAndIsDeletedFalseAndIdNot(request.getLevel(), id)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
+        ensureCodeIsAvailable(code, id);
+        ensureLevelIsAvailable(request.getLevel(), id);
 
         CustomerRank rank = getEntity(id);
         applyRequest(rank, request, code);
@@ -152,7 +148,31 @@ public class CustomerRankServiceImpl implements CustomerRankService {
                 .stream()
                 .anyMatch(rank -> normalizeAmount(rank.getMinLifetimeAmount()).compareTo(ZERO) == 0);
         if (!hasDefaultRank) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.CUSTOMER_RANK_DEFAULT_REQUIRED);
+        }
+    }
+
+    private void ensureCodeIsAvailable(String code) {
+        if (customerRankRepository.existsByCodeIgnoreCaseAndIsDeletedFalse(code)) {
+            throw new BusinessException(ErrorCode.CUSTOMER_RANK_CODE_EXISTED);
+        }
+    }
+
+    private void ensureCodeIsAvailable(String code, UUID id) {
+        if (customerRankRepository.existsByCodeIgnoreCaseAndIsDeletedFalseAndIdNot(code, id)) {
+            throw new BusinessException(ErrorCode.CUSTOMER_RANK_CODE_EXISTED);
+        }
+    }
+
+    private void ensureLevelIsAvailable(Integer level) {
+        if (customerRankRepository.existsByLevelAndIsDeletedFalse(level)) {
+            throw new BusinessException(ErrorCode.CUSTOMER_RANK_LEVEL_EXISTED);
+        }
+    }
+
+    private void ensureLevelIsAvailable(Integer level, UUID id) {
+        if (customerRankRepository.existsByLevelAndIsDeletedFalseAndIdNot(level, id)) {
+            throw new BusinessException(ErrorCode.CUSTOMER_RANK_LEVEL_EXISTED);
         }
     }
 

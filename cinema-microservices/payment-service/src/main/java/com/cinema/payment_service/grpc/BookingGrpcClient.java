@@ -12,6 +12,7 @@ import com.cinema.grpc.booking.GetBookingPaymentContextRequest;
 import com.cinema.grpc.booking.UpsertBookingPromotionSnapshotReply;
 import com.cinema.grpc.booking.UpsertBookingPromotionSnapshotRequest;
 import io.grpc.StatusRuntimeException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.client.GrpcChannelFactory;
 import org.springframework.stereotype.Component;
 
@@ -20,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Component
+@Slf4j
 public class BookingGrpcClient {
 
     private final BookingInternalServiceGrpc.BookingInternalServiceBlockingStub bookingBlockingStub;
@@ -30,17 +32,30 @@ public class BookingGrpcClient {
 
     public BookingPaymentContext getBookingPaymentContext(UUID bookingId) {
         try {
+            log.info("BOOKING_CONTEXT_REQUEST bookingId={}", bookingId);
             GetBookingPaymentContextReply reply = bookingBlockingStub.getBookingPaymentContext(
                     GetBookingPaymentContextRequest.newBuilder()
                             .setBookingId(bookingId.toString())
                             .build());
 
             if (!reply.getSuccess()) {
+                log.warn("BOOKING_CONTEXT_REPLY_FAILED bookingId={} errorKey={} message={}",
+                        bookingId,
+                        reply.getErrorKey(),
+                        reply.getMessage());
                 throw new BusinessException(GrpcErrorUtils.resolve(reply.getErrorKey(), ErrorCode.BOOKING_SERVICE_ERROR));
             }
 
+            log.info("BOOKING_CONTEXT_REPLY_OK bookingId={} payloadBookingId={}",
+                    bookingId,
+                    reply.getBooking() == null ? "" : reply.getBooking().getBookingId());
             return toContext(reply.getBooking());
         } catch (StatusRuntimeException ex) {
+            log.error("BOOKING_CONTEXT_GRPC_FAILURE bookingId={} status={} description={}",
+                    bookingId,
+                    ex.getStatus(),
+                    ex.getStatus() == null ? "" : ex.getStatus().getDescription(),
+                    ex);
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
     }
@@ -107,6 +122,11 @@ public class BookingGrpcClient {
 
     private BookingPaymentContext toContext(BookingPaymentContextPayload payload) {
         if (payload == null || payload.getBookingId().isBlank()) {
+            log.error("BOOKING_CONTEXT_INVALID_PAYLOAD payloadBookingId={} payloadShowtimeId={} payloadCinemaId={} payloadUserId={}",
+                    payload == null ? "" : payload.getBookingId(),
+                    payload == null ? "" : payload.getShowtimeId(),
+                    payload == null ? "" : payload.getCinemaId(),
+                    payload == null ? "" : payload.getUserId());
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
 
@@ -131,6 +151,18 @@ public class BookingGrpcClient {
                     normalizePoints(payload.getLoyaltyPointsUsed()),
                     normalizePoints(payload.getLoyaltyPointsEarned()));
         } catch (Exception ex) {
+            log.error(
+                    "BOOKING_CONTEXT_PARSE_FAILED payloadBookingId={} payloadShowtimeId={} payloadCinemaId={} payloadFilmId={} payloadUserId={} payloadReservedUntil={} payloadFinalAmount={} payloadBookingStatus={} payloadPaymentStatus={}",
+                    payload.getBookingId(),
+                    payload.getShowtimeId(),
+                    payload.getCinemaId(),
+                    payload.getFilmId(),
+                    payload.getUserId(),
+                    payload.getReservedUntil(),
+                    payload.getFinalAmount(),
+                    payload.getBookingStatus(),
+                    payload.getPaymentStatus(),
+                    ex);
             throw new BusinessException(ErrorCode.BOOKING_SERVICE_ERROR);
         }
     }

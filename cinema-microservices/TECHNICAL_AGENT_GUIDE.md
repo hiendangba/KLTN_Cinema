@@ -14,6 +14,25 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-07-08 - customer-rank validation)
+
+- `user-service` đã tách lỗi tạo/cập nhật/xóa `customer-ranks` ra mã riêng thay vì ném chung `9005 BAD_REQUEST`.
+- `POST/PUT /api/customer-ranks` giờ trả `4406` khi trùng `code`, `4407` khi trùng `level`, và `4408` khi hệ thống không còn hạng mặc định `ACTIVE` với `minLifetimeAmount = 0`.
+- Files chạm: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `user-service/src/main/java/com/cinema/user_service/services/impl/CustomerRankServiceImpl.java`, `user-service/src/test/java/com/cinema/user_service/services/impl/CustomerRankServiceImplTest.java`.
+- Reason: payload tạo hạng trước đây chỉ nhận `Bad request` chung nên người dùng không biết vấp vào rule nào; tách mã lỗi giúp FE hiển thị đúng nguyên nhân nghiệp vụ.
+- Verification: đã thêm unit test cho 4 case chính của `CustomerRankServiceImpl` gồm success, trùng code, trùng level, và thiếu default rank active.
+- Remaining risk: nếu FE vẫn chỉ map mọi mã 44xx về một popup chung thì người dùng vẫn chưa thấy hết chi tiết, nhưng backend đã đủ thông tin để hiển thị riêng từng case.
+
+- `payment-service` đã bỏ pin cứng `grpc-netty-shaded:1.80.0` trong `payment-service/pom.xml` để dùng cùng bộ version do `spring-grpc-dependencies` quản lý.
+- Lý do fix: log runtime cho thấy `grpc-netty-shaded 1.80.0` đi chung với `grpc-core 1.77.1` làm channel panic bằng `NoClassDefFoundError: KeepAliveManager$ClientKeepAlivePinger$TransportWithDisconnectReason`, từ đó payment-service trả `9104`.
+- Verification: `./mvnw.cmd -f pom.xml -pl payment-service -am -DskipTests compile` pass sau khi bỏ version pin, nên classpath gRPC đã đồng bộ lại ở mức compile.
+- Remaining risk: cần redeploy/restart payment-service trên môi trường chạy thật thì classpath mới có hiệu lực; nếu image cũ còn chạy, lỗi cũ vẫn có thể tiếp diễn.
+
+- `booking-service` và `payment-service` đã thêm log trace cho booking-payment context để phân biệt được 3 nhánh lỗi: call gRPC thất bại, booking-service reply fail, và payload parse fail.
+- Log key mới: `BOOKING_CONTEXT_LOOKUP` / `BOOKING_CONTEXT_READY` / `BOOKING_CONTEXT_FAILED` ở booking-service, và `BOOKING_CONTEXT_REQUEST` / `BOOKING_CONTEXT_REPLY_OK` / `BOOKING_CONTEXT_REPLY_FAILED` / `BOOKING_CONTEXT_GRPC_FAILURE` / `BOOKING_CONTEXT_PARSE_FAILED` ở payment-service.
+- Verification: `./mvnw.cmd -f pom.xml -pl booking-service,payment-service -am -DskipTests compile` pass sau khi thêm log.
+- Remaining risk: log chi tiết hơn sẽ làm log volume tăng nhẹ khi traffic gọi payment session nhiều; nếu cần có thể hạ một số dòng xuống `debug` sau khi xác định xong root cause.
+
 ## Changelog ngắn (2026-07-05 - booking report)
 
 - `booking-service` báo cáo `POST /api/bookings/reports/showtimes/search` đã trả thêm `cinemaName`, `hallName`, `filmName` cho từng item report bằng lookup qua `CinemaGrpcClient`, `HallGrpcClient`, `FilmGrpcClient`.
