@@ -23,7 +23,7 @@ public class PaymentPublicController {
 
   private final PaymentSessionService paymentSessionService;
 
-  @GetMapping(value = "/payment/result", produces = MediaType.TEXT_HTML_VALUE)
+  @GetMapping(value = {"/payment/result", "/result"}, produces = MediaType.TEXT_HTML_VALUE)
   public ResponseEntity<String> paymentResult(@RequestParam Map<String, String> queryParams) {
     MomoIpnRequest callback = MomoIpnRequest.fromQueryParams(queryParams);
     try {
