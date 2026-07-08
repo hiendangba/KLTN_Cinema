@@ -21,12 +21,14 @@ import org.mapstruct.factory.Mappers;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -110,13 +112,13 @@ class UserServiceImplLoyaltyPointsTest {
         User user = buildUser(userId, 2500L);
 
         when(userRepository.findByIdAndIsDeletedFalse(userId)).thenReturn(Optional.of(user));
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.updateLoyaltyPoints(any(UUID.class), any(Long.class), any(LocalDateTime.class)))
+                .thenReturn(1);
 
         long nextBalance = service.addLoyaltyPoints(userId, 500L);
 
         assertThat(nextBalance).isEqualTo(3000L);
-        assertThat(user.getLoyaltyPoints()).isEqualTo(3000L);
-        verify(userRepository).save(user);
+        verify(userRepository).updateLoyaltyPoints(eq(userId), eq(3000L), any(LocalDateTime.class));
     }
 
     @Test
@@ -130,7 +132,10 @@ class UserServiceImplLoyaltyPointsTest {
                 () -> service.deductLoyaltyPoints(userId, 5000L));
 
         assertThat(exception.getErrorCode()).isEqualTo(com.cinema.exception.ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
-        verify(userRepository, never()).save(any(User.class));
+        verify(userRepository, never()).updateLoyaltyPoints(
+                any(UUID.class),
+                any(Long.class),
+                any(LocalDateTime.class));
     }
 
     @Test

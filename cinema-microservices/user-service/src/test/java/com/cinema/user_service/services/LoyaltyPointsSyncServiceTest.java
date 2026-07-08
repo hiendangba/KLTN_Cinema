@@ -63,14 +63,19 @@ class LoyaltyPointsSyncServiceTest {
 
         when(userLoyaltyLedgerRepository.existsByPaymentTransactionId(transactionId)).thenReturn(false);
         when(userRepository.findByIdAndIsDeletedFalse(userId)).thenReturn(Optional.of(user));
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userRepository.updateLoyaltyPoints(any(UUID.class), any(Long.class), any(LocalDateTime.class)))
+                .thenReturn(1);
         when(userLoyaltyLedgerRepository.save(any(UserLoyaltyLedger.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         loyaltyPointsSyncService.apply(event);
 
-        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(userCaptor.capture());
-        assertEquals(850L, userCaptor.getValue().getLoyaltyPoints());
+        ArgumentCaptor<Long> loyaltyPointsCaptor = ArgumentCaptor.forClass(Long.class);
+        ArgumentCaptor<LocalDateTime> timeUpdatedCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(userRepository).updateLoyaltyPoints(
+                org.mockito.ArgumentMatchers.eq(userId),
+                loyaltyPointsCaptor.capture(),
+                timeUpdatedCaptor.capture());
+        assertEquals(850L, loyaltyPointsCaptor.getValue());
 
         ArgumentCaptor<UserLoyaltyLedger> ledgerCaptor = ArgumentCaptor.forClass(UserLoyaltyLedger.class);
         verify(userLoyaltyLedgerRepository).save(ledgerCaptor.capture());
@@ -98,7 +103,10 @@ class LoyaltyPointsSyncServiceTest {
 
         loyaltyPointsSyncService.apply(event);
 
-        verify(userRepository, never()).save(any(User.class));
+        verify(userRepository, never()).updateLoyaltyPoints(
+                any(UUID.class),
+                any(Long.class),
+                any(LocalDateTime.class));
         verify(userLoyaltyLedgerRepository, never()).save(any(UserLoyaltyLedger.class));
     }
 

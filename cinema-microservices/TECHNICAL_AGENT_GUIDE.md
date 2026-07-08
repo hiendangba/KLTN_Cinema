@@ -33,6 +33,11 @@
 - Verification: `./mvnw.cmd -f pom.xml -pl booking-service,payment-service -am -DskipTests compile` pass sau khi thêm log.
 - Remaining risk: log chi tiết hơn sẽ làm log volume tăng nhẹ khi traffic gọi payment session nhiều; nếu cần có thể hạ một số dòng xuống `debug` sau khi xác định xong root cause.
 
+- `booking-service` `GET /api/bookings/{id}/checkout-context` đã đổi sang fallback mềm: nếu `payment-service` lookup session lỗi thì API vẫn trả booking checkout context với `paymentSession = null` thay vì ném `9502`.
+- Lý do fix: screenshot cho thấy checkout-context bị che thành `External service error` dù booking bản thân vẫn đọc được; endpoint này có `paymentSession` nullable nên không nên fail toàn bộ chỉ vì lookup payment session.
+- Verification: `./mvnw.cmd -f pom.xml -pl booking-service -am "-Dtest=BookingServiceImplTest" "-Dsurefire.failIfNoSpecifiedTests=false" test` pass `33 tests, 0 failures, 0 errors`, và regression mới xác nhận payment lookup fail vẫn trả checkout context thành công.
+- Remaining risk: API vẫn trả `9004` ở `GET /api/bookings/{id}` theo rule hiện tại nếu customer không phải owner hoặc booking chưa ở trạng thái `CONFIRMED + PAID`; đây là rule phân quyền chứ không phải lỗi transport.
+
 ## Changelog ngắn (2026-07-05 - booking report)
 
 - `booking-service` báo cáo `POST /api/bookings/reports/showtimes/search` đã trả thêm `cinemaName`, `hallName`, `filmName` cho từng item report bằng lookup qua `CinemaGrpcClient`, `HallGrpcClient`, `FilmGrpcClient`.
@@ -2391,3 +2396,9 @@ Cập nhật kỹ thuật gần nhất: 03/07/2026.
 - Reason: API tạo review trước đó chỉ trả `9004` nên người dùng không biết là do chưa xem xong phim hay do không đủ điều kiện booking; luồng mới trả đúng thông điệp nghiệp vụ để FE/QA xử lý chính xác hơn.
 - Verification: `common-lib` test pass, `BookingInternalGrpcServiceTest` pass 8/8, và `review-service` `test-compile` pass sau khi thêm test propagate cho case `REVIEW_SHOWTIME_NOT_ENDED`.
 - Remaining risk: `booking-service` vẫn còn vài test integration/legacy đỏ trên môi trường này vì thiếu PostgreSQL `localhost:5433`, nên full reactor test vẫn chưa xanh toàn bộ dù logic review eligibility mới đã biên dịch và unit-test pass.
+
+- Added observability for customer spend propagation: `UserServiceImpl.getMyProfile(...)` and `getUserById(...)` now log `lifetimePaidAmount` and `loyaltyPoints`, and `UserInternalGrpcService.getUserBasicById(...)` logs the exact payload returned to callers.
+- Fixed a lost-update race in user snapshot sync: `LoyaltyPointsSyncService` and `CustomerRankSettlementSyncService` now update only their own columns via `UserRepository.updateLoyaltyPoints(...)` / `updateLifetimePaidAmount(...)` instead of saving a stale full `User` entity, which previously let one consumer overwrite the other consumer's field back to `0`.
+- Added a one-time backfill script at `scripts/repair_user_lifetime_paid_amount.sql` so existing `users.lifetime_paid_amount` rows can be recomputed from `user_rank_settlement_ledger` after deploy.
+- Reason: payment -> user settlement already applies successfully, so when UI still shows `0` we need a direct trace from DB state to outbound API payload before assuming the write path is broken.
+- Files chạm: `user-service/src/main/java/com/cinema/user_service/services/impl/UserServiceImpl.java`, `user-service/src/main/java/com/cinema/user_service/grpc/UserInternalGrpcService.java`.

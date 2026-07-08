@@ -572,7 +572,10 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByIdAndIsDeletedFalse(userUUID)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
 
-        log.info("User profile loaded: userId={}", userUUID);
+        log.info("User profile loaded: userId={} lifetimePaidAmount={} loyaltyPoints={}",
+                userUUID,
+                user.getLifetimePaidAmount(),
+                user.getLoyaltyPoints());
         UserResponse response = toRankedUserResponse(user);
         response.setIdentityAccount(identityGrpcClient.getAccountByUserId(userUUID));
         return response;
@@ -595,8 +598,13 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
 
-        log.info("User profile loaded by id: requesterId={}, requesterRole={}, targetUserId={}, targetRole={}",
-                requesterUserId, requesterRole, userId, targetUser.getRole());
+        log.info("User profile loaded by id: requesterId={}, requesterRole={}, targetUserId={}, targetRole={}, lifetimePaidAmount={}, loyaltyPoints={}",
+                requesterUserId,
+                requesterRole,
+                userId,
+                targetUser.getRole(),
+                targetUser.getLifetimePaidAmount(),
+                targetUser.getLoyaltyPoints());
         UserResponse response = toRankedUserResponse(targetUser);
         response.setIdentityAccount(identityGrpcClient.getAccountByUserId(userId));
         return response;
@@ -777,8 +785,10 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
-        user.setLoyaltyPoints(nextPoints);
-        userRepository.save(user);
+        int updatedRows = userRepository.updateLoyaltyPoints(userId, nextPoints, java.time.LocalDateTime.now());
+        if (updatedRows == 0) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
         log.info("User loyalty points updated: userId={}, operation={}, delta={}, current={}, next={}",
                 userId,
                 isAddition ? "ADD" : "DEDUCT",

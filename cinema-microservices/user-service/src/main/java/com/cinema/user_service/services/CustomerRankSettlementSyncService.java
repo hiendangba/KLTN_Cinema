@@ -64,8 +64,10 @@ public class CustomerRankSettlementSyncService {
         ledger.setProcessedAt(LocalDateTime.now());
         ledgerRepository.save(ledger);
 
-        user.setLifetimePaidAmount(nextAmount);
-        userRepository.save(user);
+        int updatedRows = userRepository.updateLifetimePaidAmount(user.getId(), nextAmount, LocalDateTime.now());
+        if (updatedRows == 0) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
         log.info(
                 "CUSTOMER_RANK_SETTLEMENT_APPLIED transactionId={} bookingId={} userId={} type={} amount={} current={} next={}",
                 event.paymentTransactionId(),

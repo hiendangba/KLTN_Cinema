@@ -63,8 +63,10 @@ public class LoyaltyPointsSyncService {
         ledger.setOccurredAt(event.occurredAt() == null ? LocalDateTime.now() : event.occurredAt());
         ledger.setProcessedAt(LocalDateTime.now());
         userLoyaltyLedgerRepository.save(ledger);
-        user.setLoyaltyPoints(nextPoints);
-        userRepository.save(user);
+        int updatedRows = userRepository.updateLoyaltyPoints(user.getId(), nextPoints, LocalDateTime.now());
+        if (updatedRows == 0) {
+            throw new BusinessException(ErrorCode.USER_NOT_FOUND);
+        }
         log.info(
                 "LOYALTY_SYNC_APPLIED transactionId={} bookingId={} userId={} used={} earned={} current={} next={}",
                 event.paymentTransactionId(),

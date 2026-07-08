@@ -464,7 +464,24 @@ public class BookingServiceImpl implements BookingService {
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         if (HeaderNames.ROLE_CUSTOMER.equals(role)) {
             UUID requesterUserId = resolveUserId(httpRequest);
-            paymentSession = paymentGrpcClient.getSessionByBookingId(id, requesterUserId, role);
+            try {
+                paymentSession = paymentGrpcClient.getSessionByBookingId(id, requesterUserId, role);
+            } catch (BusinessException ex) {
+                log.warn(
+                        "CHECKOUT_CONTEXT_PAYMENT_SESSION_FALLBACK bookingId={} requesterUserId={} errorCode={} message={}",
+                        id,
+                        requesterUserId,
+                        ex.getErrorCode().name(),
+                        ex.getMessage());
+                paymentSession = null;
+            } catch (RuntimeException ex) {
+                log.error(
+                        "CHECKOUT_CONTEXT_PAYMENT_SESSION_LOOKUP_FAILED bookingId={} requesterUserId={}",
+                        id,
+                        requesterUserId,
+                        ex);
+                paymentSession = null;
+            }
         }
 
         boolean activeStatus = booking.getBookingStatus() == BookingStatus.PENDING

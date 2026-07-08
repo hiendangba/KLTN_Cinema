@@ -224,6 +224,11 @@ public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInterna
             StreamObserver<GetUserBasicByIdReply> responseObserver) {
         try {
             UserResponse user = userService.getUserById(UUID.fromString(request.getUserId()));
+            log.info("USER_BASIC_RESPONSE userId={} lifetimePaidAmount={} loyaltyPoints={} rankCode={}",
+                    user.getId(),
+                    user.getLifetimePaidAmount(),
+                    user.getLoyaltyPoints(),
+                    user.getCustomerRank() == null ? null : user.getCustomerRank().code());
             responseObserver.onNext(GetUserBasicByIdReply.newBuilder()
                     .setSuccess(true)
                     .setMessage("User fetched successfully")
