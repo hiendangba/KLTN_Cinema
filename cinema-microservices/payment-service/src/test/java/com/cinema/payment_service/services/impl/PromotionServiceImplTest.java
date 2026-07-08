@@ -1,9 +1,12 @@
 package com.cinema.payment_service.services.impl;
 
+import com.cinema.dto.request.FilterField;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.Enum.SuccessMessage;
+import com.cinema.payment_service.dto.request.PromotionField;
 import com.cinema.payment_service.dto.request.PromotionUpsertRequest;
 import com.cinema.payment_service.dto.response.PromotionResponse;
 import com.cinema.payment_service.entity.Promotion;
@@ -36,7 +39,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -260,5 +265,96 @@ class PromotionServiceImplTest {
         assertEquals(10, response.getMaxUsageCount());
         assertEquals(4L, response.getUsedCount());
         assertEquals(6L, response.getRemainingUsageCount());
+    }
+
+    @Test
+    void searchPromotions_shouldFilterByMultipleCinemaIdsForAdmin() {
+        UUID userId = UUID.randomUUID();
+        UUID promotionAId = UUID.randomUUID();
+        UUID promotionBId = UUID.randomUUID();
+        UUID cinemaAId = UUID.randomUUID();
+        UUID cinemaBId = UUID.randomUUID();
+        UUID cinemaOtherId = UUID.randomUUID();
+
+        Promotion promotionA = promotion(promotionAId, "PROMO-A");
+        Promotion promotionB = promotion(promotionBId, "PROMO-B");
+
+        PageRequest<PromotionField> request = PageRequest.<PromotionField>builder()
+                .page(1)
+                .size(20)
+                .filterBy(List.of(FilterField.<PromotionField>builder()
+                        .field(PromotionField.CINEMA_ID)
+                        .operator("IN")
+                        .value(List.of(cinemaAId, cinemaBId))
+                        .build()))
+                .build();
+
+        when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
+        when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+        when(promotionRepository.findAllByIsDeletedFalse()).thenReturn(List.of(promotionA, promotionB));
+        when(promotionCinemaRepository.findAllByPromotionId(promotionAId))
+                .thenReturn(List.of(promotionCinema(promotionAId, cinemaAId)));
+        when(promotionCinemaRepository.findAllByPromotionId(promotionBId))
+                .thenReturn(List.of(promotionCinema(promotionBId, cinemaOtherId)));
+        when(promotionCinemaRepository.findAllByPromotionIdIn(List.of(promotionAId)))
+                .thenReturn(List.of(promotionCinema(promotionAId, cinemaAId)));
+        when(promotionFilmRepository.findAllByPromotionIdIn(List.of(promotionAId))).thenReturn(List.of());
+        when(paymentTransactionPromotionRepository.summarizeReachedPaidUsageByPromotionIds(List.of(promotionAId)))
+                .thenReturn(List.of());
+
+        var response = promotionService.searchPromotions(request, httpRequest);
+
+        assertEquals(1, response.getData().size());
+        assertEquals(promotionAId, response.getData().get(0).getId());
+        assertTrue(response.getData().get(0).getCinemaIds().contains(cinemaAId));
+    }
+
+    @Test
+    void searchPromotions_shouldRejectManagerFilteringOutsideAccessibleCinemas() {
+        UUID userId = UUID.randomUUID();
+        UUID allowedCinemaId = UUID.randomUUID();
+        UUID blockedCinemaId = UUID.randomUUID();
+
+        PageRequest<PromotionField> request = PageRequest.<PromotionField>builder()
+                .page(1)
+                .size(20)
+                .filterBy(List.of(FilterField.<PromotionField>builder()
+                        .field(PromotionField.CINEMA_ID)
+                        .operator("IN")
+                        .value(List.of(allowedCinemaId, blockedCinemaId))
+                        .build()))
+                .build();
+
+        when(httpRequest.getHeader("X-User-Role")).thenReturn("MANAGER");
+        when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+        when(promotionRepository.findAllByIsDeletedFalse()).thenReturn(List.of());
+        when(cinemaGrpcClient.getCinemasByUserId(userId, "MANAGER"))
+                .thenReturn(List.of(new CinemaGrpcClient.CinemaSummary(allowedCinemaId, "Allowed")));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> promotionService.searchPromotions(request, httpRequest));
+
+        assertEquals(ErrorCode.FORBIDDEN, exception.getErrorCode());
+        verify(cinemaGrpcClient).getCinemasByUserId(eq(userId), eq("MANAGER"));
+    }
+
+    private Promotion promotion(UUID promotionId, String code) {
+        Promotion promotion = new Promotion();
+        promotion.setId(promotionId);
+        promotion.setCode(code);
+        promotion.setName(code);
+        promotion.setDiscountType(PromotionDiscountType.PERCENT);
+        promotion.setDiscountValue(BigDecimal.TEN);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setIsDeleted(false);
+        promotion.setTimeCreated(LocalDateTime.now());
+        return promotion;
+    }
+
+    private PromotionCinema promotionCinema(UUID promotionId, UUID cinemaId) {
+        PromotionCinema mapping = new PromotionCinema();
+        mapping.setPromotionId(promotionId);
+        mapping.setCinemaId(cinemaId);
+        return mapping;
     }
 }

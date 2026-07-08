@@ -15,6 +15,7 @@ import java.util.UUID;
 @Getter
 public enum PromotionField {
     ID("id", UUID.class),
+    CINEMA_ID("cinemaId", UUID.class),
     CODE("code", String.class),
     NAME("name", String.class),
     DISCOUNT_TYPE("discountType", PromotionDiscountType.class),
@@ -76,6 +77,7 @@ public enum PromotionField {
         }
         return switch (this) {
             case ID -> promotion.getId();
+            case CINEMA_ID -> null;
             case CODE -> promotion.getCode();
             case NAME -> promotion.getName();
             case DISCOUNT_TYPE -> promotion.getDiscountType();

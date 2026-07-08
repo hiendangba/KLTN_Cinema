@@ -179,6 +179,40 @@ class HallServiceImplTest {
     }
 
     @Test
+    void updateHall_allowsAdminWithoutCinemaOwnershipValidation() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        MockHttpServletRequest request = adminRequest();
+        UpdateHallRequest updateRequest = updateRequest(cinemaId, "Hall B");
+        Hall hall = new Hall();
+        hall.setId(hallId);
+        hall.setCinemaId(cinemaId);
+        hall.setName("Hall A");
+        hall.setStatus(HallEnum.HallStatus.ACTIVE);
+        hall.setIsDeleted(false);
+
+        when(hallRepository.findByIdAndIsDeletedFalse(hallId)).thenReturn(Optional.of(hall));
+        when(hallRepository.existsByCinemaIdAndNameIgnoreCaseAndIdNotAndIsDeletedFalse(cinemaId, "Hall B", hallId))
+                .thenReturn(false);
+        when(showtimeGrpcClient.listActiveShowtimeIdsByHall(hallId)).thenReturn(List.of());
+        doAnswer(invocation -> {
+            Hall target = invocation.getArgument(0);
+            UpdateHallRequest source = invocation.getArgument(1);
+            target.setName(source.getName());
+            target.setStatus(source.getStatus());
+            return null;
+        }).when(hallMapper).updateEntityFromRequest(hall, updateRequest);
+        when(hallRepository.save(hall)).thenReturn(hall);
+        when(seatGrpcClient.replaceLayoutDefinition(hallId, updateRequest.getLayoutDefinition()))
+                .thenReturn(ActionMessageResponse.builder().message("ok").build());
+
+        ActionMessageResponse response = hallService.updateHall(hallId, updateRequest, request);
+
+        assertThat(response.getMessage()).isEqualTo(SuccessMessage.HALL_UPDATED.getMessage());
+        verify(cinemaGrpcClient, never()).getCinemaIdsByUserId(any(UUID.class));
+    }
+
+    @Test
     void deleteHall_usesCinemaIdQueryParamAndValidatesOwnership() {
         UUID managerId = UUID.randomUUID();
         UUID cinemaId = UUID.randomUUID();
@@ -200,6 +234,30 @@ class HallServiceImplTest {
         assertThat(response.getMessage()).isEqualTo(SuccessMessage.HALL_DELETED.getMessage());
         assertThat(hall.getIsDeleted()).isTrue();
         verify(hallRepository).save(hall);
+    }
+
+    @Test
+    void deleteHall_allowsAdminWithoutCinemaOwnershipValidation() {
+        UUID cinemaId = UUID.randomUUID();
+        UUID hallId = UUID.randomUUID();
+        MockHttpServletRequest request = adminRequest();
+        Hall hall = new Hall();
+        hall.setId(hallId);
+        hall.setCinemaId(cinemaId);
+        hall.setName("Hall A");
+        hall.setStatus(HallEnum.HallStatus.ACTIVE);
+        hall.setIsDeleted(false);
+
+        when(hallRepository.findByIdAndIsDeletedFalse(hallId)).thenReturn(Optional.of(hall));
+        when(showtimeGrpcClient.listActiveShowtimeIdsByHall(hallId)).thenReturn(List.of());
+        when(hallRepository.save(hall)).thenReturn(hall);
+
+        ActionMessageResponse response = hallService.deleteHall(hallId, request);
+
+        assertThat(response.getMessage()).isEqualTo(SuccessMessage.HALL_DELETED.getMessage());
+        assertThat(hall.getIsDeleted()).isTrue();
+        verify(hallRepository).save(hall);
+        verify(cinemaGrpcClient, never()).getCinemaIdsByUserId(any(UUID.class));
     }
 
     @Test

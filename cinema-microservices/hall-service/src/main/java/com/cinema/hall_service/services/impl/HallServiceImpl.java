@@ -362,7 +362,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
-        RequestAuthUtils.requireRole(httpRequest, HeaderNames.ROLE_MANAGER);
+        RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
     }
 
     private void validateCinemaOwnership(HttpServletRequest httpRequest, UUID cinemaId) {
@@ -370,6 +370,10 @@ public class HallServiceImpl implements HallService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         try {
+            String role = RequestAuthUtils.requireRoleHeader(httpRequest);
+            if (HeaderNames.ROLE_ADMIN.equals(role)) {
+                return;
+            }
             UUID userId = RequestAuthUtils.requireUserId(httpRequest);
             List<UUID> managedCinemaIds = cinemaGrpcClient.getCinemaIdsByUserId(userId);
             if (managedCinemaIds.isEmpty()) {

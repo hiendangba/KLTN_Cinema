@@ -144,7 +144,7 @@ public class PromotionServiceImpl implements PromotionService {
         UUID requesterUserId = RequestAuthUtils.requireUserId(httpRequest);
         List<Promotion> promotions = promotionRepository.findAllByIsDeletedFalse();
         promotions = applyVisibilityFilter(promotions, role, requesterUserId);
-        promotions = applyPromotionPageRequest(promotions, request);
+        promotions = applyPromotionPageRequest(promotions, request, role, requesterUserId);
 
         int page = request.getPageOrDefault();
         int size = request.getSizeOrDefault();
@@ -345,7 +345,11 @@ public class PromotionServiceImpl implements PromotionService {
         return accessibleCinemaIds.stream().anyMatch(promotionCinemaIds::contains);
     }
 
-    private List<Promotion> applyPromotionPageRequest(List<Promotion> items, PageRequest<PromotionField> request) {
+    private List<Promotion> applyPromotionPageRequest(
+            List<Promotion> items,
+            PageRequest<PromotionField> request,
+            String role,
+            UUID requesterUserId) {
         if (items == null || items.isEmpty()) {
             return List.of();
         }
@@ -360,6 +364,7 @@ public class PromotionServiceImpl implements PromotionService {
 
         List<FilterField<PromotionField>> filters = request.getFilterBy();
         if (filters != null && !filters.isEmpty()) {
+            validatePromotionSearchFilters(filters, role, requesterUserId);
             filtered = filtered.stream()
                     .filter(item -> matchesAllFilters(item, filters))
                     .collect(Collectors.toCollection(ArrayList::new));
@@ -420,6 +425,9 @@ public class PromotionServiceImpl implements PromotionService {
         if (item == null || filter == null || filter.getField() == null || filter.getOperator() == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
+        if (filter.getField() == PromotionField.CINEMA_ID) {
+            return matchesCinemaFilter(item, filter);
+        }
 
         String operator = filter.getOperator().trim().toUpperCase(Locale.ROOT);
         Object rawValue = filter.getValue();
@@ -438,6 +446,66 @@ public class PromotionServiceImpl implements PromotionService {
             case "LTE" -> compareValues(fieldValue, PromotionField.convertValue(String.valueOf(rawValue), dataType)) <= 0;
             case "IN" -> matchesInValues(fieldValue, rawValue, dataType);
             case "BETWEEN" -> matchesBetweenValues(fieldValue, rawValue, dataType);
+            default -> throw new BusinessException(ErrorCode.BAD_REQUEST);
+        };
+    }
+
+    private void validatePromotionSearchFilters(
+            List<FilterField<PromotionField>> filters,
+            String role,
+            UUID requesterUserId) {
+        if (filters == null || filters.isEmpty()) {
+            return;
+        }
+
+        for (FilterField<PromotionField> filter : filters) {
+            if (filter == null || filter.getField() != PromotionField.CINEMA_ID) {
+                continue;
+            }
+
+            List<UUID> requestedCinemaIds = convertToUuidList(filter.getValue());
+            if (requestedCinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST);
+            }
+
+            String operator = filter.getOperator() == null ? "" : filter.getOperator().trim().toUpperCase(Locale.ROOT);
+            if (!"IN".equals(operator) && !"EQ".equals(operator)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST);
+            }
+
+            if (HeaderNames.ROLE_ADMIN.equals(role)) {
+                continue;
+            }
+            if (!HeaderNames.ROLE_MANAGER.equals(role) && !HeaderNames.ROLE_STAFF.equals(role)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+
+            List<UUID> accessibleCinemaIds = loadAccessibleCinemaIds(requesterUserId, role);
+            if (accessibleCinemaIds.isEmpty()) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+            if (!accessibleCinemaIds.containsAll(requestedCinemaIds)) {
+                throw new BusinessException(ErrorCode.FORBIDDEN);
+            }
+        }
+    }
+
+    private boolean matchesCinemaFilter(Promotion item, FilterField<PromotionField> filter) {
+        if (item == null || filter == null || filter.getValue() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        String operator = filter.getOperator().trim().toUpperCase(Locale.ROOT);
+        List<UUID> promotionCinemaIds = loadCinemaIds(item.getId());
+        if (promotionCinemaIds.isEmpty()) {
+            return false;
+        }
+
+        return switch (operator) {
+            case "EQ", "IN" -> {
+                List<UUID> requestedCinemaIds = convertToUuidList(filter.getValue());
+                yield requestedCinemaIds.stream().anyMatch(promotionCinemaIds::contains);
+            }
             default -> throw new BusinessException(ErrorCode.BAD_REQUEST);
         };
     }
@@ -500,6 +568,14 @@ public class PromotionServiceImpl implements PromotionService {
             values.add(PromotionField.convertValue(value, dataType));
         }
         return values;
+    }
+
+    private List<UUID> convertToUuidList(Object rawValue) {
+        List<Comparable<?>> comparableValues = convertToComparableList(rawValue, UUID.class);
+        return comparableValues.stream()
+                .map(value -> (UUID) value)
+                .distinct()
+                .toList();
     }
 
     private int compareValues(Object left, Object right) {
