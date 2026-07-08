@@ -44,8 +44,6 @@ public class PromotionUpsertRequest {
 
     private UUID minCustomerRankId;
 
-    private BigDecimal minCustomerLifetimeAmount;
-
     private Integer maxUsageCount;
 
     @NotNull(message = "Promotion start time is required")

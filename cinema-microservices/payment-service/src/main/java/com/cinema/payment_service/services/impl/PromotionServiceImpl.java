@@ -215,14 +215,6 @@ public class PromotionServiceImpl implements PromotionService {
                 && request.getMaxDiscountAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
-        if (request.getMinCustomerLifetimeAmount() != null
-                && request.getMinCustomerLifetimeAmount().compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
-        if (request.getMinCustomerRankId() != null
-                && request.getMinCustomerLifetimeAmount() != null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
-        }
         if (request.getMaxUsageCount() != null && request.getMaxUsageCount() <= 0) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
@@ -319,7 +311,7 @@ public class PromotionServiceImpl implements PromotionService {
         promotion.setMinOrderAmount(normalizeNullableAmount(request.getMinOrderAmount()));
         promotion.setMaxDiscountAmount(normalizeNullableAmount(request.getMaxDiscountAmount()));
         promotion.setMinCustomerRankId(request.getMinCustomerRankId());
-        promotion.setMinCustomerLifetimeAmount(normalizeNullableAmount(request.getMinCustomerLifetimeAmount()));
+        promotion.setMinCustomerLifetimeAmount(null);
         promotion.setMaxUsageCount(request.getMaxUsageCount());
         promotion.setStartAt(request.getStartAt());
         promotion.setEndAt(request.getEndAt());

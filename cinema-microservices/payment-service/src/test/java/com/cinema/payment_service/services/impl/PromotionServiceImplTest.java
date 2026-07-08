@@ -113,7 +113,7 @@ class PromotionServiceImplTest {
         assertEquals("ADMIN", saved.getCreatedByRole());
         assertEquals(userId, saved.getCreatedByUserId());
         assertEquals(PromotionStatus.ACTIVE, saved.getStatus());
-        assertEquals(null, saved.getMinCustomerLifetimeAmount());
+        assertEquals(null, saved.getMinCustomerRankId());
         assertEquals(null, saved.getMaxUsageCount());
         assertEquals(SuccessMessage.PROMOTION_CREATED.getMessage(), response.getMessage());
     }
@@ -148,7 +148,7 @@ class PromotionServiceImplTest {
     }
 
     @Test
-    void createPromotion_shouldRejectWhenRankAndLifetimeAmountAreProvidedTogether() {
+    void createPromotion_shouldUseRankWithoutSeparateLifetimeAmount() {
         UUID userId = UUID.randomUUID();
         UUID rankId = UUID.randomUUID();
 
@@ -158,19 +158,33 @@ class PromotionServiceImplTest {
                 .discountType(PromotionDiscountType.PERCENT)
                 .discountValue(BigDecimal.TEN)
                 .minCustomerRankId(rankId)
-                .minCustomerLifetimeAmount(BigDecimal.valueOf(500000))
                 .startAt(LocalDateTime.now().minusDays(1))
                 .endAt(LocalDateTime.now().plusDays(7))
                 .build();
 
         when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
         when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+        when(promotionRepository.existsByCodeIgnoreCaseAndIsDeletedFalse("VIP10")).thenReturn(false);
+        when(customerRankGrpcClient.getCustomerRankById(rankId)).thenReturn(
+                new CustomerRankGrpcClient.CustomerRankInfo(
+                        rankId,
+                        "GOLD",
+                        "Gold",
+                        BigDecimal.valueOf(1000000),
+                        BigDecimal.valueOf(1000),
+                        BigDecimal.ONE,
+                        3,
+                        "ACTIVE"));
+        when(promotionRepository.save(any(Promotion.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        BusinessException exception = assertThrows(BusinessException.class,
-                () -> promotionService.createPromotion(request, httpRequest));
+        ActionMessageResponse response = promotionService.createPromotion(request, httpRequest);
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.getErrorCode());
-        verify(promotionRepository, never()).save(any());
+        ArgumentCaptor<Promotion> captor = ArgumentCaptor.forClass(Promotion.class);
+        verify(promotionRepository).save(captor.capture());
+        Promotion saved = captor.getValue();
+        assertEquals(rankId, saved.getMinCustomerRankId());
+        assertEquals(null, saved.getMinCustomerLifetimeAmount());
+        assertEquals(SuccessMessage.PROMOTION_CREATED.getMessage(), response.getMessage());
     }
 
     @Test
@@ -213,13 +227,35 @@ class PromotionServiceImplTest {
     }
 
     @Test
-    void updatePromotion_shouldRejectWhenRankAndLifetimeAmountAreProvidedTogether() {
+    void updatePromotion_shouldUseRankWithoutSeparateLifetimeAmount() {
         UUID promotionId = UUID.randomUUID();
         UUID userId = UUID.randomUUID();
         UUID rankId = UUID.randomUUID();
+        Promotion promotion = new Promotion();
+        promotion.setId(promotionId);
+        promotion.setCode("SALE10");
+        promotion.setName("Sale");
+        promotion.setDiscountType(PromotionDiscountType.PERCENT);
+        promotion.setDiscountValue(BigDecimal.TEN);
+        promotion.setStatus(PromotionStatus.ACTIVE);
+        promotion.setIsDeleted(false);
 
         when(httpRequest.getHeader("X-User-Role")).thenReturn("ADMIN");
         when(httpRequest.getHeader("X-User-ID")).thenReturn(userId.toString());
+        when(promotionRepository.findById(promotionId)).thenReturn(Optional.of(promotion));
+        when(promotionRepository.existsByCodeIgnoreCaseAndIsDeletedFalseAndIdNot("SALE10", promotionId))
+                .thenReturn(false);
+        when(customerRankGrpcClient.getCustomerRankById(rankId)).thenReturn(
+                new CustomerRankGrpcClient.CustomerRankInfo(
+                        rankId,
+                        "GOLD",
+                        "Gold",
+                        BigDecimal.valueOf(1000000),
+                        BigDecimal.valueOf(1000),
+                        BigDecimal.ONE,
+                        3,
+                        "ACTIVE"));
+        when(promotionRepository.save(any(Promotion.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PromotionUpsertRequest request = PromotionUpsertRequest.builder()
                 .code("SALE10")
@@ -227,16 +263,18 @@ class PromotionServiceImplTest {
                 .discountType(PromotionDiscountType.PERCENT)
                 .discountValue(BigDecimal.TEN)
                 .minCustomerRankId(rankId)
-                .minCustomerLifetimeAmount(BigDecimal.valueOf(500000))
                 .startAt(LocalDateTime.now().minusDays(1))
                 .endAt(LocalDateTime.now().plusDays(7))
                 .build();
 
-        BusinessException exception = assertThrows(BusinessException.class,
-                () -> promotionService.updatePromotion(promotionId, request, httpRequest));
+        ActionMessageResponse response = promotionService.updatePromotion(promotionId, request, httpRequest);
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.getErrorCode());
-        verify(promotionRepository, never()).save(any());
+        ArgumentCaptor<Promotion> captor = ArgumentCaptor.forClass(Promotion.class);
+        verify(promotionRepository).save(captor.capture());
+        Promotion saved = captor.getValue();
+        assertEquals(rankId, saved.getMinCustomerRankId());
+        assertEquals(null, saved.getMinCustomerLifetimeAmount());
+        assertEquals(SuccessMessage.PROMOTION_UPDATED.getMessage(), response.getMessage());
     }
 
     @Test

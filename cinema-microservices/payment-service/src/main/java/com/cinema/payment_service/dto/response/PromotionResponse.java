@@ -27,7 +27,6 @@ public class PromotionResponse {
     private BigDecimal minOrderAmount;
     private BigDecimal maxDiscountAmount;
     private CustomerRankSummaryResponse customerRank;
-    private BigDecimal minCustomerLifetimeAmount;
     private Integer maxUsageCount;
     private Long usedCount;
     private Long remainingUsageCount;
