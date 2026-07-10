@@ -84,6 +84,16 @@ class GoogleOAuthServiceTest {
     }
 
     @Test
+    void buildAuthorizationUrl_shouldForceAccountSelection() {
+        String url = service.buildAuthorizationUrl("state-value");
+
+        assertThat(url).contains("prompt=select_account");
+        assertThat(url).contains("state=state-value");
+        assertThat(url).contains("client_id=" + CLIENT_ID);
+        assertThat(url).contains("redirect_uri=" + REDIRECT_URI.replace(":", "%3A").replace("/", "%2F"));
+    }
+
+    @Test
     void exchangeCode_shouldThrowCodeExchangeFailed_whenGoogleReturns4xx() {
         String errorJson = """
                 {

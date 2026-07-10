@@ -71,6 +71,7 @@ public class GoogleOAuthService {
                 SCOPES);
         String authorizationUrl = requestUrl
                 .setState(state)
+                .set("prompt", "select_account")
                 .build();
         log.info("Google OAuth authorize URL built: host={} stateLength={}",
                 AUTHORIZATION_SERVER_URL, safeLength(state));

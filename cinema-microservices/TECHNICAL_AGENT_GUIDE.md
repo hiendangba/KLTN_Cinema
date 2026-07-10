@@ -25,6 +25,12 @@
 - Verification: đã đối chiếu trực tiếp các block service trong `compose.prod.yaml` và `ENV JAVA_OPTS` của các Dockerfile liên quan; mức mới giữa image default và prod runtime đã khớp nhau.
 - Remaining risk: không thể cam kết "không bao giờ" OOM nếu traffic hoặc class loading tiếp tục tăng mạnh; sau khi deploy vẫn nên theo dõi `docker logs` và `docker stats`, đặc biệt vì ảnh hiện tại còn cho thấy `showtime-service` đang chạy giới hạn `352MiB` cũ nên máy deploy chưa đồng bộ hết với repo.
 
+- `identity-service` Google OAuth authorize URL giờ luôn thêm `prompt=select_account` để ép hiện màn chọn tài khoản trước khi người dùng login, thay vì nhảy thẳng vào account Google đã đăng nhập sẵn trên browser.
+- FE không đổi contract callback: sau khi Google authorize xong vẫn redirect về `https://cinema-star-ten.vercel.app/auth/callback?oauth=google&status=success`, rồi `AuthCallback` gọi `/users/me` để nạp profile và lưu `currentUser`.
+- Files chạm: `identity-service/src/main/java/com/cinema/identity_service/services/google/GoogleOAuthService.java`, `identity-service/src/test/java/com/cinema/identity_service/services/google/GoogleOAuthServiceTest.java`.
+- Reason: người dùng cần tự chọn account mỗi lần login Google, tránh việc browser reuse session Google cũ và vào thẳng account gần nhất.
+- Verification: thêm regression test `buildAuthorizationUrl_shouldForceAccountSelection` để khóa `prompt=select_account` và `state` trong authorize URL.
+
 ## Changelog ngắn (2026-07-08 - customer-rank validation)
 
 - `user-service` đã tách lỗi tạo/cập nhật/xóa `customer-ranks` ra mã riêng thay vì ném chung `9005 BAD_REQUEST`.
