@@ -90,7 +90,7 @@ class GoogleOAuthServiceTest {
         assertThat(url).contains("prompt=select_account");
         assertThat(url).contains("state=state-value");
         assertThat(url).contains("client_id=" + CLIENT_ID);
-        assertThat(url).contains("redirect_uri=" + REDIRECT_URI.replace(":", "%3A").replace("/", "%2F"));
+        assertThat(url).contains("redirect_uri=" + REDIRECT_URI);
     }
 
     @Test
