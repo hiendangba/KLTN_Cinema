@@ -2,10 +2,11 @@ services:
   identity-service:
     image: ${IMAGE_REPO}/identity-service:${IMAGE_TAG:-dev}
     pull_policy: always
+    restart: unless-stopped
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "${IDENTITY_JAVA_OPTS:--Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=256m -XX:ReservedCodeCacheSize=96m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError}"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
       SPRINGDOC_API_DOCS_ENABLED: "false"
@@ -47,7 +48,7 @@ services:
       - postgres
       - redis
       - rabbitmq
-    mem_limit: 448m
+    mem_limit: 768m
 
   user-service:
     image: ${IMAGE_REPO}/user-service:${IMAGE_TAG:-dev}
@@ -55,7 +56,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms64m -Xmx256m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
       SPRINGDOC_API_DOCS_ENABLED: "false"
@@ -87,7 +88,7 @@ services:
       - redis
       - rabbitmq
       - cinema-service
-    mem_limit: 352m
+    mem_limit: 576m
 
   film-service:
     image: ${IMAGE_REPO}/film-service:${IMAGE_TAG:-dev}
@@ -136,7 +137,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
       DB_POOL_MAX_SIZE: "4"
@@ -181,7 +182,7 @@ services:
       - hall-service
       - cinema-service
       - seat-service
-    mem_limit: 448m
+    mem_limit: 640m
 
   booking-service:
     image: ${IMAGE_REPO}/booking-service:${IMAGE_TAG:-dev}
@@ -189,7 +190,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
       DB_POOL_MAX_SIZE: "4"
@@ -228,7 +229,7 @@ services:
       - cinema-service
       - identity-service
       - film-service
-    mem_limit: 448m
+    mem_limit: 640m
 
   payment-service:
     image: ${IMAGE_REPO}/payment-service:${IMAGE_TAG:-dev}
@@ -236,7 +237,7 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
-      JAVA_OPTS: "-Xms48m -Xmx160m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JAVA_OPTS: "-Xms96m -Xmx288m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
       JPA_SHOW_SQL: "false"
       JPA_DDL_AUTO: "update"
       DB_URL: jdbc:postgresql://postgres:5432/payment_db
@@ -276,7 +277,7 @@ services:
       - booking-service
       - film-service
       - cinema-service
-    mem_limit: 352m
+    mem_limit: 576m
 
   upload-service:
     image: ${IMAGE_REPO}/upload-service:${IMAGE_TAG:-dev}
@@ -470,6 +471,8 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 123456
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./postgres-init:/docker-entrypoint-initdb.d

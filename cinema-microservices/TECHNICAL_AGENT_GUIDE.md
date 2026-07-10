@@ -14,6 +14,17 @@
 - Nếu bạn là AI agent: ưu tiên đọc phần "Sổ tay tác nghiệp AI" ở cuối trước khi sửa code.
 - Nếu bạn sửa liên service: luôn kiểm tra mục gRPC Contracts + Compose/Envoy.
 
+## Changelog ngắn (2026-07-10 - identity-service metaspace)
+
+- `identity-service` trong `compose.prod.yaml` đã được nới JVM headroom để giảm nguy cơ sập vì `java.lang.OutOfMemoryError: Metaspace`: `Xmx` tăng từ `224m` lên `320m`, `MaxMetaspaceSize` từ `128m` lên `256m`, `ReservedCodeCacheSize` từ `64m` lên `96m`, và `mem_limit` từ `448m` lên `768m`.
+- Block prod của `identity-service` cũng thêm `restart: unless-stopped` và cho phép override qua biến `IDENTITY_JAVA_OPTS`, nên khi cần tăng thêm RAM trên VPS có thể chỉnh env mà không phải sửa lại image ngay.
+- Default runtime trong `identity-service/Dockerfile` đã được đồng bộ với mức mới và bật `HeapDumpOnOutOfMemoryError` để nếu còn OOM thì container sẽ để lại thêm dấu vết debug.
+- Từ ảnh `docker stats`, bốn service khác cũng đã tiến sát ngưỡng bộ nhớ nên prod compose được nới tiếp như sau: `user-service` lên `Xmx320m/mem_limit 576m`, `payment-service` lên `Xmx288m/mem_limit 576m`, `booking-service` lên `Xmx320m/mem_limit 640m`, `showtime-service` lên `Xmx320m/mem_limit 640m`; các Dockerfile tương ứng cũng được đồng bộ default `JAVA_OPTS`.
+- Files chạm: `compose.prod.yaml`, `identity-service/Dockerfile`, `user-service/Dockerfile`, `payment-service/Dockerfile`, `booking-service/Dockerfile`, `showtime-service/Dockerfile`.
+- Reason: log production của `cinema-deploy-identity-service-1` kết thúc bằng `OutOfMemoryError: Metaspace`, nên giới hạn JVM cũ của identity-service không còn đủ an toàn cho phiên bản hiện tại.
+- Verification: đã đối chiếu trực tiếp các block service trong `compose.prod.yaml` và `ENV JAVA_OPTS` của các Dockerfile liên quan; mức mới giữa image default và prod runtime đã khớp nhau.
+- Remaining risk: không thể cam kết "không bao giờ" OOM nếu traffic hoặc class loading tiếp tục tăng mạnh; sau khi deploy vẫn nên theo dõi `docker logs` và `docker stats`, đặc biệt vì ảnh hiện tại còn cho thấy `showtime-service` đang chạy giới hạn `352MiB` cũ nên máy deploy chưa đồng bộ hết với repo.
+
 ## Changelog ngắn (2026-07-08 - customer-rank validation)
 
 - `user-service` đã tách lỗi tạo/cập nhật/xóa `customer-ranks` ra mã riêng thay vì ném chung `9005 BAD_REQUEST`.

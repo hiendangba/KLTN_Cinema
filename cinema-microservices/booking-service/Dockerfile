@@ -7,6 +7,6 @@ RUN --mount=type=cache,target=/root/.m2 mvn -DskipTests -pl booking-service -am 
 
 FROM eclipse-temurin:17
 WORKDIR /app
-ENV JAVA_OPTS="-Xms64m -Xmx224m -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m"
+ENV JAVA_OPTS="-Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
 COPY --from=builder /app/booking-service/target/*.jar app.jar
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
