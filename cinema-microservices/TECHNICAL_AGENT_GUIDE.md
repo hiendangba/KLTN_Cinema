@@ -16,6 +16,11 @@
 
 ## Changelog ngắn (2026-07-10 - identity-service metaspace)
 
+- `FE/CinemaStar` sidebar quản trị đã ẩn thanh cuộn dọc mặc định bằng utility `hide-scrollbar`, giữ khả năng cuộn nhưng bỏ phần scrollbar lộ ra gây lệch giao diện ở cột menu trái.
+- Files chạm: `FE/CinemaStar/src/components/admin/AdminSidebar.jsx`, `FE/CinemaStar/src/index.css`.
+- Reason: cột menu trái trong trang quản trị đang lộ scrollbar hệ thống, nhìn không khớp visual dark/purple của dashboard.
+- Verification: class `hide-scrollbar` đã được gắn trực tiếp lên `<aside>` của `AdminSidebar` và utility CSS đã cover cả WebKit, Firefox, IE/Edge legacy.
+
 - `identity-service` trong `compose.prod.yaml` đã được nới JVM headroom để giảm nguy cơ sập vì `java.lang.OutOfMemoryError: Metaspace`: `Xmx` tăng từ `224m` lên `320m`, `MaxMetaspaceSize` từ `128m` lên `256m`, `ReservedCodeCacheSize` từ `64m` lên `96m`, và `mem_limit` từ `448m` lên `768m`.
 - Block prod của `identity-service` cũng thêm `restart: unless-stopped` và cho phép override qua biến `IDENTITY_JAVA_OPTS`, nên khi cần tăng thêm RAM trên VPS có thể chỉnh env mà không phải sửa lại image ngay.
 - Default runtime trong `identity-service/Dockerfile` đã được đồng bộ với mức mới và bật `HeapDumpOnOutOfMemoryError` để nếu còn OOM thì container sẽ để lại thêm dấu vết debug.
