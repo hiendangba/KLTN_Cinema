@@ -16,6 +16,11 @@
 
 ## Changelog ngắn (2026-07-10 - identity-service metaspace)
 
+- `booking-service`, `payment-service`, `showtime-service`, `film-service`, `review-service` đã tách thêm nhóm `BAD_REQUEST` mang tính nghiệp vụ, user-facing thành các `ErrorCode` riêng thay vì trả chung `9005 Bad request`.
+- Các case đã rõ message gồm: trùng mã khuyến mãi, giá trị khuyến mãi không hợp lệ, trạng thái thanh toán/hoàn tiền không hợp lệ, khuyến mãi hết lượt, tên sản phẩm trùng, chọn quá số ghế cho phép, showtime không thuộc rạp, ghế sai loại, tên actor/type trùng, review/comment rỗng hoặc vượt quá số media cho phép.
+- Files chạm: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PromotionServiceImpl.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `booking-service/src/main/java/com/cinema/booking_service/services/impl/BookingServiceImpl.java`, `booking-service/src/main/java/com/cinema/booking_service/services/impl/ProductServiceImpl.java`, `showtime-service/src/main/java/com/cinema/showtime_service/services/impl/ShowTimeServiceImpl.java`, `film-service/src/main/java/com/cinema/film_service/services/impl/TypeServiceImpl.java`, `film-service/src/main/java/com/cinema/film_service/services/impl/ActorServiceImpl.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/ReviewServiceImpl.java`, `review-service/src/main/java/com/cinema/review_service/service/impl/CommentServiceImpl.java`.
+- Reason: FE đang lấy trực tiếp `message` từ backend, nên nếu backend chỉ trả `Bad request` thì người dùng không biết phải sửa input hay state nào.
+
 - `payment-service` đã tách lỗi khoảng ngày doanh thu không hợp lệ ra mã riêng `4015 INVALID_DATE_RANGE`, thay cho `9005 Bad request`, để FE hiển thị rõ: ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.
 - Files chạm: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImplTest.java`.
 - Reason: case `toDate < fromDate` trước đây bị dồn vào lỗi chung nên người dùng không biết cần sửa field nào; giờ response đã mang message nghiệp vụ cụ thể hơn.

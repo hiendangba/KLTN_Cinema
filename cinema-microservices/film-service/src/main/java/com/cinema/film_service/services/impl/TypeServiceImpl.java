@@ -50,7 +50,7 @@ public class TypeServiceImpl implements TypeService {
         validateAdmin(httpRequest, "createType");
         String name = normalize(request.getName());
         if (filmTypeRepository.findByNameIgnoreCaseAndIsDeletedFalse(name).isPresent()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.FILM_TYPE_NAME_EXISTED);
         }
 
         FilmType type = filmTypeMapper.toEntity(request);
@@ -69,7 +69,7 @@ public class TypeServiceImpl implements TypeService {
         FilmType type = getActiveTypeOrThrow(id);
         String name = normalize(request.getName());
         if (filmTypeRepository.existsByNameIgnoreCaseAndIdNotAndIsDeletedFalse(name, id)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.FILM_TYPE_NAME_EXISTED);
         }
 
         filmTypeMapper.updateEntityFromRequest(type, request);

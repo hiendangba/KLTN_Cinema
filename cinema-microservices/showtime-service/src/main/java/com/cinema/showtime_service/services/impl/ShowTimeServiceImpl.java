@@ -90,7 +90,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
     @Transactional(readOnly = true)
     public PageResponse<ShowTimeResponse> searchShowtimesByFilmId(UUID filmId, SearchShowtimesByFilmRequest request) {
         if (request == null || request.getDate() == null) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.SHOWTIME_DATE_REQUIRED);
         }
 
         List<FilterField<ShowTimeField>> filters = new ArrayList<>();
@@ -631,7 +631,7 @@ public class ShowTimeServiceImpl implements ShowTimeService {
         }
 
         if (!request.getStartDateTime().isAfter(LocalDateTime.now())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.SHOWTIME_START_TIME_INVALID);
         }
     }
 

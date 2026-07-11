@@ -49,7 +49,7 @@ public class ProductServiceImpl implements ProductService {
 
         if (productRepository.existsByCinemaIdAndNameIgnoreCaseAndIsDeletedFalse(
                 request.getCinemaId(), request.getName())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PRODUCT_NAME_EXISTED);
         }
 
         Product product = productMapper.toEntity(request);
@@ -74,7 +74,7 @@ public class ProductServiceImpl implements ProductService {
 
         if (productRepository.existsByCinemaIdAndNameIgnoreCaseAndIdNotAndIsDeletedFalse(
                 product.getCinemaId(), request.getName(), id)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PRODUCT_NAME_EXISTED);
         }
 
         productMapper.updateEntityFromRequest(product, request);

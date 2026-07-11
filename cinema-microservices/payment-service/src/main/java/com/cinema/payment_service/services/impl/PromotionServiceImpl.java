@@ -196,27 +196,27 @@ public class PromotionServiceImpl implements PromotionService {
             if (request.getDiscountValue() == null
                     || request.getDiscountValue().compareTo(BigDecimal.ZERO) <= 0
                     || request.getDiscountValue().compareTo(new BigDecimal("100")) > 0) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                throw new BusinessException(ErrorCode.PROMOTION_PERCENT_DISCOUNT_INVALID);
             }
         } else if (request.getDiscountType() == PromotionDiscountType.FIXED) {
             if (request.getDiscountValue() == null || request.getDiscountValue().compareTo(BigDecimal.ZERO) <= 0) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                throw new BusinessException(ErrorCode.PROMOTION_FIXED_DISCOUNT_INVALID);
             }
         }
 
         if (request.getStartAt() != null && request.getEndAt() != null
                 && request.getEndAt().isBefore(request.getStartAt())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PROMOTION_TIME_RANGE_INVALID);
         }
         if (request.getMinOrderAmount() != null && request.getMinOrderAmount().compareTo(BigDecimal.ZERO) < 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PROMOTION_MIN_ORDER_AMOUNT_INVALID);
         }
         if (request.getMaxDiscountAmount() != null
                 && request.getMaxDiscountAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PROMOTION_MAX_DISCOUNT_AMOUNT_INVALID);
         }
         if (request.getMaxUsageCount() != null && request.getMaxUsageCount() <= 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PROMOTION_MAX_USAGE_COUNT_INVALID);
         }
     }
 
@@ -234,7 +234,7 @@ public class PromotionServiceImpl implements PromotionService {
             throw new BusinessException(ErrorCode.MANAGER_NOT_ASSIGNED_CINEMA);
         }
         if (cinemaIds == null || cinemaIds.isEmpty()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PROMOTION_CINEMA_REQUIRED);
         }
         if (!accessibleCinemaIds.containsAll(cinemaIds)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -299,7 +299,7 @@ public class PromotionServiceImpl implements PromotionService {
                 ? promotionRepository.existsByCodeIgnoreCaseAndIsDeletedFalse(code)
                 : promotionRepository.existsByCodeIgnoreCaseAndIsDeletedFalseAndIdNot(code, idToIgnore);
         if (existed) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PROMOTION_CODE_EXISTED);
         }
     }
 

@@ -153,13 +153,13 @@ public class BookingServiceImpl implements BookingService {
 
         List<CreateBookingRequest.SeatItem> seatItems = request.getSeatItems();
         if (seatItems == null || seatItems.isEmpty() || seatItems.size() > 5) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.BOOKING_SEAT_LIMIT_INVALID);
         }
 
         List<String> normalizedSeatCodes = normalizeAndValidateSeatCodes(seatItems);
         ShowtimeGrpcClient.ShowtimeSummary showtime = showtimeGrpcClient.getShowtimeById(request.getShowtimeId());
         if (!showtime.getCinemaId().equals(request.getCinemaId())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.BOOKING_SHOWTIME_CINEMA_MISMATCH);
         }
         FilmGrpcClient.FilmSnapshot film = filmGrpcClient.getFilmById(showtime.getFilmId());
         Map<String, SeatGrpcClient.SeatSnapshot> canonicalSeatSnapshotByCode =
@@ -540,7 +540,7 @@ public class BookingServiceImpl implements BookingService {
             throw new BusinessException(ErrorCode.FORBIDDEN);
         }
         if (booking.getBookingStatus() == BookingStatus.CONFIRMED && booking.getPaymentStatus() == PaymentStatus.PAID) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.BOOKING_CANNOT_CANCEL_PAID);
         }
 
         booking.setBookingStatus(BookingStatus.CANCELLED);
@@ -1950,10 +1950,10 @@ public class BookingServiceImpl implements BookingService {
         for (Map.Entry<UUID, Integer> entry : mergedQuantities.entrySet()) {
             Product product = productMap.get(entry.getKey());
             if (!cinemaId.equals(product.getCinemaId())) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                throw new BusinessException(ErrorCode.BOOKING_PRODUCT_CINEMA_MISMATCH);
             }
             if (product.getStatus() != ProductStatus.ACTIVE) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                throw new BusinessException(ErrorCode.BOOKING_PRODUCT_INACTIVE);
             }
 
             Integer quantity = entry.getValue();
@@ -2006,7 +2006,7 @@ public class BookingServiceImpl implements BookingService {
                 throw new BusinessException(ErrorCode.SEAT_NOT_FOUND);
             }
             if (seatItems.get(i).getSeatType() != canonicalType) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                throw new BusinessException(ErrorCode.BOOKING_SEAT_TYPE_MISMATCH);
             }
         }
         return canonicalSeatSnapshotByCode;

@@ -49,7 +49,7 @@ public class ActorServiceImpl implements ActorService {
         validateAdmin(httpRequest, "createActor");
         String name = normalize(request.getName());
         if (actorRepository.existsByNameIgnoreCaseAndIsDeletedFalse(name)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.ACTOR_NAME_EXISTED);
         }
         Actor actor = actorMapper.toEntity(request);
         actor.setName(name);
@@ -68,7 +68,7 @@ public class ActorServiceImpl implements ActorService {
         Actor actor = getActiveActorOrThrow(id);
         actor.setName(normalize(request.getName()));
         if (actorRepository.existsByNameIgnoreCaseAndIdNotAndIsDeletedFalse(actor.getName(), id)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.ACTOR_NAME_EXISTED);
         }
         actorMapper.updateEntityFromRequest(actor, request);
         actor.setName(normalize(request.getName()));

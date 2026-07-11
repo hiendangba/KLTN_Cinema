@@ -163,7 +163,7 @@ public class CommentServiceImpl implements CommentService {
 
     private String normalizeRequiredText(String value) {
         if (value == null || value.isBlank()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.COMMENT_CONTENT_REQUIRED);
         }
         return value.trim();
     }
@@ -171,7 +171,7 @@ public class CommentServiceImpl implements CommentService {
     private List<MediaUrlUtils.MediaDescriptor> normalizeMediaDescriptors(List<String> mediaUrls) {
         List<MediaUrlUtils.MediaDescriptor> descriptors = MediaUrlUtils.normalize(mediaUrls);
         if (descriptors.size() > 5) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.COMMENT_MEDIA_LIMIT_EXCEEDED);
         }
         return descriptors;
     }

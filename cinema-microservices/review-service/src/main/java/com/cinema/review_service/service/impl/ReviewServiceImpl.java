@@ -131,13 +131,13 @@ public class ReviewServiceImpl implements ReviewService {
 
     private void validateRating(Integer rating) {
         if (rating == null || rating < 1 || rating > 5) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.REVIEW_RATING_INVALID);
         }
     }
 
     private String normalizeRequiredText(String value) {
         if (value == null || value.isBlank()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.REVIEW_CONTENT_REQUIRED);
         }
         return value.trim();
     }
@@ -149,7 +149,7 @@ public class ReviewServiceImpl implements ReviewService {
     private List<MediaUrlUtils.MediaDescriptor> normalizeMediaDescriptors(List<String> mediaUrls) {
         List<MediaUrlUtils.MediaDescriptor> descriptors = MediaUrlUtils.normalize(mediaUrls);
         if (descriptors.size() > 5) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.REVIEW_MEDIA_LIMIT_EXCEEDED);
         }
         return descriptors;
     }

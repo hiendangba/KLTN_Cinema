@@ -259,7 +259,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     .build();
         }
         if (transaction.getStatus() != PaymentTransactionStatus.PENDING) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PAYMENT_SESSION_STATUS_INVALID);
         }
         ensurePromotionUsageAvailable(transaction);
 
@@ -378,14 +378,14 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     .build();
         }
         if (transaction.getStatus() != PaymentTransactionStatus.PAID) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.REFUND_STATUS_INVALID);
         }
 
         BigDecimal refundAmount = normalizeAmount(
                 request != null && request.getRefundAmount() != null ? request.getRefundAmount()
                         : transaction.getAmount());
         if (refundAmount.compareTo(ZERO) <= 0 || refundAmount.compareTo(normalizeAmount(transaction.getAmount())) > 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.REFUND_AMOUNT_INVALID);
         }
 
         transaction.setStatus(PaymentTransactionStatus.REFUND_PENDING);
@@ -418,13 +418,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     .build();
         }
         if (transaction.getStatus() != PaymentTransactionStatus.REFUND_PENDING) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.REFUND_STATUS_INVALID);
         }
 
         BigDecimal refundAmount = normalizeAmount(
                 transaction.getRefundAmount() == null ? transaction.getAmount() : transaction.getRefundAmount());
         if (refundAmount.compareTo(ZERO) <= 0 || refundAmount.compareTo(normalizeAmount(transaction.getAmount())) > 0) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.REFUND_AMOUNT_INVALID);
         }
 
         transaction.setStatus(PaymentTransactionStatus.REFUNDED);
@@ -885,7 +885,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
         if ("CONFIRMED".equalsIgnoreCase(bookingContext.bookingStatus())
                 && !"PAID".equalsIgnoreCase(bookingContext.paymentStatus())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PAYMENT_SESSION_STATUS_INVALID);
         }
     }
 
@@ -1222,20 +1222,20 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             }
 
             Promotion promotion = promotionRepository.findByIdForUpdate(snapshot.getPromotionId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST));
+                    .orElseThrow(() -> new BusinessException(ErrorCode.PROMOTION_NOT_AVAILABLE));
             if (Boolean.TRUE.equals(promotion.getIsDeleted())) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                throw new BusinessException(ErrorCode.PROMOTION_NOT_AVAILABLE);
             }
             if (paymentTransactionPromotionRepository.existsReachedPaidUsageByPromotionIdAndUserId(
                     promotion.getId(),
                     transaction.getUserId())) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                throw new BusinessException(ErrorCode.PROMOTION_USER_USAGE_LIMIT_REACHED);
             }
             if (promotion.getMaxUsageCount() != null) {
                 long usedCount = paymentTransactionPromotionRepository
                         .countReachedPaidUsageByPromotionId(promotion.getId());
                 if (usedCount >= promotion.getMaxUsageCount()) {
-                    throw new BusinessException(ErrorCode.BAD_REQUEST);
+                    throw new BusinessException(ErrorCode.PROMOTION_GLOBAL_USAGE_LIMIT_REACHED);
                 }
             }
         }
@@ -1668,7 +1668,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 && dateRange.getFrom() != null
                 && dateRange.getTo() != null
                 && dateRange.getTo().isBefore(dateRange.getFrom())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
         }
     }
 

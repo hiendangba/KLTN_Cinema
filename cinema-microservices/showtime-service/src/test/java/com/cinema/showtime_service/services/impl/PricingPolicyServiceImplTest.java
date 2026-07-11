@@ -148,6 +148,25 @@ class PricingPolicyServiceImplTest {
         verify(cinemaGrpcClient, never()).getCinemaIdsByUserId(any(), any());
     }
 
+    @Test
+    void deletePricingPolicy_shouldReturnSpecificErrorWhenPolicyIsInUse() {
+        UUID policyId = UUID.randomUUID();
+        UUID cinemaId = UUID.randomUUID();
+        PricingPolicy policy = new PricingPolicy();
+        policy.setId(policyId);
+        policy.setCinemaId(cinemaId);
+        policy.setIsDeleted(false);
+
+        when(pricingPolicyRepository.findByIdAndIsDeletedFalse(policyId)).thenReturn(Optional.of(policy));
+        when(showTimeRepository.existsByPricingPolicyIdAndIsDeletedFalse(policyId)).thenReturn(true);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> pricingPolicyService.deletePricingPolicy(policyId, adminRequest()));
+
+        assertEquals(ErrorCode.PRICING_POLICY_IN_USE, ex.getErrorCode());
+        verify(pricingPolicyRepository, never()).save(any());
+    }
+
     private HttpServletRequest adminRequest() {
         HttpServletRequest request = mock(HttpServletRequest.class);
         when(request.getHeader(HeaderNames.X_USER_ROLE)).thenReturn(HeaderNames.ROLE_ADMIN);

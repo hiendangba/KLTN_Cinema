@@ -210,7 +210,7 @@ public class PricingPolicyServiceImpl implements PricingPolicyService {
 
     private void validatePricingPolicyNotUsed(UUID pricingPolicyId) {
         if (showTimeRepository.existsByPricingPolicyIdAndIsDeletedFalse(pricingPolicyId)) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.PRICING_POLICY_IN_USE);
         }
     }
 
