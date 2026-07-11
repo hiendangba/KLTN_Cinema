@@ -48,6 +48,7 @@ public enum ErrorCode {
 
         PASSWORD_DUPLICATED("4012", "Mật khẩu mới không được trùng với mật khẩu cũ", HttpStatus.BAD_REQUEST),
         PASSWORD_INCORRECT("4013", "Mật khẩu không chính xác", HttpStatus.BAD_REQUEST),
+        INVALID_DATE_RANGE("4015", "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu", HttpStatus.BAD_REQUEST),
         PUBLISH_FAILED("4012", "Không thể gửi sự kiện. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
 
         FILM_TITLE_EXISTED("4101", "Phim có cùng tên và năm phát hành đã tồn tại", HttpStatus.CONFLICT),

@@ -16,6 +16,11 @@
 
 ## Changelog ngắn (2026-07-10 - identity-service metaspace)
 
+- `payment-service` đã tách lỗi khoảng ngày doanh thu không hợp lệ ra mã riêng `4015 INVALID_DATE_RANGE`, thay cho `9005 Bad request`, để FE hiển thị rõ: ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.
+- Files chạm: `common-lib/src/main/java/com/cinema/exception/ErrorCode.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`, `payment-service/src/test/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImplTest.java`.
+- Reason: case `toDate < fromDate` trước đây bị dồn vào lỗi chung nên người dùng không biết cần sửa field nào; giờ response đã mang message nghiệp vụ cụ thể hơn.
+- Verification: thêm regression test cho `getAllCinemaRevenueReport_shouldRejectInvalidDateRange` để khóa đúng error code/message mới.
+
 - `FE/CinemaStar` sidebar quản trị đã ẩn thanh cuộn dọc mặc định bằng utility `hide-scrollbar`, giữ khả năng cuộn nhưng bỏ phần scrollbar lộ ra gây lệch giao diện ở cột menu trái.
 - Files chạm: `FE/CinemaStar/src/components/admin/AdminSidebar.jsx`, `FE/CinemaStar/src/index.css`.
 - Reason: cột menu trái trong trang quản trị đang lộ scrollbar hệ thống, nhìn không khớp visual dark/purple của dashboard.

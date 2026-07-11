@@ -1199,6 +1199,36 @@ class PaymentSessionServiceImplTest {
     }
 
     @Test
+    void getAllCinemaRevenueReport_shouldRejectInvalidDateRange() {
+        UUID cinema1 = UUID.randomUUID();
+        LocalDateTime from = LocalDateTime.of(2026, 5, 29, 18, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 5, 29, 9, 0);
+
+        when(cinemaGrpcClient.getAllActiveCinemas()).thenReturn(List.of(
+                new CinemaGrpcClient.CinemaSummary(cinema1, "Cinema 1")));
+
+        PageRequest<CinemaRevenueField> pageRequest = new PageRequest<>();
+        pageRequest.setPage(1);
+        pageRequest.setSize(10);
+
+        CinemaRevenueReportRequest request = CinemaRevenueReportRequest.builder()
+                .dateRange(DateRange.builder().from(from).to(to).build())
+                .pageRequest(pageRequest)
+                .build();
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> paymentSessionService.getAllCinemaRevenueReport(request));
+
+        assertEquals(ErrorCode.INVALID_DATE_RANGE, exception.getErrorCode());
+        assertEquals(ErrorCode.INVALID_DATE_RANGE.getMessage(), exception.getMessage());
+        verify(paymentTransactionRepositoryImpl, never()).findAllForRevenueReport(
+                anyCollection(),
+                any(),
+                any(),
+                any());
+    }
+
+    @Test
     void searchFilmRevenueReport_shouldAllowAdminAndAggregateByFilmAcrossCinemas() {
         UUID cinema1 = UUID.randomUUID();
         UUID cinema2 = UUID.randomUUID();

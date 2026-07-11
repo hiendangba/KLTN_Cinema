@@ -1557,7 +1557,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 && dateRange.getFrom() != null
                 && dateRange.getTo() != null
                 && dateRange.getTo().isBefore(dateRange.getFrom())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST);
+            throw new BusinessException(ErrorCode.INVALID_DATE_RANGE);
         }
     }
 
