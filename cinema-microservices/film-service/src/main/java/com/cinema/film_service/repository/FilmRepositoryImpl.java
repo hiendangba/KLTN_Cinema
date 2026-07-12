@@ -11,6 +11,7 @@ import com.cinema.film_service.entity.FilmType;
 import com.cinema.text.SearchTextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -23,6 +24,9 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.lang.reflect.Array;
@@ -34,6 +38,9 @@ import java.util.Locale;
 @RequiredArgsConstructor
 @Repository
 public class FilmRepositoryImpl {
+    private static final String VIETNAMESE_ACCENTED_LOWER = "àáạảãăằắặẳẵâầấậẩẫđèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹ";
+    private static final String VIETNAMESE_ASCII = "aaaaaaaaaaaaaaaaadeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyy";
+
     @PersistenceContext
     private final EntityManager entityManager;
 
@@ -77,6 +84,52 @@ public class FilmRepositoryImpl {
         return query.getResultList();
     }
 
+    public Page<String> searchDistinctDirectors(String keyword, Pageable pageable) {
+        Pageable safePageable = pageable == null ? org.springframework.data.domain.PageRequest.of(0, 20) : pageable;
+        String normalizedKeyword = normalizeKeyword(keyword);
+        String normalizedExpression = normalizedDirectorExpression();
+        String whereClause = buildDirectorsWhereClause(normalizedKeyword, normalizedExpression);
+
+        String contentSql = """
+                select min(trim(f.director)) as director_name
+                from films f
+                %s
+                group by %s
+                order by %s asc, min(trim(f.director)) asc
+                """.formatted(whereClause, normalizedExpression, normalizedExpression);
+
+        jakarta.persistence.Query contentQuery = entityManager.createNativeQuery(contentSql);
+        if (normalizedKeyword != null) {
+            contentQuery.setParameter("keyword", normalizedKeyword);
+        }
+        contentQuery.setFirstResult((int) safePageable.getOffset());
+        contentQuery.setMaxResults(safePageable.getPageSize());
+
+        @SuppressWarnings("unchecked")
+        List<Object> rows = contentQuery.getResultList();
+        List<String> content = rows.stream()
+                .map(String::valueOf)
+                .toList();
+
+        String countSql = """
+                select count(*)
+                from (
+                    select 1
+                    from films f
+                    %s
+                    group by %s
+                ) director_groups
+                """.formatted(whereClause, normalizedExpression);
+
+        Query countQuery = entityManager.createNativeQuery(countSql);
+        if (normalizedKeyword != null) {
+            countQuery.setParameter("keyword", normalizedKeyword);
+        }
+
+        Number totalElements = (Number) countQuery.getSingleResult();
+        return new PageImpl<>(content, safePageable, totalElements.longValue());
+    }
+
     private List<Predicate> buildPredicates(
             CriteriaBuilder cb,
             CriteriaQuery<Film> cq,
@@ -102,7 +155,8 @@ public class FilmRepositoryImpl {
                 }
 
                 SortField<FilmField> currentSort = sortBy.get(level);
-                Comparable<?> cmpValue = FilmField.convertValue(cursorParts[level], currentSort.getField().getDataType());
+                Comparable<?> cmpValue = FilmField.convertValue(cursorParts[level],
+                        currentSort.getField().getDataType());
                 Predicate cmpPredicate = buildCursorComparePredicate(cb, cq, root, currentSort, cmpValue, previous);
                 andPredicates.add(cmpPredicate);
                 orPredicates.add(cb.and(andPredicates.toArray(new Predicate[0])));
@@ -192,7 +246,8 @@ public class FilmRepositoryImpl {
                 : greaterThanPredicate(cb, path, value);
     }
 
-    private Predicate buildFilterPredicate(CriteriaBuilder cb, CriteriaQuery<Film> cq, Root<Film> root, FilterField<FilmField> filter) {
+    private Predicate buildFilterPredicate(CriteriaBuilder cb, CriteriaQuery<Film> cq, Root<Film> root,
+            FilterField<FilmField> filter) {
         if (filter == null || filter.getField() == null || filter.getOperator() == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -255,7 +310,8 @@ public class FilmRepositoryImpl {
         Class<?> dataType = String.class;
 
         if ("NEQ".equals(operator)) {
-            return cb.not(buildRelationExistsPredicate(cb, cq, root, relationName, attributeName, "EQ", rawValue, dataType));
+            return cb.not(
+                    buildRelationExistsPredicate(cb, cq, root, relationName, attributeName, "EQ", rawValue, dataType));
         }
 
         return buildRelationExistsPredicate(cb, cq, root, relationName, attributeName, operator, rawValue, dataType);
@@ -363,7 +419,8 @@ public class FilmRepositoryImpl {
                 cb.lessThanOrEqualTo(lower, end));
     }
 
-    private Predicate buildKeywordPredicate(CriteriaBuilder cb, CriteriaQuery<Film> cq, Root<Film> root, String keyword) {
+    private Predicate buildKeywordPredicate(CriteriaBuilder cb, CriteriaQuery<Film> cq, Root<Film> root,
+            String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return null;
         }
@@ -517,6 +574,34 @@ public class FilmRepositoryImpl {
         return cb.lessThanOrEqualTo((Path<T>) path, (T) value);
     }
 
+    private String buildDirectorsWhereClause(String normalizedKeyword, String normalizedExpression) {
+        StringBuilder where = new StringBuilder("""
+                where f.is_deleted = false
+                  and f.director is not null
+                  and trim(f.director) <> ''
+                """);
+
+        if (normalizedKeyword != null) {
+            where.append("  and ")
+                    .append(normalizedExpression)
+                    .append(" like concat('%', :keyword, '%')\n");
+        }
+
+        return where.toString();
+    }
+
+    private String normalizedDirectorExpression() {
+        return "translate(lower(trim(f.director)), '" + VIETNAMESE_ACCENTED_LOWER + "', '" + VIETNAMESE_ASCII + "')";
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null) {
+            return null;
+        }
+        String normalized = SearchTextUtils.normalize(keyword);
+        return normalized.isBlank() ? null : normalized;
+    }
+
     private boolean isGreaterThan(Comparable<?> left, Comparable<?> right) {
         return asComparable(left).compareTo(right) > 0;
     }
@@ -526,7 +611,8 @@ public class FilmRepositoryImpl {
         return (Comparable<Object>) value;
     }
 
-    private List<Order> buildOrders(CriteriaBuilder cb, CriteriaQuery<Film> cq, Root<Film> root, List<SortField<FilmField>> sortBy) {
+    private List<Order> buildOrders(CriteriaBuilder cb, CriteriaQuery<Film> cq, Root<Film> root,
+            List<SortField<FilmField>> sortBy) {
         List<Order> orders = new ArrayList<>();
         if (sortBy != null && !sortBy.isEmpty()) {
             for (SortField<FilmField> sort : sortBy) {
@@ -549,7 +635,8 @@ public class FilmRepositoryImpl {
         return orders;
     }
 
-    private Expression<String> relationSortExpression(CriteriaBuilder cb, CriteriaQuery<Film> cq, Root<Film> root, FilmField field) {
+    private Expression<String> relationSortExpression(CriteriaBuilder cb, CriteriaQuery<Film> cq, Root<Film> root,
+            FilmField field) {
         String relationName = field == FilmField.ACTOR ? "actors" : "types";
         Subquery<String> subquery = cq.subquery(String.class);
         Root<Film> correlatedFilm = subquery.correlate(root);

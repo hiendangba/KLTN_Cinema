@@ -2,6 +2,7 @@ package com.cinema.film_service.controller;
 
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.controller.BaseController;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.response.APIResponse;
 import com.cinema.film_service.dto.request.BatchFilmRequest;
 import com.cinema.film_service.dto.request.CreateFilmRequest;
@@ -13,6 +14,7 @@ import com.cinema.film_service.dto.response.BatchFilmResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.services.FilmService;
 import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,13 @@ public class FilmController extends BaseController {
         @Valid @RequestBody FilmCursorPageRequest request,
         HttpServletRequest httpRequest) {
         CursorPageResponse<FilmResponse> response = filmService.searchCustomerFilms(request, httpRequest);
+        return ok(SuccessMessage.FILMS_SEARCHED, response);
+    }
+
+    @PostMapping("/directors/search")
+    public ResponseEntity<APIResponse<PageResponse<String>>> searchDirectors(
+            @Valid @RequestBody PageRequest<FilmField> request) {
+        PageResponse<String> response = filmService.searchDirectors(request);
         return ok(SuccessMessage.FILMS_SEARCHED, response);
     }
 

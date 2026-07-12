@@ -5,9 +5,11 @@ import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.request.CursorPageRequest;
 import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
 import com.cinema.dto.response.ActionMessageResponse;
 import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
 import com.cinema.film_service.dto.request.BatchFilmRequest;
@@ -36,6 +38,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -166,6 +169,29 @@ public class FilmServiceImpl implements FilmService {
         }
 
         return searchFilmsInternal(request, scopedFilmIds, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<String> searchDirectors(PageRequest<FilmField> request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST);
+        }
+
+        String keyword = request.getNormalizedKeyword();
+        Page<String> directorsPage = filmRepositoryImpl.searchDistinctDirectors(
+                keyword,
+                request.toPageable());
+
+        return PageResponse.<String>builder()
+                .data(directorsPage.getContent())
+                .currentPage(directorsPage.getNumber() + 1)
+                .totalPages(directorsPage.getTotalPages())
+                .totalElements(directorsPage.getTotalElements())
+                .size(directorsPage.getSize())
+                .hasNext(directorsPage.hasNext())
+                .hasPrevious(directorsPage.hasPrevious())
+                .build();
     }
 
     @Override

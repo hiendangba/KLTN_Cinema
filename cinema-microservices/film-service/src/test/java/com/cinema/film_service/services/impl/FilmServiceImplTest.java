@@ -3,6 +3,7 @@ package com.cinema.film_service.services.impl;
 import com.cinema.Enum.FilmEnum;
 import com.cinema.dto.request.DateRange;
 import com.cinema.dto.request.FilterField;
+import com.cinema.dto.request.PageRequest;
 import com.cinema.dto.request.SortField;
 import com.cinema.exception.BusinessException;
 import com.cinema.exception.ErrorCode;
@@ -23,6 +24,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -45,6 +48,7 @@ import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 class FilmServiceImplTest {
@@ -69,6 +73,71 @@ class FilmServiceImplTest {
 
     @InjectMocks
     private FilmServiceImpl filmService;
+
+    @Test
+    void searchDirectors_shouldDeduplicateSortAndPaginate() {
+        Film christopherNolan1 = buildFilm(UUID.randomUUID(), "Film A", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+        christopherNolan1.setDirector(" Christopher Nolan ");
+        Film christopherNolan2 = buildFilm(UUID.randomUUID(), "Film B", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 2));
+        christopherNolan2.setDirector("Christopher Nolan");
+        Film denis = buildFilm(UUID.randomUUID(), "Film C", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 3));
+        denis.setDirector("Denis Villeneuve");
+        Film steven = buildFilm(UUID.randomUUID(), "Film D", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 4));
+        steven.setDirector("Steven Spielberg");
+        Film deleted = buildFilm(UUID.randomUUID(), "Film E", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 5));
+        deleted.setDirector("Martin Scorsese");
+        deleted.setIsDeleted(true);
+
+        PageRequest<FilmField> request = PageRequest.<FilmField>builder()
+                .page(2)
+                .size(1)
+                .build();
+
+        when(filmRepositoryImpl.searchDistinctDirectors(
+                nullable(String.class),
+                any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of("Denis Villeneuve"), org.springframework.data.domain.PageRequest.of(1, 1), 3));
+
+        var response = filmService.searchDirectors(request);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(filmRepositoryImpl).searchDistinctDirectors(nullable(String.class), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(1);
+        assertThat(response.getTotalElements()).isEqualTo(3);
+        assertThat(response.getTotalPages()).isEqualTo(3);
+        assertThat(response.getCurrentPage()).isEqualTo(2);
+        assertThat(response.getData()).containsExactly("Denis Villeneuve");
+    }
+
+    @Test
+    void searchDirectors_shouldFilterByAccentInsensitiveKeyword() {
+        Film first = buildFilm(UUID.randomUUID(), "Film A", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 1));
+        first.setDirector("Đặng Bá Hiền");
+        Film duplicate = buildFilm(UUID.randomUUID(), "Film B", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 2));
+        duplicate.setDirector("Dang Ba Hien");
+        Film other = buildFilm(UUID.randomUUID(), "Film C", FilmEnum.FilmStatus.NOW_SHOWING, LocalDate.of(2026, 5, 3));
+        other.setDirector("Trần Anh Hùng");
+
+        when(filmRepositoryImpl.searchDistinctDirectors(
+                nullable(String.class),
+                any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of("Đặng Bá Hiền"), org.springframework.data.domain.PageRequest.of(0, 10), 1));
+
+        PageRequest<FilmField> request = PageRequest.<FilmField>builder()
+                .page(1)
+                .size(10)
+                .keyword("dang")
+                .build();
+
+        var response = filmService.searchDirectors(request);
+
+        assertThat(response.getTotalElements()).isEqualTo(1);
+        assertThat(response.getData()).hasSize(1);
+        assertThat(response.getData().get(0))
+                .satisfies(name -> assertThat(name).isNotBlank())
+                .satisfies(name -> assertThat(com.cinema.text.SearchTextUtils.containsIgnoreCase(name, "dang")).isTrue());
+    }
 
     @Test
     void searchCustomerFilms_shouldScopeToAllowedStatusesAndActiveFilmIds() {

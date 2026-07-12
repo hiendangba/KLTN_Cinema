@@ -1,5 +1,7 @@
 package com.cinema.film_service.services;
 
+import com.cinema.dto.request.PageRequest;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.film_service.dto.request.FilmCursorPageRequest;
 import com.cinema.dto.response.CursorPageResponse;
 import com.cinema.film_service.dto.request.BatchFilmRequest;
@@ -25,6 +27,8 @@ public interface FilmService {
     CursorPageResponse<FilmResponse> searchFilms(FilmCursorPageRequest request);
 
     CursorPageResponse<FilmResponse> searchCustomerFilms(FilmCursorPageRequest request, HttpServletRequest httpRequest);
+
+    PageResponse<String> searchDirectors(PageRequest<FilmField> request);
 
     ActionMessageResponse deleteFilm(UUID id, HttpServletRequest httpRequest);
 }

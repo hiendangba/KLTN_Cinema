@@ -2,6 +2,7 @@ package com.cinema.film_service.controller;
 
 import com.cinema.Enum.SuccessMessage;
 import com.cinema.dto.response.CursorPageResponse;
+import com.cinema.dto.response.PageResponse;
 import com.cinema.film_service.dto.response.FilmResponse;
 import com.cinema.film_service.services.FilmService;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,5 +71,38 @@ class FilmControllerSearchIntegrationTest {
                 .andExpect(jsonPath("$.data.data[0].id").value(filmId.toString()))
                 .andExpect(jsonPath("$.data.data[0].averageRating").value(4.67))
                 .andExpect(jsonPath("$.data.data[0].reviewCount").value(12));
+    }
+
+    @Test
+    void searchDirectors_shouldReturnPagedDirectorNames() throws Exception {
+        PageResponse<String> response = PageResponse.<String>builder()
+                .data(List.of("Christopher Nolan", "Denis Villeneuve"))
+                .currentPage(1)
+                .totalPages(1)
+                .totalElements(2)
+                .size(10)
+                .hasNext(false)
+                .hasPrevious(false)
+                .build();
+
+        when(filmService.searchDirectors(any()))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/api/films/directors/search")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "page": 1,
+                                  "size": 10,
+                                  "keyword": "nolan"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.message").value(SuccessMessage.FILMS_SEARCHED.getMessage()))
+                .andExpect(jsonPath("$.data.data[0]").value("Christopher Nolan"))
+                .andExpect(jsonPath("$.data.totalElements").value(2));
     }
 }
