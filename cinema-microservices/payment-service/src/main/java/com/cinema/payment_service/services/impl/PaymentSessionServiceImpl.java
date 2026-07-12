@@ -115,6 +115,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         UUID bookingId = request.getBookingId();
         String requestedPromotionCode = normalizePromotionCode(request.getPromotionCode());
         UUID requestedPromotionId = request.getPromotionId();
+        validateRequestedLoyaltyPointsUnit(request.getLoyaltyPointsUsed());
         long requestedLoyaltyPointsUsed = normalizeRequestedLoyaltyPoints(request.getLoyaltyPointsUsed());
         BookingGrpcClient.BookingPaymentContext bookingContext = bookingGrpcClient.getBookingPaymentContext(bookingId);
         ensureRequesterCanCreateSessionForBooking(requesterUserId, requesterRole, bookingContext);
@@ -584,6 +585,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     @Transactional(readOnly = true)
     public PromotionPreviewResponse previewPromotion(PromotionPreviewRequest request, UUID requesterUserId) {
         validateRequestedLoyaltyPoints(requesterUserId, request == null ? null : request.getLoyaltyPointsUsed());
+        validateRequestedLoyaltyPointsUnit(request == null ? null : request.getLoyaltyPointsUsed());
         return promotionEngine.previewPromotion(request, requesterUserId);
     }
 
@@ -1046,6 +1048,16 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
         return value;
+    }
+
+    private void validateRequestedLoyaltyPointsUnit(Long value) {
+        long normalizedValue = normalizeRequestedLoyaltyPoints(value);
+        if (normalizedValue <= 0) {
+            return;
+        }
+        if (normalizedValue % 1000L != 0L) {
+            throw new BusinessException(ErrorCode.LOYALTY_POINTS_UNIT_INVALID);
+        }
     }
 
     private boolean isReusable(PaymentTransaction latest, BookingGrpcClient.BookingPaymentContext bookingContext) {

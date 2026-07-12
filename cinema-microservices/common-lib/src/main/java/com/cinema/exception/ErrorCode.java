@@ -124,6 +124,7 @@ public enum ErrorCode {
         BOOKING_TICKET_LIMIT_EXCEEDED("4401", "Một lần đặt không được quá 5 vé.", HttpStatus.BAD_REQUEST),
         BOOKING_EXPIRED("4402", "Booking đã hết hạn thanh toán", HttpStatus.CONFLICT),
         LOYALTY_POINTS_INSUFFICIENT("4403", "Không đủ điểm tích lũy", HttpStatus.BAD_REQUEST),
+        LOYALTY_POINTS_UNIT_INVALID("4404", "Số điểm phải là bội số của 1000", HttpStatus.BAD_REQUEST),
         BOOKING_SERVICE_ERROR("9104", "Lỗi khi gọi Booking Service. Vui lòng thử lại sau.",
                         HttpStatus.SERVICE_UNAVAILABLE),
         CINEMA_SERVICE_ERROR("9105", "Lỗi khi gọi Cinema Service. Vui lòng thử lại sau.",
