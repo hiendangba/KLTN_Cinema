@@ -153,7 +153,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                         bookingContext,
                         latest,
                         null,
-                        normalizeAmount(latest.getAmount()));
+                        resolveSnapshotPayableAmount(latest));
                 return ActionMessageResponse.builder()
                         .message(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage())
                         .build();
@@ -186,7 +186,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 bookingContext,
                 transaction,
                 appliedPromotions,
-                normalizeAmount(transaction.getAmount()));
+                resolveSnapshotPayableAmount(transaction));
 
         transaction.setPayUrl(momoGatewayProperties.getRedirectUrl());
         PaymentTransaction persistedTransaction = paymentTransactionRepository.saveAndFlush(transaction);
@@ -1331,6 +1331,13 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 normalizeAmount(payableAmount),
                 transaction.getLoyaltyPointsUsed(),
                 transaction.getLoyaltyPointsEarned());
+    }
+
+    private BigDecimal resolveSnapshotPayableAmount(PaymentTransaction transaction) {
+        if (transaction == null) {
+            return ZERO;
+        }
+        return normalizeAmount(transaction.getAmount());
     }
 
     private UUID resolvePromotionIdForSnapshot(PaymentTransaction transaction, List<PromotionQuote> appliedPromotions) {

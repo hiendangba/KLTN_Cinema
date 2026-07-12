@@ -167,7 +167,8 @@ public class BookingServiceImpl implements BookingService {
         if (bookingSeatItemRepository.existsLockedSeatCodes(
                 request.getShowtimeId(),
                 normalizedSeatCodes,
-                EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED))) {
+                EnumSet.of(BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED),
+                LocalDateTime.now())) {
             throw new BusinessException(ErrorCode.SEAT_ALREADY_LOCKED);
         }
 

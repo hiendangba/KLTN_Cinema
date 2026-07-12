@@ -19,12 +19,14 @@ public interface BookingSeatItemRepository extends JpaRepository<BookingSeatItem
             WHERE b.showtimeId = :showtimeId
               AND b.isDeleted = false
               AND b.bookingStatus IN :statuses
+              AND b.reservedUntil > :now
               AND UPPER(bsi.seatCode) IN :seatCodes
             """)
     boolean existsLockedSeatCodes(
             @Param("showtimeId") UUID showtimeId,
             @Param("seatCodes") Collection<String> seatCodes,
-            @Param("statuses") Collection<BookingStatus> statuses);
+            @Param("statuses") Collection<BookingStatus> statuses,
+            @Param("now") LocalDateTime now);
 
     @Query("""
             SELECT UPPER(bsi.seatCode)

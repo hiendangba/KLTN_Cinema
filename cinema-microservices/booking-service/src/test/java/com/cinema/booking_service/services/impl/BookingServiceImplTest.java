@@ -433,9 +433,9 @@ class BookingServiceImplTest {
                 when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 10));
                 when(seatGrpcClient.getLayoutByHallId(hall2)).thenReturn(layoutBundle(hall2, 20));
                 when(hallGrpcClient.getHallById(hall1))
-                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 1"));
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "PhÃ²ng 1"));
                 when(hallGrpcClient.getHallById(hall2))
-                                .thenReturn(new HallGrpcClient.HallSummary(hall2, cinema2, "Phòng 2"));
+                                .thenReturn(new HallGrpcClient.HallSummary(hall2, cinema2, "PhÃ²ng 2"));
                 when(filmGrpcClient.getFilmById(film1))
                                 .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
                                                 .id(film1)
@@ -471,14 +471,14 @@ class BookingServiceImplTest {
                 assertEquals(10L, itemByShowtimeId.get(showtime1).totalSeatCapacity());
                 assertEquals("Cinema 1", itemByShowtimeId.get(showtime1).cinemaName());
                 assertEquals("Phim 1", itemByShowtimeId.get(showtime1).filmName());
-                assertEquals("Phòng 1", itemByShowtimeId.get(showtime1).hallName());
+                assertEquals("PhÃ²ng 1", itemByShowtimeId.get(showtime1).hallName());
                 assertEquals(0, itemByShowtimeId.get(showtime1).occupancyRate().compareTo(new BigDecimal("0.3000")));
                 assertEquals(1L, itemByShowtimeId.get(showtime2).totalBookings());
                 assertEquals(2L, itemByShowtimeId.get(showtime2).totalSeatsBooked());
                 assertEquals(20L, itemByShowtimeId.get(showtime2).totalSeatCapacity());
                 assertEquals("Cinema 2", itemByShowtimeId.get(showtime2).cinemaName());
                 assertEquals("Phim 2", itemByShowtimeId.get(showtime2).filmName());
-                assertEquals("Phòng 2", itemByShowtimeId.get(showtime2).hallName());
+                assertEquals("PhÃ²ng 2", itemByShowtimeId.get(showtime2).hallName());
                 assertEquals(0, itemByShowtimeId.get(showtime2).occupancyRate().compareTo(new BigDecimal("0.1000")));
         }
 
@@ -517,11 +517,11 @@ class BookingServiceImplTest {
 
                 when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 54));
                 when(hallGrpcClient.getHallById(hall1))
-                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 06"));
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "PhÃ²ng 06"));
                 when(filmGrpcClient.getFilmById(film1))
                                 .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
                                                 .id(film1)
-                                                .title("VENOM: KẺ CUỐI")
+                                                .title("VENOM: Káºº CUá»I")
                                                 .build());
 
                 ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
@@ -536,8 +536,8 @@ class BookingServiceImplTest {
                 assertEquals(0, response.total().occupancyRate().compareTo(new BigDecimal("0.1296")));
                 assertEquals(0, response.items().get(0).occupancyRate().compareTo(new BigDecimal("0.1296")));
                 assertEquals("Cinema 1", response.items().get(0).cinemaName());
-                assertEquals("Phòng 06", response.items().get(0).hallName());
-                assertEquals("VENOM: KẺ CUỐI", response.items().get(0).filmName());
+                assertEquals("PhÃ²ng 06", response.items().get(0).hallName());
+                assertEquals("VENOM: Káºº CUá»I", response.items().get(0).filmName());
         }
 
         @Test
@@ -591,11 +591,11 @@ class BookingServiceImplTest {
 
                 when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 54));
                 when(hallGrpcClient.getHallById(hall1))
-                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 06"));
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "PhÃ²ng 06"));
                 when(filmGrpcClient.getFilmById(film1))
                                 .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
                                                 .id(film1)
-                                                .title("VENOM: KẺ CUỐI")
+                                                .title("VENOM: Káºº CUá»I")
                                                 .build());
 
                 ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
@@ -664,11 +664,11 @@ class BookingServiceImplTest {
                                                 .build());
                 when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 54));
                 when(hallGrpcClient.getHallById(hall1))
-                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 06"));
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "PhÃ²ng 06"));
                 when(filmGrpcClient.getFilmById(film1))
                                 .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
                                                 .id(film1)
-                                                .title("VENOM: KẺ CUỐI")
+                                                .title("VENOM: Káºº CUá»I")
                                                 .build());
 
                 ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
@@ -683,20 +683,20 @@ class BookingServiceImplTest {
                 try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
                              new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
                         org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-                        assertEquals("BÁO CÁO HIỆU SUẤT SUẤT CHIẾU", sheet.getRow(0).getCell(0).getStringCellValue());
-                        assertEquals("Mã suất chiếu", sheet.getRow(1).getCell(0).getStringCellValue());
-                        assertEquals("Mã rạp", sheet.getRow(1).getCell(1).getStringCellValue());
-                        assertEquals("Tên rạp", sheet.getRow(1).getCell(2).getStringCellValue());
-                        assertEquals("Mã phim", sheet.getRow(1).getCell(3).getStringCellValue());
-                        assertEquals("Tên phim", sheet.getRow(1).getCell(4).getStringCellValue());
-                        assertEquals("Mã phòng", sheet.getRow(1).getCell(5).getStringCellValue());
-                        assertEquals("Tên phòng", sheet.getRow(1).getCell(6).getStringCellValue());
-                        assertEquals("Bắt đầu", sheet.getRow(1).getCell(7).getStringCellValue());
-                        assertEquals("Kết thúc", sheet.getRow(1).getCell(8).getStringCellValue());
-                        assertEquals("Tổng booking", sheet.getRow(1).getCell(9).getStringCellValue());
-                        assertEquals("Tổng ghế đã bán", sheet.getRow(1).getCell(10).getStringCellValue());
-                        assertEquals("Tổng sức chứa", sheet.getRow(1).getCell(11).getStringCellValue());
-                        assertEquals("Tỷ lệ lấp đầy", sheet.getRow(1).getCell(12).getStringCellValue());
+                        assertEquals("BÃO CÃO HIá»†U SUáº¤T SUáº¤T CHIáº¾U", sheet.getRow(0).getCell(0).getStringCellValue());
+                        assertEquals("MÃ£ suáº¥t chiáº¿u", sheet.getRow(1).getCell(0).getStringCellValue());
+                        assertEquals("MÃ£ ráº¡p", sheet.getRow(1).getCell(1).getStringCellValue());
+                        assertEquals("TÃªn ráº¡p", sheet.getRow(1).getCell(2).getStringCellValue());
+                        assertEquals("MÃ£ phim", sheet.getRow(1).getCell(3).getStringCellValue());
+                        assertEquals("TÃªn phim", sheet.getRow(1).getCell(4).getStringCellValue());
+                        assertEquals("MÃ£ phÃ²ng", sheet.getRow(1).getCell(5).getStringCellValue());
+                        assertEquals("TÃªn phÃ²ng", sheet.getRow(1).getCell(6).getStringCellValue());
+                        assertEquals("Báº¯t Ä‘áº§u", sheet.getRow(1).getCell(7).getStringCellValue());
+                        assertEquals("Káº¿t thÃºc", sheet.getRow(1).getCell(8).getStringCellValue());
+                        assertEquals("Tá»•ng booking", sheet.getRow(1).getCell(9).getStringCellValue());
+                        assertEquals("Tá»•ng gháº¿ Ä‘Ã£ bÃ¡n", sheet.getRow(1).getCell(10).getStringCellValue());
+                        assertEquals("Tá»•ng sá»©c chá»©a", sheet.getRow(1).getCell(11).getStringCellValue());
+                        assertEquals("Tá»· lá»‡ láº¥p Ä‘áº§y", sheet.getRow(1).getCell(12).getStringCellValue());
                         assertEquals(3, sheet.getLastRowNum());
                         assertEquals(showtime2.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
                         assertEquals(showtime1.toString(), sheet.getRow(3).getCell(0).getStringCellValue());
@@ -754,11 +754,11 @@ class BookingServiceImplTest {
                                                 .build());
                 when(seatGrpcClient.getLayoutByHallId(hall1)).thenReturn(layoutBundle(hall1, 54));
                 when(hallGrpcClient.getHallById(hall1))
-                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "Phòng 06"));
+                                .thenReturn(new HallGrpcClient.HallSummary(hall1, cinema1, "PhÃ²ng 06"));
                 when(filmGrpcClient.getFilmById(film1))
                                 .thenReturn(FilmGrpcClient.FilmSnapshot.builder()
                                                 .id(film1)
-                                                .title("VENOM: KÈO CUỐI")
+                                                .title("VENOM: KÃˆO CUá»I")
                                                 .build());
 
                 ShowtimePerformanceReportRequest request = ShowtimePerformanceReportRequest.builder()
@@ -774,7 +774,7 @@ class BookingServiceImplTest {
                 try (org.apache.poi.xssf.usermodel.XSSFWorkbook workbook =
                              new org.apache.poi.xssf.usermodel.XSSFWorkbook(new ByteArrayInputStream(file))) {
                         org.apache.poi.ss.usermodel.Sheet sheet = workbook.getSheetAt(0);
-                        assertEquals("BÁO CÁO HIỆU SUẤT SUẤT CHIẾU", sheet.getRow(0).getCell(0).getStringCellValue());
+                        assertEquals("BÃO CÃO HIá»†U SUáº¤T SUáº¤T CHIáº¾U", sheet.getRow(0).getCell(0).getStringCellValue());
                         assertEquals(2, sheet.getLastRowNum());
                         assertEquals(showtime2.toString(), sheet.getRow(2).getCell(0).getStringCellValue());
                 }
@@ -1637,7 +1637,7 @@ class BookingServiceImplTest {
                                 .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
                                                 com.cinema.Enum.HallEnum.SeatType.STANDARD)));
                 when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
-                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED), LocalDateTime.now()))
                                 .thenReturn(false);
                 when(bookingMapper.toEntity(request)).thenReturn(mappedBooking);
                 when(bookingSeatItemMapper.toEntity(any(CreateBookingRequest.SeatItem.class)))
@@ -1694,7 +1694,7 @@ class BookingServiceImplTest {
                                 .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
                                                 com.cinema.Enum.HallEnum.SeatType.STANDARD)));
                 when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
-                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED), LocalDateTime.now()))
                                 .thenReturn(true);
 
                 BusinessException ex = assertThrows(BusinessException.class,
@@ -1742,7 +1742,7 @@ class BookingServiceImplTest {
                                 .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
                                                 com.cinema.Enum.HallEnum.SeatType.STANDARD)));
                 when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
-                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED), LocalDateTime.now()))
                                 .thenReturn(false);
                 when(bookingMapper.toEntity(any(CreateBookingRequest.class))).thenReturn(new Booking());
                 when(bookingSeatItemMapper.toEntity(any(CreateBookingRequest.SeatItem.class)))
@@ -1800,7 +1800,7 @@ class BookingServiceImplTest {
                                 .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
                                                 com.cinema.Enum.HallEnum.SeatType.STANDARD)));
                 when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
-                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED), LocalDateTime.now()))
                                 .thenReturn(false);
                 when(bookingMapper.toEntity(any(CreateBookingRequest.class))).thenReturn(new Booking());
                 when(bookingSeatItemMapper.toEntity(any(CreateBookingRequest.SeatItem.class)))
@@ -1859,7 +1859,7 @@ class BookingServiceImplTest {
                                 .thenReturn(Map.of("A1", new SeatGrpcClient.SeatSnapshot(seatId,
                                                 com.cinema.Enum.HallEnum.SeatType.STANDARD)));
                 when(bookingSeatItemRepository.existsLockedSeatCodes(showtimeId, List.of("A1"), EnumSet.of(
-                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED)))
+                                BookingStatus.PENDING, BookingStatus.RESERVED, BookingStatus.CONFIRMED), LocalDateTime.now()))
                                 .thenReturn(false);
                 when(bookingMapper.toEntity(any(CreateBookingRequest.class))).thenReturn(new Booking());
                 when(bookingSeatItemMapper.toEntity(any(CreateBookingRequest.SeatItem.class)))
@@ -2038,3 +2038,5 @@ class BookingServiceImplTest {
                                 .build();
         }
 }
+
+

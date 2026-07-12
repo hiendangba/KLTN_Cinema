@@ -1,4 +1,4 @@
-﻿package com.cinema.exception;
+package com.cinema.exception;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
