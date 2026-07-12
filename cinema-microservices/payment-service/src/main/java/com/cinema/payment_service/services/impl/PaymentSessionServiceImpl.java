@@ -109,6 +109,12 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     public ActionMessageResponse createSession(CreatePaymentSessionRequest request, UUID requesterUserId,
             String requesterRole) {
         if (request == null || request.getBookingId() == null || requesterUserId == null) {
+            log.warn(
+                    "PAYMENT_SESSION_CREATE_REJECTED reason=missing_required_input bookingId={} requesterUserId={} requesterRole={} loyaltyPointsUsed={}",
+                    request == null ? null : request.getBookingId(),
+                    requesterUserId,
+                    requesterRole,
+                    request == null ? null : request.getLoyaltyPointsUsed());
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
 
@@ -1056,6 +1062,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return;
         }
         if (normalizedValue % 1000L != 0L) {
+            log.warn(
+                    "PAYMENT_SESSION_CREATE_REJECTED reason=loyalty_points_unit_invalid loyaltyPointsUsed={} unit={}",
+                    normalizedValue,
+                    1000L);
             throw new BusinessException(ErrorCode.LOYALTY_POINTS_UNIT_INVALID);
         }
     }
@@ -1183,12 +1193,20 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         }
 
         if (userId == null) {
+            log.warn(
+                    "PAYMENT_SESSION_CREATE_REJECTED reason=unauthorized_loyalty_validation loyaltyPointsUsed={}",
+                    normalizedRequestedPoints);
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
 
         UserGrpcClient.UserBasicInfo user = userGrpcClient.getUserBasicById(userId);
         long availablePoints = normalizeLongValue(user.loyaltyPoints());
         if (normalizedRequestedPoints > availablePoints) {
+            log.warn(
+                    "PAYMENT_SESSION_CREATE_REJECTED reason=loyalty_points_insufficient requesterUserId={} requestedPoints={} availablePoints={}",
+                    userId,
+                    normalizedRequestedPoints,
+                    availablePoints);
             throw new BusinessException(ErrorCode.LOYALTY_POINTS_INSUFFICIENT);
         }
     }
