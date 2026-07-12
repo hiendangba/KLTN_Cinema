@@ -12,6 +12,7 @@ import java.util.UUID;
 public enum FilmRevenueField {
     FILM_ID("filmId", UUID.class),
     FILM_NAME("filmName", String.class),
+    DIRECTOR("director", String.class),
     CINEMA_COUNT("cinemaCount", Long.class),
     TOTAL_TRANSACTIONS("totalTransactions", Long.class),
     PAID_COUNT("paidCount", Long.class),

@@ -25,7 +25,7 @@ public class FilmGrpcClient {
         this.filmBlockingStub = FilmInternalServiceGrpc.newBlockingStub(channelFactory.createChannel("film"));
     }
 
-    public Map<UUID, String> getFilmTitlesByIds(Collection<UUID> filmIds) {
+    public Map<UUID, FilmMetadata> getFilmMetadataByIds(Collection<UUID> filmIds) {
         if (filmIds == null || filmIds.isEmpty()) {
             return Map.of();
         }
@@ -42,13 +42,15 @@ public class FilmGrpcClient {
                 return Map.of();
             }
 
-            Map<UUID, String> result = new LinkedHashMap<>();
+            Map<UUID, FilmMetadata> result = new LinkedHashMap<>();
             for (FilmPayload payload : reply.getFilmsList()) {
                 if (payload == null || payload.getId() == null || payload.getId().isBlank()) {
                     continue;
                 }
                 try {
-                    result.put(UUID.fromString(payload.getId()), payload.getTitle() == null ? "" : payload.getTitle());
+                    result.put(UUID.fromString(payload.getId()), new FilmMetadata(
+                            payload.getTitle() == null ? "" : payload.getTitle(),
+                            payload.getDirector() == null ? "" : payload.getDirector()));
                 } catch (IllegalArgumentException ex) {
                     log.warn("Skipping invalid film payload id={}", payload.getId());
                 }

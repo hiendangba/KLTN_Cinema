@@ -8,6 +8,7 @@ import com.cinema.payment_service.dto.response.FilmRevenueItemResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
 import com.cinema.payment_service.entity.PaymentTransactionPromotion;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
+import com.cinema.payment_service.grpc.FilmMetadata;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -69,7 +70,7 @@ public class RevenueReportSupport {
 
     public List<FilmRevenueItemResponse> aggregateFilmRevenueItems(
             List<PaymentTransaction> revenueTransactions,
-            Map<UUID, String> filmNames,
+            Map<UUID, FilmMetadata> filmMetadataById,
             FilmRevenueReportRequest request) {
         DateRange dateRange = request == null ? null : request.getDateRange();
         LocalDateTime from = dateRange == null ? null : dateRange.getFrom();
@@ -86,8 +87,13 @@ public class RevenueReportSupport {
             }
             FilmRevenueAccumulator accumulator = accumulatorMap.computeIfAbsent(
                     transaction.getFilmId(),
-                    filmId -> new FilmRevenueAccumulator(filmId, normalizeStringValue(
-                            filmNames == null ? null : filmNames.get(filmId))));
+                    filmId -> {
+                        FilmMetadata filmMetadata = filmMetadataById == null ? null : filmMetadataById.get(filmId);
+                        return new FilmRevenueAccumulator(
+                                filmId,
+                                normalizeStringValue(filmMetadata == null ? null : filmMetadata.title()),
+                                normalizeStringValue(filmMetadata == null ? null : filmMetadata.director()));
+                    });
             accumulator.apply(transaction, from, to);
         }
 
@@ -352,15 +358,17 @@ public class RevenueReportSupport {
     private class FilmRevenueAccumulator {
         private final UUID filmId;
         private final String filmName;
+        private final String director;
         private final LinkedHashSet<UUID> cinemaIds = new LinkedHashSet<>();
         private long totalTransactions;
         private long paidCount;
         private long refundedCount;
         private BigDecimal paidAmount = ZERO;
 
-        private FilmRevenueAccumulator(UUID filmId, String filmName) {
+        private FilmRevenueAccumulator(UUID filmId, String filmName, String director) {
             this.filmId = filmId;
             this.filmName = filmName;
+            this.director = director;
         }
 
         private void apply(PaymentTransaction transaction, LocalDateTime from, LocalDateTime to) {
@@ -390,6 +398,7 @@ public class RevenueReportSupport {
             return FilmRevenueItemResponse.builder()
                     .filmId(filmId)
                     .filmName(filmName)
+                    .director(director)
                     .cinemaCount(cinemaIds.size())
                     .totalTransactions(totalTransactions)
                     .paidCount(paidCount)

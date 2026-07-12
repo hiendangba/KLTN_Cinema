@@ -36,6 +36,7 @@ import com.cinema.payment_service.enums.PaymentTransactionStatus;
 import com.cinema.payment_service.grpc.CinemaGrpcClient;
 import com.cinema.payment_service.grpc.BookingGrpcClient;
 import com.cinema.payment_service.grpc.FilmGrpcClient;
+import com.cinema.payment_service.grpc.FilmMetadata;
 import com.cinema.payment_service.grpc.UserGrpcClient;
 import com.cinema.payment_service.mapper.PaymentMapper;
 import com.cinema.payment_service.repository.PaymentTransactionRepository;
@@ -1728,15 +1729,15 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 requestedFilmIds,
                 from,
                 to);
-        Map<UUID, String> filmNames = revenueTransactions.isEmpty()
+        Map<UUID, FilmMetadata> filmMetadataById = revenueTransactions.isEmpty()
                 ? Map.of()
-                : filmGrpcClient.getFilmTitlesByIds(
+                : filmGrpcClient.getFilmMetadataByIds(
                         revenueTransactions.stream()
                                 .map(PaymentTransaction::getFilmId)
                                 .filter(java.util.Objects::nonNull)
                                 .distinct()
                                 .toList());
-        return revenueReportSupport.aggregateFilmRevenueItems(revenueTransactions, filmNames, request);
+        return revenueReportSupport.aggregateFilmRevenueItems(revenueTransactions, filmMetadataById, request);
     }
 
     private List<FilmRevenueItemResponse> filterSelectedFilmRevenueItems(
@@ -1851,6 +1852,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return true;
         }
         return SearchTextUtils.containsIgnoreCase(item.filmName(), keyword)
+                || SearchTextUtils.containsIgnoreCase(item.director(), keyword)
                 || SearchTextUtils.containsIgnoreCase(item.filmId() == null ? null : item.filmId().toString(), keyword);
     }
 
@@ -1896,6 +1898,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         return switch (field) {
             case FILM_ID -> item.filmId();
             case FILM_NAME -> item.filmName();
+            case DIRECTOR -> item.director();
             case CINEMA_COUNT -> item.cinemaCount();
             case TOTAL_TRANSACTIONS -> item.totalTransactions();
             case PAID_COUNT -> item.paidCount();

@@ -9,6 +9,7 @@ import java.util.UUID;
 public record FilmRevenueItemResponse(
         UUID filmId,
         String filmName,
+        String director,
         long cinemaCount,
         long totalTransactions,
         long paidCount,

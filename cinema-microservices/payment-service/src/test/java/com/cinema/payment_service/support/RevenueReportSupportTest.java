@@ -1,6 +1,7 @@
 package com.cinema.payment_service.support;
 
 import com.cinema.dto.request.DateRange;
+import com.cinema.payment_service.grpc.FilmMetadata;
 import com.cinema.payment_service.dto.request.FilmRevenueReportRequest;
 import com.cinema.payment_service.dto.response.FilmRevenueItemResponse;
 import com.cinema.payment_service.entity.PaymentTransaction;
@@ -64,13 +65,11 @@ class RevenueReportSupportTest {
         paidB.setAmount(BigDecimal.valueOf(90000));
         transactions.add(paidB);
 
-        Map<UUID, String> filmNames = Map.of(
-                filmA, "Film A",
-                filmB, "Film B");
-
         List<FilmRevenueItemResponse> items = revenueReportSupport.aggregateFilmRevenueItems(
                 transactions,
-                filmNames,
+                Map.of(
+                        filmA, new FilmMetadata("Film A", "Director A"),
+                        filmB, new FilmMetadata("Film B", "Director B")),
                 request);
 
         assertEquals(2, items.size());
@@ -81,6 +80,7 @@ class RevenueReportSupportTest {
                 .orElse(null);
         assertNotNull(filmAItem);
         assertEquals("Film A", filmAItem.filmName());
+        assertEquals("Director A", filmAItem.director());
         assertEquals(2L, filmAItem.cinemaCount());
         assertEquals(3L, filmAItem.totalTransactions());
         assertEquals(2L, filmAItem.paidCount());
@@ -93,6 +93,7 @@ class RevenueReportSupportTest {
                 .orElse(null);
         assertNotNull(filmBItem);
         assertEquals("Film B", filmBItem.filmName());
+        assertEquals("Director B", filmBItem.director());
         assertEquals(1L, filmBItem.cinemaCount());
         assertEquals(1L, filmBItem.totalTransactions());
         assertEquals(1L, filmBItem.paidCount());

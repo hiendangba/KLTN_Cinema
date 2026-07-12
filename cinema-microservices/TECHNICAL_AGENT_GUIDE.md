@@ -16,6 +16,12 @@
 
 ## Changelog ngắn (2026-07-10 - identity-service metaspace)
 
+- `payment-service` film revenue report giờ coi `director` là field chuẩn của report: `FilmRevenueField` đã thêm `DIRECTOR`, `FilmRevenueItemResponse` trả thêm `director`, và `search/export` đều hỗ trợ filter/sort/keyword theo đạo diễn qua `pageRequest`.
+- `FilmGrpcClient` không còn chỉ lấy `filmId -> title`; hiện trả metadata tối thiểu `title + director` để `PaymentSessionServiceImpl` và `RevenueReportSupport` dựng report theo phim nhưng vẫn lọc được theo đạo diễn.
+- Files chạm chính: `payment-service/src/main/java/com/cinema/payment_service/dto/request/FilmRevenueField.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/response/FilmRevenueItemResponse.java`, `payment-service/src/main/java/com/cinema/payment_service/grpc/FilmGrpcClient.java`, `payment-service/src/main/java/com/cinema/payment_service/grpc/FilmMetadata.java`, `payment-service/src/main/java/com/cinema/payment_service/support/RevenueReportSupport.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`.
+- Reason: FE đã có dropdown đạo diễn từ `film-service`, nhưng report doanh thu phim trước đó chưa nhận và chưa áp dụng filter này nên request filter bị bỏ qua.
+- Verification: đã thêm regression tests cho aggregate support và film revenue report search/export theo `director`; hiện chưa chạy trọn Maven suite được vì `payment-service` đang bị chặn bởi lỗi compile sẵn có ở `CustomerRankGrpcClient` thiếu generated gRPC classes `com.cinema.grpc.user.*`.
+
 - `film-service` đã thêm API `POST /api/films/directors/search` để FE lấy danh sách tên đạo diễn unique có phân trang bằng `PageRequest` hiện có (`page`, `size`, `keyword`), trả `PageResponse<String>`.
 - API này không dùng `DirectorField`, không chạm FE, chỉ lọc theo `keyword` accent-insensitive và bỏ film `isDeleted = true`.
 - Files chạm: `film-service/src/main/java/com/cinema/film_service/controller/FilmController.java`, `film-service/src/main/java/com/cinema/film_service/services/FilmService.java`, `film-service/src/main/java/com/cinema/film_service/services/impl/FilmServiceImpl.java`, `film-service/src/main/java/com/cinema/film_service/repository/FilmRepository.java`, `film-service/src/test/java/com/cinema/film_service/controller/FilmControllerSearchIntegrationTest.java`, `film-service/src/test/java/com/cinema/film_service/services/impl/FilmServiceImplTest.java`.
