@@ -21,6 +21,11 @@
 - Reason: trước đây input sai đơn vị bị rơi vào `BAD_REQUEST` chung, người dùng không biết phải sửa ở đâu; rule mới giúp API báo lỗi rõ ràng hơn cho UI.
 - Verification: đã chạy lại build `FE/CinemaStar` trước đó; phần payment backend cần build Maven riêng sau thay đổi này để xác nhận compile end-to-end.
 
+- `payableAmount` của booking đã được đồng bộ lại theo nghĩa "số tiền cuối cùng khách thực trả", tức `finalAmount - promotionDiscountAmount - loyaltyPointsUsed`.
+- `payment-service` hiện gửi snapshot booking với `payableAmount` sau khi đã áp dụng loyalty points; `booking-service` cũng validate theo cùng công thức để tránh lỗi `BAD_REQUEST` do lệch nghĩa giữa hai service.
+- Reason: trước đó `payableAmount` mới chỉ trừ promotion nên không phản ánh đúng trường hợp khách dùng điểm tích lũy.
+- Verification: đã build lại `payment-service`; bước tiếp theo cần build `booking-service` để xác nhận compile sau khi đổi công thức validate snapshot.
+
 - `payment-service` film revenue report giờ coi `director` là field chuẩn của report: `FilmRevenueField` đã thêm `DIRECTOR`, `FilmRevenueItemResponse` trả thêm `director`, và `search/export` đều hỗ trợ filter/sort/keyword theo đạo diễn qua `pageRequest`.
 - `FilmGrpcClient` không còn chỉ lấy `filmId -> title`; hiện trả metadata tối thiểu `title + director` để `PaymentSessionServiceImpl` và `RevenueReportSupport` dựng report theo phim nhưng vẫn lọc được theo đạo diễn.
 - Files chạm chính: `payment-service/src/main/java/com/cinema/payment_service/dto/request/FilmRevenueField.java`, `payment-service/src/main/java/com/cinema/payment_service/dto/response/FilmRevenueItemResponse.java`, `payment-service/src/main/java/com/cinema/payment_service/grpc/FilmGrpcClient.java`, `payment-service/src/main/java/com/cinema/payment_service/grpc/FilmMetadata.java`, `payment-service/src/main/java/com/cinema/payment_service/support/RevenueReportSupport.java`, `payment-service/src/main/java/com/cinema/payment_service/services/impl/PaymentSessionServiceImpl.java`.

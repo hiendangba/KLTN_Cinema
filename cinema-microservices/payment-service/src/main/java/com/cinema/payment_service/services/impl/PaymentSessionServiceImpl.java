@@ -149,7 +149,11 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     requestedPromotionCode,
                     requestedLoyaltyPointsUsed)) {
                 validateRequestedLoyaltyPoints(bookingContext.userId(), requestedLoyaltyPointsUsed);
-                syncBookingPromotionSnapshot(bookingContext, latest, null);
+                syncBookingPromotionSnapshot(
+                        bookingContext,
+                        latest,
+                        null,
+                        normalizeAmount(latest.getAmount()));
                 return ActionMessageResponse.builder()
                         .message(SuccessMessage.PAYMENT_SESSION_CREATED.getMessage())
                         .build();
@@ -178,7 +182,11 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 bookingContext,
                 requesterUserId);
         applyLoyaltyPointsIfNeeded(transaction, requestedLoyaltyPointsUsed);
-        syncBookingPromotionSnapshot(bookingContext, transaction, appliedPromotions);
+        syncBookingPromotionSnapshot(
+                bookingContext,
+                transaction,
+                appliedPromotions,
+                normalizeAmount(transaction.getAmount()));
 
         transaction.setPayUrl(momoGatewayProperties.getRedirectUrl());
         PaymentTransaction persistedTransaction = paymentTransactionRepository.saveAndFlush(transaction);
@@ -1308,7 +1316,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
 
     private void syncBookingPromotionSnapshot(BookingGrpcClient.BookingPaymentContext bookingContext,
                                               PaymentTransaction transaction,
-                                              List<PromotionQuote> appliedPromotions) {
+                                              List<PromotionQuote> appliedPromotions,
+                                              BigDecimal payableAmount) {
         if (bookingContext == null || transaction == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
@@ -1319,7 +1328,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 transaction.getPromotionCode(),
                 transaction.getPromotionName(),
                 normalizeAmount(transaction.getPromotionDiscountAmount()),
-                normalizeAmount(transaction.getAmount()),
+                normalizeAmount(payableAmount),
                 transaction.getLoyaltyPointsUsed(),
                 transaction.getLoyaltyPointsEarned());
     }

@@ -218,19 +218,28 @@ public class BookingInternalGrpcService extends BookingInternalServiceGrpc.Booki
 
             BigDecimal grossAmount = normalizeAmount(booking.getFinalAmount());
             BigDecimal discountAmount = parseAmount(request.getPromotionDiscountAmount()).setScale(0, RoundingMode.HALF_UP);
+            long loyaltyPointsUsed = normalizePoints(request.getLoyaltyPointsUsed());
+            BigDecimal loyaltyPointsAmount = BigDecimal.valueOf(loyaltyPointsUsed);
             BigDecimal payableAmount = parseAmount(request.getPayableAmount()).setScale(0, RoundingMode.HALF_UP);
 
             if (discountAmount.compareTo(BigDecimal.ZERO) < 0
                     || payableAmount.compareTo(BigDecimal.ZERO) < 0
-                    || grossAmount.subtract(discountAmount).setScale(0, RoundingMode.HALF_UP).compareTo(payableAmount) != 0) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST);
+                    || grossAmount.subtract(discountAmount).subtract(loyaltyPointsAmount).setScale(0, RoundingMode.HALF_UP).compareTo(payableAmount) != 0) {
+                log.warn(
+                        "BOOKING_PROMOTION_SNAPSHOT_REJECTED reason=payable_amount_mismatch bookingId={} grossAmount={} discountAmount={} loyaltyPointsUsed={} payableAmount={}",
+                        bookingId,
+                        grossAmount,
+                        discountAmount,
+                        loyaltyPointsUsed,
+                        payableAmount);
+                throw new BusinessException(ErrorCode.BOOKING_PAYABLE_AMOUNT_MISMATCH);
             }
 
             booking.setPromotionId(parseNullableUuid(request.getPromotionId()));
             booking.setPromotionCode(blankToNull(request.getPromotionCode()));
             booking.setPromotionName(blankToNull(request.getPromotionName()));
             booking.setPromotionDiscountAmount(discountAmount);
-            booking.setLoyaltyPointsUsed(normalizePoints(request.getLoyaltyPointsUsed()));
+            booking.setLoyaltyPointsUsed(loyaltyPointsUsed);
             booking.setLoyaltyPointsEarned(normalizePoints(request.getLoyaltyPointsEarned()));
             booking.setPayableAmount(payableAmount);
             bookingRepository.save(booking);

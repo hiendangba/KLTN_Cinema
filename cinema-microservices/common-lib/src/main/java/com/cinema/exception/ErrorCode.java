@@ -1,4 +1,4 @@
-package com.cinema.exception;
+﻿package com.cinema.exception;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -14,21 +14,26 @@ public enum ErrorCode {
         BAD_REQUEST("9005", "Bad request", HttpStatus.BAD_REQUEST),
         CUSTOMER_RANK_CODE_EXISTED("4406", "Mã hạng khách hàng đã tồn tại", HttpStatus.CONFLICT),
         CUSTOMER_RANK_LEVEL_EXISTED("4407", "Cấp hạng khách hàng đã tồn tại", HttpStatus.CONFLICT),
-        CUSTOMER_RANK_DEFAULT_REQUIRED("4408", "Phải có ít nhất một hạng mặc định đang ACTIVE với minLifetimeAmount = 0",
+        CUSTOMER_RANK_DEFAULT_REQUIRED("4408",
+                        "Phải có ít nhất một hạng mặc định đang ACTIVE với minLifetimeAmount = 0",
                         HttpStatus.BAD_REQUEST),
-        PROMOTION_PERCENT_DISCOUNT_INVALID("4409", "Giảm giá phần trăm phải lớn hơn 0 và không vượt quá 100", HttpStatus.BAD_REQUEST),
+        PROMOTION_PERCENT_DISCOUNT_INVALID("4409", "Giảm giá phần trăm phải lớn hơn 0 và không vượt quá 100",
+                        HttpStatus.BAD_REQUEST),
         PROMOTION_FIXED_DISCOUNT_INVALID("4410", "Giảm giá cố định phải lớn hơn 0", HttpStatus.BAD_REQUEST),
-        PROMOTION_TIME_RANGE_INVALID("4411", "Thời gian kết thúc khuyến mãi phải sau thời gian bắt đầu", HttpStatus.BAD_REQUEST),
+        PROMOTION_TIME_RANGE_INVALID("4411", "Thời gian kết thúc khuyến mãi phải sau thời gian bắt đầu",
+                        HttpStatus.BAD_REQUEST),
         PROMOTION_MIN_ORDER_AMOUNT_INVALID("4412", "Giá trị đơn hàng tối thiểu không được âm", HttpStatus.BAD_REQUEST),
         PROMOTION_MAX_DISCOUNT_AMOUNT_INVALID("4413", "Giảm giá tối đa phải lớn hơn 0", HttpStatus.BAD_REQUEST),
         PROMOTION_MAX_USAGE_COUNT_INVALID("4414", "Số lượt sử dụng tối đa phải lớn hơn 0", HttpStatus.BAD_REQUEST),
         PROMOTION_CINEMA_REQUIRED("4415", "Khuyến mãi của manager phải chọn ít nhất một rạp", HttpStatus.BAD_REQUEST),
         PROMOTION_CODE_EXISTED("4416", "Mã khuyến mãi đã tồn tại", HttpStatus.CONFLICT),
-        PAYMENT_SESSION_STATUS_INVALID("4417", "Phiên thanh toán không ở trạng thái hợp lệ để thực hiện thao tác này", HttpStatus.BAD_REQUEST),
+        PAYMENT_SESSION_STATUS_INVALID("4417", "Phiên thanh toán không ở trạng thái hợp lệ để thực hiện thao tác này",
+                        HttpStatus.BAD_REQUEST),
         REFUND_STATUS_INVALID("4418", "Giao dịch không ở trạng thái hợp lệ để hoàn tiền", HttpStatus.BAD_REQUEST),
         REFUND_AMOUNT_INVALID("4419", "Số tiền hoàn không hợp lệ", HttpStatus.BAD_REQUEST),
         PROMOTION_NOT_AVAILABLE("4420", "Khuyến mãi không còn khả dụng", HttpStatus.BAD_REQUEST),
-        PROMOTION_USER_USAGE_LIMIT_REACHED("4421", "Bạn đã dùng hết số lượt áp dụng khuyến mãi này", HttpStatus.BAD_REQUEST),
+        PROMOTION_USER_USAGE_LIMIT_REACHED("4421", "Bạn đã dùng hết số lượt áp dụng khuyến mãi này",
+                        HttpStatus.BAD_REQUEST),
         PROMOTION_GLOBAL_USAGE_LIMIT_REACHED("4422", "Khuyến mãi đã hết lượt sử dụng", HttpStatus.BAD_REQUEST),
         PRODUCT_NAME_EXISTED("4423", "Tên sản phẩm đã tồn tại trong rạp", HttpStatus.CONFLICT),
         BOOKING_SEAT_LIMIT_INVALID("4424", "Mỗi lần đặt phải chọn từ 1 đến 5 ghế", HttpStatus.BAD_REQUEST),
@@ -117,7 +122,6 @@ public enum ErrorCode {
         SEAT_ALREADY_LOCKED("4400", "Ghế bạn chọn đã được giữ hoặc đã có người đặt. Vui lòng chọn ghế khác.",
                         HttpStatus.CONFLICT),
 
-
         EMAIL_SEND_FAILED("9100", "Gửi email thất bại. Vui lòng thử lại sau.", HttpStatus.INTERNAL_SERVER_ERROR),
         FILM_SERVICE_ERROR("9101", "Lỗi khi gọi Film Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
         HALL_SERVICE_ERROR("9102", "Lỗi khi gọi Hall Service. Vui lòng thử lại sau.", HttpStatus.SERVICE_UNAVAILABLE),
@@ -125,6 +129,8 @@ public enum ErrorCode {
         BOOKING_EXPIRED("4402", "Booking đã hết hạn thanh toán", HttpStatus.CONFLICT),
         LOYALTY_POINTS_INSUFFICIENT("4403", "Không đủ điểm tích lũy", HttpStatus.BAD_REQUEST),
         LOYALTY_POINTS_UNIT_INVALID("4404", "Số điểm phải là bội số của 1000", HttpStatus.BAD_REQUEST),
+        BOOKING_PAYABLE_AMOUNT_MISMATCH("4405", "Số tiền phải bằng giá gốc trừ đi khuyến mãi và điểm tích lũy",
+                        HttpStatus.BAD_REQUEST),
         BOOKING_SERVICE_ERROR("9104", "Lỗi khi gọi Booking Service. Vui lòng thử lại sau.",
                         HttpStatus.SERVICE_UNAVAILABLE),
         CINEMA_SERVICE_ERROR("9105", "Lỗi khi gọi Cinema Service. Vui lòng thử lại sau.",
