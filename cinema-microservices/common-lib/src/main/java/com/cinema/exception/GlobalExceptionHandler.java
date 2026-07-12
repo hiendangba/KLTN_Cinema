@@ -27,7 +27,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<APIResponse<Void>> handleBusinessException(
             BusinessException ex, WebRequest request) {
-        log.warn("Business exception: {} - {}", ex.getErrorCode().getCode(), ex.getMessage());
+        log.warn(
+                "Business exception: {} - {} path={}",
+                ex.getErrorCode().getCode(),
+                ex.getMessage(),
+                request.getDescription(false).replace("uri=", ""));
+        log.warn("Business exception stack trace", ex);
         APIResponse<Void> response = APIResponse.<Void>builder()
                 .success(false)
                 .message(ex.getMessage())

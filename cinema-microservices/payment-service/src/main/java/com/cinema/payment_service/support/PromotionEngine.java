@@ -299,8 +299,16 @@ public class PromotionEngine {
 
     private RuntimeException resolveStrictPromotionException(Promotion promotion, PromotionQuote quote) {
         if (promotion == null) {
+            org.slf4j.LoggerFactory.getLogger(PromotionEngine.class).warn(
+                    "PROMOTION_CHECK_REJECTED reason=promotion_not_found");
             return new BusinessException(ErrorCode.NOT_FOUND);
         }
+        org.slf4j.LoggerFactory.getLogger(PromotionEngine.class).warn(
+                "PROMOTION_CHECK_REJECTED promotionId={} promotionCode={} note={} discountAmount={}",
+                promotion.getId(),
+                promotion.getCode(),
+                quote == null ? null : quote.note(),
+                quote == null ? null : quote.discountAmount());
         return new BusinessException(ErrorCode.BAD_REQUEST);
     }
 
