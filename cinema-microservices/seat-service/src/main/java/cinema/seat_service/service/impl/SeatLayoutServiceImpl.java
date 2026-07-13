@@ -46,6 +46,8 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
     @Override
     @Transactional
     public ActionMessageResponse createHallLayoutDefinition(UUID hallId, HallLayoutDefinitionRequest request) {
+        // Chỉ cho phép tạo layout lần đầu.
+        // Nếu hall đã có layout còn hiệu lực thì chặn để tránh ghi đè ngoài ý muốn.
         if (hallLayoutProfileRepository.findByHallIdAndIsDeletedFalse(hallId).isPresent()) {
             throw new BusinessException(ErrorCode.HALL_LAYOUT_ALREADY_EXISTS);
         }
@@ -55,6 +57,8 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
     @Override
     @Transactional
     public ActionMessageResponse replaceHallLayoutDefinition(UUID hallId, HallLayoutDefinitionRequest request) {
+        // Replace chỉ hợp lệ khi layout đã tồn tại.
+        // Nếu chưa có layout thì trả NOT_FOUND thay vì âm thầm tạo mới.
         if (hallLayoutProfileRepository.findByHallIdAndIsDeletedFalse(hallId).isEmpty()) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -62,8 +66,12 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
     }
 
     private ActionMessageResponse upsertDefinition(UUID hallId, HallLayoutDefinitionRequest request) {
+        // Validate toàn bộ định nghĩa layout trước khi chạm vào database
+        // để tránh lưu trạng thái nửa đúng nửa sai.
         validateDefinition(request);
 
+        // Upsert profile tổng của layout: số hàng, số cột, vị trí màn hình.
+        // Dùng hallId làm khóa để mỗi hall chỉ có một profile layout hiện hành.
         HallLayoutProfile profile = hallLayoutProfileRepository.findById(hallId)
                 .orElseGet(HallLayoutProfile::new);
         profile.setHallId(hallId);
@@ -73,6 +81,9 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
         profile.setIsDeleted(false);
         hallLayoutProfileRepository.save(profile);
 
+        // Tách input thành 2 nhóm:
+        // - SEAT: lưu ở bảng Seat để phục vụ booking/chọn ghế.
+        // - AISLE/BLOCKED: lưu ở bảng cell layout để dựng sơ đồ ghế đầy đủ.
         Map<String, HallLayoutDefinitionRequest.CellInput> requestedSeatByCode = new LinkedHashMap<>();
         Map<String, HallLayoutDefinitionRequest.CellInput> requestedCellByCoord = new LinkedHashMap<>();
         for (HallLayoutDefinitionRequest.CellInput input : request.getCells()) {
@@ -83,6 +94,9 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
             requestedCellByCoord.put(toCoordKey(input.getRow(), input.getCol()), input);
         }
 
+        // Đồng bộ danh sách ghế:
+        // - Ghế có trong request thì tạo mới hoặc cập nhật lại.
+        // - Ghế cũ không còn xuất hiện trong request thì đánh dấu xóa mềm.
         List<Seat> existingSeats = seatRepository.findAllByHallId(hallId);
         Map<String, Seat> existingSeatByCode = new LinkedHashMap<>();
         for (Seat existingSeat : existingSeats) {
@@ -111,6 +125,8 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
         }
         seatRepository.saveAll(seatsToSave);
 
+        // Đồng bộ các ô layout không phải ghế như lối đi hoặc ô blocked.
+        // Cách làm tương tự danh sách ghế: upsert các ô mới và xóa mềm các ô cũ không còn dùng.
         List<HallLayoutCell> existingCells = hallLayoutCellRepository.findAllByHallId(hallId);
         Map<String, HallLayoutCell> existingCellByCoord = new LinkedHashMap<>();
         for (HallLayoutCell existingCell : existingCells) {
@@ -137,6 +153,9 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
             }
         }
         hallLayoutCellRepository.saveAll(cellsToSave);
+
+        // Phát sinh outbox event sau khi cập nhật layout thành công
+        // để các service khác có thể đồng bộ hoặc làm mới dữ liệu liên quan.
         publishOutboxEvent(hallId, requestedSeatByCode.size(), requestedCellByCoord.size());
 
         return ActionMessageResponse.builder()
@@ -145,23 +164,29 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
     }
 
     private String generateSeatCode(Integer row, Integer col) {
+        // Chuẩn hóa mã ghế từ tọa độ hàng/cột để mọi nơi trong hệ thống dùng cùng một format.
         return SeatCodeGenerator.fromRowCol(row, col).toUpperCase(Locale.ROOT);
     }
 
     private String normalizeSeatCode(String seatCode) {
+        // Trim và upper-case để tránh lệch mã ghế do nhập liệu khác nhau như "a1", " A1 ".
         return seatCode == null ? "" : seatCode.trim().toUpperCase(Locale.ROOT);
     }
 
     private String toCoordKey(Integer row, Integer col) {
+        // Ghép tọa độ thành key duy nhất để map nhanh và kiểm tra trùng vị trí.
         return row + ":" + col;
     }
 
     @Override
     @Transactional(readOnly = true)
     public HallLayoutResponse getHallLayoutDefinition(UUID hallId) {
+        // Lấy profile layout đang còn hiệu lực của hall.
+        // Nếu không có thì xem như hall chưa được định nghĩa sơ đồ ghế.
         HallLayoutProfile profile = hallLayoutProfileRepository.findByHallIdAndIsDeletedFalse(hallId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
 
+        // Chỉ trả về các ghế chưa bị xóa mềm, đồng thời map sang response để client dựng seat map.
         List<HallLayoutSeatResponse> seats = seatRepository.findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(hallId)
                 .stream()
                 .map(seat -> HallLayoutSeatResponse.builder()
@@ -173,6 +198,7 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
                         .build())
                 .toList();
 
+        // Lấy các ô layout đặc biệt như aisle/blocked để frontend có đủ dữ liệu vẽ sơ đồ.
         List<HallLayoutCellResponse> cells = hallLayoutCellRepository.findAllByHallIdAndIsDeletedFalseOrderByRowAscColAsc(hallId)
                 .stream()
                 .map(cell -> HallLayoutCellResponse.builder()
@@ -196,9 +222,12 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
     @Override
     @Transactional(readOnly = true)
     public List<Seat> getSeatsByCodes(UUID hallId, Collection<String> seatCodes) {
+        // Trả sớm nếu đầu vào rỗng để tránh query thừa.
         if (seatCodes == null || seatCodes.isEmpty()) {
             return List.of();
         }
+
+        // Chuẩn hóa seat code trước khi query để đồng nhất với dữ liệu đã lưu trong DB.
         List<String> normalized = seatCodes.stream()
                 .map(code -> code == null ? "" : code.trim().toUpperCase(Locale.ROOT))
                 .filter(code -> !code.isBlank())
@@ -207,6 +236,7 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
     }
 
     private void validateDefinition(HallLayoutDefinitionRequest request) {
+        // Kiểm tra phần khung của layout: tổng hàng/cột phải hợp lệ và danh sách cell không được rỗng.
         if (request.getTotalRows() == null || request.getTotalRows() <= 0
                 || request.getTotalCols() == null || request.getTotalCols() <= 0) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
@@ -215,6 +245,11 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
 
+        // Kiểm tra từng cell:
+        // - không vượt ra ngoài layout
+        // - không trùng tọa độ
+        // - cell là ghế thì bắt buộc có seatType
+        // - cell không phải ghế thì không được gán seatType
         Set<String> occupied = new HashSet<>();
         Map<Integer, List<HallLayoutDefinitionRequest.CellInput>> seatsByRow = new LinkedHashMap<>();
         for (HallLayoutDefinitionRequest.CellInput cell : request.getCells()) {
@@ -238,10 +273,14 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
                 throw new BusinessException(ErrorCode.INVALID_INPUT);
             }
         }
+
+        // Kiểm tra riêng quy tắc ghế đôi để đảm bảo dữ liệu layout đúng nghiệp vụ.
         validateCoupleSeatPairs(seatsByRow);
     }
 
     private void validateCoupleSeatPairs(Map<Integer, List<HallLayoutDefinitionRequest.CellInput>> seatsByRow) {
+        // Ghế COUPLE phải luôn đi theo cặp 2 ghế liền kề trên cùng một hàng.
+        // Nếu bị lẻ, bị ngăn bởi seat khác hoặc bị lệch cột thì request không hợp lệ.
         for (List<HallLayoutDefinitionRequest.CellInput> rowSeats : seatsByRow.values()) {
             rowSeats.sort(Comparator.comparingInt(HallLayoutDefinitionRequest.CellInput::getCol));
 
@@ -269,6 +308,8 @@ public class SeatLayoutServiceImpl implements SeatLayoutService {
     }
 
     private void publishOutboxEvent(UUID hallId, int seatCount, int cellCount) {
+        // Lưu sự kiện outbox để downstream service biết layout của hall vừa thay đổi
+        // mà không cần gọi đồng bộ trực tiếp ngay trong transaction hiện tại.
         OutboxEvent event = new OutboxEvent();
         event.setAggregateType("HALL_LAYOUT");
         event.setAggregateId(hallId.toString());

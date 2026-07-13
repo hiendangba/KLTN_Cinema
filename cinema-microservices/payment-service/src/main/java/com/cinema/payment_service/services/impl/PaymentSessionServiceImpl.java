@@ -54,7 +54,6 @@ import com.cinema.http.HeaderNames;
 import com.cinema.http.RequestAuthUtils;
 import com.cinema.text.SearchTextUtils;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -144,10 +143,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             }
             if (isReusable(latest, bookingContext)
                     && canReuseLatestTransaction(
-                    latest,
-                    requestedPromotionId,
-                    requestedPromotionCode,
-                    requestedLoyaltyPointsUsed)) {
+                            latest,
+                            requestedPromotionId,
+                            requestedPromotionCode,
+                            requestedLoyaltyPointsUsed)) {
                 validateRequestedLoyaltyPoints(bookingContext.userId(), requestedLoyaltyPointsUsed);
                 syncBookingPromotionSnapshot(
                         bookingContext,
@@ -553,7 +552,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                                 item.refundedAmount(),
                                 item.grossAmount(),
                                 item.netAmount()))
-                .toList());
+                        .toList());
     }
 
     @Override
@@ -630,6 +629,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     @Override
     @Transactional
     public WebhookProcessingResult handleMomoReturn(MomoIpnRequest request) {
+        // Ghi log ngay khi MoMo redirect/webhook quay về để có dữ liệu truy vết:
+        // biết request nào tới, mã giao dịch nào, resultCode bao nhiêu.
         log.info(
                 "MOMO_RETURN_RECEIVED orderId={} requestId={} resultCode={} transId={} responseTime={}",
                 request == null ? "" : safeWebhookPart(request.orderId()),
@@ -637,6 +638,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 request == null || request.resultCode() == null ? "" : request.resultCode(),
                 request == null || request.transId() == null ? "" : request.transId(),
                 request == null || request.responseTime() == null ? "" : request.responseTime());
+        // Không xử lý logic trực tiếp ở đây mà gom về một flow chung với IPN.
+        // Cách này giúp tránh lặp code giữa "return URL" và "webhook/IPN URL".
         return processMomoCallback(request, "MOMO_RETURN");
     }
 
@@ -654,6 +657,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private WebhookProcessingResult processMomoCallback(MomoIpnRequest request, String logPrefix) {
+        // Chặn sớm payload không hợp lệ.
+        // orderId dùng để tìm payment transaction, signature dùng để xác thực request thật sự từ MoMo.
         if (request == null || !StringUtils.hasText(request.orderId()) || !StringUtils.hasText(request.signature())) {
             log.warn(
                     "{}_INVALID_PAYLOAD orderId={} requestId={} reason=missing_orderId_or_signature",
@@ -665,6 +670,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "message", "Invalid webhook payload"));
         }
 
+        // Verify chữ ký HMAC để đảm bảo callback không bị giả mạo hoặc bị sửa dữ liệu trên đường truyền.
         if (!verifyMomoSignature(request)) {
             log.warn(
                     "{}_REJECTED_SIGNATURE orderId={} requestId={} resultCode={}",
@@ -677,6 +683,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "message", "Unauthorized"));
         }
 
+        // Tìm transaction nội bộ dựa trên orderId MoMo trả về.
+        // Nếu không có thì chỉ ghi nhận và bỏ qua, tránh làm lỗi webhook phía MoMo.
         PaymentTransaction transaction = paymentTransactionRepository.findByOrderInvoiceNumber(request.orderId())
                 .orElse(null);
         if (transaction == null) {
@@ -693,6 +701,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "message", "Payment transaction not found"));
         }
 
+        // Tạo khóa nhận diện sự kiện webhook để chống xử lý trùng.
+        // Thực tế nhà cung cấp thanh toán có thể gửi lại cùng một callback nhiều lần.
         String webhookEventKey = buildWebhookEventKey(request);
         if (isDuplicateWebhook(transaction, webhookEventKey)) {
             log.info(
@@ -708,6 +718,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "message", "Duplicate webhook ignored"));
         }
 
+        // Nếu transaction đã hết hạn thì không được xác nhận thanh toán nữa.
+        // Tuy vậy vẫn lưu metadata webhook cuối cùng để dễ audit.
         if (transaction.getStatus() == PaymentTransactionStatus.EXPIRED) {
             log.info(
                     "{}_TX_ALREADY_EXPIRED orderId={} requestId={} transactionId={}",
@@ -723,6 +735,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "message", "Payment session already expired"));
         }
 
+        // resultCode 0/9000 được xem là thanh toán thành công, chuyển sang flow xác nhận thành công.
         if (isSuccessfulMomoResult(request)) {
             log.info(
                     "{}_SUCCESS_RESULT orderId={} requestId={} transactionId={} resultCode={} amount={}",
@@ -735,6 +748,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return handlePaymentSucceeded(transaction, request, webhookEventKey, logPrefix);
         }
 
+        // Callback thất bại nhưng transaction đã PAID từ trước:
+        // không rollback trạng thái, chỉ ghi nhận webhook vừa tới rồi bỏ qua.
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
             log.info(
                     "{}_ALREADY_PAID orderId={} requestId={} transactionId={}",
@@ -750,6 +765,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "message", "Paid transaction already confirmed"));
         }
 
+        // Các trường hợp còn lại được xem là thanh toán thất bại.
+        // Lưu failureReason để tiện điều tra và hiển thị nguyên nhân ở các bước sau.
         transaction.setStatus(PaymentTransactionStatus.FAILED);
         transaction.setFailureReason(buildMomoFailureReason(request));
         log.warn(
@@ -771,6 +788,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             MomoIpnRequest request,
             String webhookEventKey,
             String logPrefix) {
+        // Nếu transaction đã PAID từ lần xử lý trước,
+        // không confirm booking thêm lần nữa nhưng vẫn đẩy đồng bộ hậu xử lý nếu cần.
         if (transaction.getStatus() == PaymentTransactionStatus.PAID) {
             enqueueLoyaltySync(transaction, "webhook:alreadyPaid");
             enqueuePaymentSettlement(transaction, "webhook:alreadyPaid");
@@ -781,6 +800,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "ignored", true,
                     "message", "Transaction already processed"));
         }
+        // Nếu giao dịch đang/đã refund thì cũng không nên xử lý như một lần thanh toán mới.
         if (transaction.getStatus() == PaymentTransactionStatus.REFUND_PENDING
                 || transaction.getStatus() == PaymentTransactionStatus.REFUNDED) {
             markWebhookMeta(transaction, webhookEventKey);
@@ -791,6 +811,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "message", "Transaction already processed"));
         }
 
+        // Kiểm tra số tiền MoMo báo về có khớp với số tiền hệ thống đang chờ thu hay không.
+        // Đây là bước bảo vệ rất quan trọng để tránh xác nhận sai giao dịch.
         BigDecimal webhookAmount = request.amount() == null ? null
                 : BigDecimal.valueOf(request.amount()).setScale(0, RoundingMode.HALF_UP);
         if (webhookAmount == null || transaction.getAmount() == null
@@ -813,6 +835,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "message", "Amount mismatch"));
         }
 
+        // Dù MoMo báo thành công nhưng nếu phiên thanh toán đã quá hạn thì vẫn từ chối confirm.
+        // Điều này giúp đồng bộ với vòng đời giữ ghế/giữ booking của hệ thống.
         if (transaction.getExpiresAt() != null && !transaction.getExpiresAt().isAfter(LocalDateTime.now())) {
             log.info(
                     "{}_EXPIRED_BEFORE_CONFIRM orderId={} requestId={} transactionId={} expiresAt={}",
@@ -830,8 +854,11 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "ignored", true,
                     "message", "Payment session expired"));
         }
+        // Kiểm tra lại promotion trước khi chốt PAID để tránh trường hợp mã đã hết lượt dùng
+        // trong lúc người dùng đang đứng ở trang thanh toán.
         ensurePromotionUsageAvailable(transaction);
 
+        // Đánh dấu giao dịch đã thanh toán thành công trong payment-service.
         transaction.setStatus(PaymentTransactionStatus.PAID);
         transaction.setPaidAt(parseTransactionDate(request));
         transaction.setProviderRef(extractProviderRef(request));
@@ -848,6 +875,7 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 transaction.getAmount());
 
         try {
+            // Sau khi payment thành công, gọi sang booking-service để chốt booking sang trạng thái đã thanh toán.
             bookingGrpcClient.confirmBookingPayment(
                     transaction.getBookingId(),
                     transaction.getAmount(),
@@ -857,6 +885,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     transaction.getLoyaltyPointsUsed(),
                     transaction.getLoyaltyPointsEarned());
         } catch (BusinessException ex) {
+            // Tiền đã ghi nhận thành công nhưng booking confirm bị lỗi:
+            // không rollback trạng thái PAID để tránh mất dấu thanh toán,
+            // thay vào đó lưu lỗi để hệ thống/backoffice xử lý tiếp.
             log.warn(
                     "{}_CONFIRM_BOOKING_FAILED orderId={} requestId={} transactionId={} bookingId={} errorCode={}",
                     logPrefix,
@@ -873,6 +904,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                     "booking_error", ex.getErrorCode().name()));
         }
 
+        // Đẩy các tác vụ hậu xử lý theo kiểu outbox:
+        // đồng bộ loyalty và ghi nhận settlement mà không làm chậm callback chính.
         enqueueLoyaltySync(transaction, "webhook");
         enqueuePaymentSettlement(transaction, "webhook");
 
@@ -907,8 +940,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private void ensureRequesterCanCreateSessionForBooking(UUID requesterUserId,
-                                                           String requesterRole,
-                                                           BookingGrpcClient.BookingPaymentContext bookingContext) {
+            String requesterRole,
+            BookingGrpcClient.BookingPaymentContext bookingContext) {
         if (requesterUserId == null || bookingContext == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
@@ -941,7 +974,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
         throw new BusinessException(ErrorCode.FORBIDDEN);
     }
 
-    private void ensureRequesterCanViewSession(PaymentTransaction transaction, UUID requesterUserId, String requesterRole) {
+    private void ensureRequesterCanViewSession(PaymentTransaction transaction, UUID requesterUserId,
+            String requesterRole) {
         if (transaction == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -971,7 +1005,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
                 extractCheckoutResponseField(transaction.getResponsePayloadJson(), "qrCodeUrl"));
     }
 
-    private void ensureRequesterCanCompleteSession(PaymentTransaction transaction, UUID requesterUserId, String requesterRole) {
+    private void ensureRequesterCanCompleteSession(PaymentTransaction transaction, UUID requesterUserId,
+            String requesterRole) {
         if (transaction == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -990,8 +1025,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private void ensureRequesterCanAccessCinemaScopedTransaction(PaymentTransaction transaction,
-                                                                 UUID requesterUserId,
-                                                                 String normalizedRole) {
+            UUID requesterUserId,
+            String normalizedRole) {
         if (requesterUserId == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED);
         }
@@ -1096,9 +1131,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private boolean canReuseLatestTransaction(PaymentTransaction latest,
-                                              UUID requestedPromotionId,
-                                              String requestedPromotionCode,
-                                              long requestedLoyaltyPointsUsed) {
+            UUID requestedPromotionId,
+            String requestedPromotionCode,
+            long requestedLoyaltyPointsUsed) {
         String latestPromotionCode = normalizePromotionCode(latest.getPromotionCode());
         String normalizedRequestedPromotionCode = normalizePromotionCode(requestedPromotionCode);
         long latestLoyaltyPointsUsed = normalizeLongValue(latest.getLoyaltyPointsUsed());
@@ -1288,10 +1323,10 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private List<PromotionQuote> applyPromotionIfNeeded(PaymentTransaction transaction,
-                                                        UUID requestedPromotionId,
-                                                        String requestedPromotionCode,
-                                                        BookingGrpcClient.BookingPaymentContext bookingContext,
-                                                        UUID requesterUserId) {
+            UUID requestedPromotionId,
+            String requestedPromotionCode,
+            BookingGrpcClient.BookingPaymentContext bookingContext,
+            UUID requesterUserId) {
         if (requestedPromotionId == null && !StringUtils.hasText(requestedPromotionCode)) {
             transaction.setPromotionCode(null);
             transaction.setPromotionName(null);
@@ -1315,9 +1350,9 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private void syncBookingPromotionSnapshot(BookingGrpcClient.BookingPaymentContext bookingContext,
-                                              PaymentTransaction transaction,
-                                              List<PromotionQuote> appliedPromotions,
-                                              BigDecimal payableAmount) {
+            PaymentTransaction transaction,
+            List<PromotionQuote> appliedPromotions,
+            BigDecimal payableAmount) {
         if (bookingContext == null || transaction == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }
@@ -1359,7 +1394,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private void savePromotionSnapshots(PaymentTransaction transaction, List<PromotionQuote> appliedPromotions) {
-        if (transaction == null || transaction.getId() == null || appliedPromotions == null || appliedPromotions.isEmpty()) {
+        if (transaction == null || transaction.getId() == null || appliedPromotions == null
+                || appliedPromotions.isEmpty()) {
             return;
         }
 
@@ -1529,6 +1565,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private boolean verifyMomoSignature(MomoIpnRequest request) {
+        // Rebuild lại chuỗi dữ liệu đúng format MoMo yêu cầu rồi ký bằng secretKey nội bộ.
+        // Nếu chữ ký tính ra khác chữ ký request gửi lên thì request không đáng tin cậy.
         String signed = buildMomoSignatureBase(request);
         String expectedSignature = hmacSha256Hex(signed, momoGatewayProperties.getSecretKey());
         return expectedSignature.equalsIgnoreCase(request.signature());
@@ -1546,6 +1584,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
     }
 
     private String buildMomoSignatureBase(MomoIpnRequest request) {
+        // Thứ tự field phải khớp tuyệt đối với spec của MoMo.
+        // Chỉ cần sai tên field, sai thứ tự hoặc sai giá trị trim là verify signature sẽ fail.
         StringBuilder signed = new StringBuilder();
         appendMomoSignaturePart(signed, "accessKey", momoGatewayProperties.getAccessKey());
         appendMomoSignaturePart(signed, "amount", request.amount() == null ? "" : String.valueOf(request.amount()));
@@ -2060,7 +2100,8 @@ public class PaymentSessionServiceImpl implements PaymentSessionService {
             return true;
         }
         return SearchTextUtils.containsIgnoreCase(item.cinemaName(), keyword)
-                || SearchTextUtils.containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(), keyword);
+                || SearchTextUtils.containsIgnoreCase(item.cinemaId() == null ? null : item.cinemaId().toString(),
+                        keyword);
     }
 
     private boolean matchesAllFilters(

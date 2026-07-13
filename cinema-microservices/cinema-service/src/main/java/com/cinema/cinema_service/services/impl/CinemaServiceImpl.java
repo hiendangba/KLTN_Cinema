@@ -67,6 +67,8 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     @Transactional
     public ActionMessageResponse createCinema(CreateCinemaRequest request, HttpServletRequest httpRequest) {
+        // Chỉ admin/manager được tạo rạp.
+        // Trước khi lưu cần validate tọa độ, giờ hoạt động và mã rạp.
         validateWriteRole(httpRequest);
         String role = RequestAuthUtils.requireRoleHeader(httpRequest);
         UUID actorUserId = extractUserId(httpRequest);
@@ -74,11 +76,14 @@ public class CinemaServiceImpl implements CinemaService {
         validateOperatingTime(request.getOpenTime(), request.getCloseTime());
         validateCinemaCodeNotExists(request.getCode(), null);
 
+        // Manager tạo rạp thì mặc định chính họ là manager của rạp;
+        // admin có thể chỉ định manager khác.
         UUID managerId = resolveManagerIdForCreate(request, role, actorUserId);
         Cinema cinema = cinemaMapper.toEntity(request);
         cinema.setCode(normalizeCode(request.getCode()));
         cinema.setManagerId(managerId);
         cinemaRepository.save(cinema);
+        // Đồng bộ staff assignment ngay trong cùng transaction để dữ liệu luôn nhất quán.
         syncCinemaStaffAssignments(cinema.getId(), request.getStaffIds());
 
         return ActionMessageResponse.builder()
@@ -201,6 +206,7 @@ public class CinemaServiceImpl implements CinemaService {
     @Transactional(readOnly = true)
     public PageResponse<CinemaResponse> searchMyManagedCinemas(PageRequest<CinemaField> request,
                                                                 HttpServletRequest httpRequest) {
+        // Search "rạp của tôi" luôn được scope về đúng user hiện tại và chỉ lấy rạp ACTIVE.
         validateSelfReadRole(httpRequest);
         PageRequest<CinemaField> scopedRequest = scopeMyCinemaSearchRequest(request, httpRequest);
         if (scopedRequest == null) {
@@ -212,6 +218,7 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     @Transactional(readOnly = true)
     public List<CinemaResponse> getAllActiveCinemas() {
+        // Trả danh sách rạp chưa bị xóa, sau đó enrich staff và tên manager cho response.
         return mapManagedCinemasToResponses(cinemaRepository.findAllByIsDeletedFalseOrderByCreatedAtDesc());
     }
 
@@ -316,6 +323,7 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     private boolean isActiveCinema(Cinema cinema) {
+        // Staff chỉ được coi là truy cập hợp lệ nếu rạp gắn với họ đang ở trạng thái ACTIVE.
         return cinema != null && cinema.getStatus() == CinemaStatus.ACTIVE;
     }
 
@@ -398,6 +406,8 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     private void validateNoActiveBookingForCinema(UUID cinemaId) {
+        // Gom hall và active showtime của rạp để kiểm tra xem có booking active hay không.
+        // Nếu có thì chặn các thao tác có thể làm lệch dữ liệu vận hành.
         List<UUID> hallIds = hallGrpcClient.listActiveHallIdsByCinema(cinemaId);
         if (hallIds.isEmpty()) {
             return;
@@ -417,6 +427,8 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     private void syncCinemaStaffAssignments(UUID cinemaId, List<UUID> staffIds) {
+        // Đồng bộ staff assignment theo trạng thái mong muốn:
+        // staff không còn trong request thì active=false, staff mới hoặc đổi rạp thì gán lại và active=true.
         List<UUID> normalizedStaffIds = normalizeStaffIds(staffIds);
         List<CinemaStaff> currentStaffLinks = cinemaStaffRepository.findByCinemaId(cinemaId);
         Map<UUID, CinemaStaff> currentStaffLinkMap = new HashMap<>();
@@ -495,6 +507,7 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     private List<UUID> normalizeStaffIds(List<UUID> staffIds) {
+        // Loại null và trùng lặp để tránh lưu nhiều assignment staff giống nhau.
         if (staffIds == null || staffIds.isEmpty()) {
             return List.of();
         }
@@ -510,6 +523,7 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     private UUID resolveManagerIdForCreate(CreateCinemaRequest request, String role, UUID actorUserId) {
+        // Manager tạo rạp thì không được chỉ định sang manager khác.
         if (HeaderNames.ROLE_MANAGER.equals(role)) {
             return actorUserId;
         }
@@ -522,6 +536,7 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     private UUID resolveManagerIdForUpdate(UpdateCinemaRequest request, String role, UUID currentManagerId) {
+        // Manager chỉ được giữ nguyên chính mình; admin mới được đổi manager nếu cần.
         if (HeaderNames.ROLE_MANAGER.equals(role)) {
             return currentManagerId;
         }
@@ -661,6 +676,7 @@ public class CinemaServiceImpl implements CinemaService {
 
     private PageRequest<CinemaField> scopeMyCinemaSearchRequest(PageRequest<CinemaField> request,
                                                                 HttpServletRequest httpRequest) {
+        // Luồng "rạp của tôi" luôn ép thêm filter ACTIVE và scope theo manager/staff hiện tại.
         if (request == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST);
         }

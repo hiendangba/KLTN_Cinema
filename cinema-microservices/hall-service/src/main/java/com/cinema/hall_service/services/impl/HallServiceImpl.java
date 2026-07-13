@@ -72,6 +72,8 @@ public class HallServiceImpl implements HallService {
     @Override
     @Transactional
     public ActionMessageResponse createHall(CreateHallRequest request, HttpServletRequest httpRequest) {
+        // Chỉ admin/manager mới được tạo hall, và manager chỉ được thao tác
+        // trên cinema mà mình được phân quyền quản lý.
         validateManagerRole(httpRequest);
         validateCinemaOwnership(httpRequest, request.getCinemaId());
         UUID cinemaId = request.getCinemaId();
@@ -79,6 +81,7 @@ public class HallServiceImpl implements HallService {
             throw new BusinessException(ErrorCode.HALL_NAME_EXISTED);
         }
 
+        // Tạo hall trước, sau đó mới đồng bộ ảnh và layout ghế liên quan.
         Hall hall = hallMapper.toEntity(request);
         hall.setCinemaId(cinemaId);
         hall.setStatus(request.getStatus() == null ? HallEnum.HallStatus.ACTIVE : request.getStatus());
@@ -88,6 +91,8 @@ public class HallServiceImpl implements HallService {
         // Vẫn cần Saga để đảm bảo consistency giữa Hall và LayoutDefinition,
         // nhưng tạm thời cứ tạo LayoutDefinition trước để tránh lỗi khi gọi
         // Seat Service trong quá trình tạo Hall
+        // Hall và layout ghế đang ở hai service khác nhau.
+        // Flow hiện tại gọi trực tiếp sang seat-service để tạo layout ngay sau khi hall được lưu.
         seatGrpcClient.createLayoutDefinition(hall.getId(), request.getLayoutDefinition());
 
         return ActionMessageResponse.builder()
@@ -98,6 +103,7 @@ public class HallServiceImpl implements HallService {
     @Override
     @Transactional(readOnly = true)
     public HallResponse getHallById(UUID id) {
+        // Chỉ trả về hall còn hiệu lực và kiểm tra quyền xem của user hiện tại.
         Hall hall = getActiveHallOrThrow(id);
         authorizeHallReadAccess(hall);
         return resolveHallResponse(hall, new HashMap<>());
@@ -106,6 +112,8 @@ public class HallServiceImpl implements HallService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<HallResponse> searchHalls(PageRequest<HallField> request) {
+        // Search hall có scope theo role:
+        // admin thấy toàn bộ, manager/staff chỉ thấy hall thuộc cinema được phép truy cập.
         HttpServletRequest currentRequest = getCurrentHttpRequest();
         if (currentRequest != null) {
             RequestAuthUtils.requireAnyRole(currentRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER, HeaderNames.ROLE_STAFF);
@@ -134,6 +142,7 @@ public class HallServiceImpl implements HallService {
         List<Hall> halls = hallRepositoryImpl.searchWithPageAndSortAndFilter(
                 keyword, page, size, sortFields, filterFields);
 
+        // Cache response cinema theo cinemaId để tránh gọi grpc lặp lại khi nhiều hall cùng một rạp.
         Map<UUID, CinemaResponse> cinemaResponseCache = new HashMap<>();
         List<HallResponse> data = halls.stream()
                 .map(hall -> resolveHallResponse(hall, cinemaResponseCache))
@@ -155,6 +164,7 @@ public class HallServiceImpl implements HallService {
     @Transactional
     @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse updateHall(UUID hallId, UpdateHallRequest request, HttpServletRequest httpRequest) {
+        // Chỉ người có quyền quản lý cinema mới được sửa hall.
         validateManagerRole(httpRequest);
         validateCinemaOwnership(httpRequest, request.getCinemaId());
         Hall hall = getActiveHallOrThrow(hallId);
@@ -167,6 +177,7 @@ public class HallServiceImpl implements HallService {
         if (hallHasActiveBookingOnActiveShowtime(hallId)) {
             throw new BusinessException(ErrorCode.HALL_LAYOUT_IN_USE);
         }
+        // Cập nhật dữ liệu hall trước, sau đó đồng bộ layout ghế ở seat-service.
         hallMapper.updateEntityFromRequest(hall, request);
         hallRepository.save(hall);
         try {
@@ -196,6 +207,7 @@ public class HallServiceImpl implements HallService {
     @Transactional
     @CacheEvict(value = RedisConfig.CACHE_HALLS, key = "#hallId")
     public ActionMessageResponse deleteHall(UUID hallId, HttpServletRequest httpRequest) {
+        // Không cho xóa hall nếu vẫn còn booking active trên các suất chiếu đang hoạt động.
         validateManagerRole(httpRequest);
         Hall hall = getActiveHallOrThrow(hallId);
         validateCinemaOwnership(httpRequest, hall.getCinemaId());
@@ -210,11 +222,13 @@ public class HallServiceImpl implements HallService {
     }
 
     private Hall getActiveHallOrThrow(UUID hallId) {
+        // Chỉ làm việc với hall chưa bị xóa mềm.
         return hallRepository.findByIdAndIsDeletedFalse(hallId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.HALL_NOT_FOUND));
     }
 
     private HallResponse toHallResponse(Hall hall, Map<UUID, CinemaResponse> cinemaResponseCache) {
+        // Enrich response bằng seat map, danh sách ảnh và thông tin cinema cha.
         HallResponse response = hallMapper.toResponse(hall);
         response.setSeats(seatGrpcClient.getHallSeats(hall.getId()));
         response.setImages(hallImageRepository.findAllByHall_IdAndIsDeletedFalseOrderByTimeCreatedDesc(hall.getId())
@@ -227,6 +241,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private HallResponse resolveHallResponse(Hall hall, Map<UUID, CinemaResponse> cinemaResponseCache) {
+        // Cache response theo hallId để giảm số lần dựng payload chi tiết.
         Cache cache = cacheManager.getCache(RedisConfig.CACHE_HALLS);
         if (cache != null) {
             HallResponse cached = cache.get(hall.getId(), HallResponse.class);
@@ -243,6 +258,8 @@ public class HallServiceImpl implements HallService {
     }
 
     private void reconcileHallImages(Hall hall, List<String> rawImagePaths) {
+        // Đồng bộ ảnh hall theo kiểu upsert:
+        // ảnh có trong request thì giữ lại/tạo mới, ảnh cũ bị bỏ khỏi request thì xóa mềm.
         List<String> imagePaths = rawImagePaths == null ? List.of() : rawImagePaths;
         Set<String> normalizedRequested = normalizeAndValidateRequestedImagePaths(imagePaths);
         List<HallImage> existingImages = hallImageRepository.findAllByHall_Id(hall.getId());
@@ -257,6 +274,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private Set<String> normalizeAndValidateRequestedImagePaths(List<String> imagePaths) {
+        // Chuẩn hóa và chặn path trùng ngay trong cùng một request.
         Set<String> normalizedRequested = new LinkedHashSet<>();
         for (String rawPath : imagePaths) {
             String normalized = normalizeAndValidateImagePath(rawPath);
@@ -268,6 +286,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private Map<String, HallImage> indexHallImagesByPath(List<HallImage> existingImages) {
+        // Index ảnh hiện có theo path để so sánh nhanh khi upsert/xóa mềm.
         Map<String, HallImage> existingByPath = new HashMap<>();
         for (HallImage image : existingImages) {
             existingByPath.put(image.getImagePath(), image);
@@ -279,6 +298,7 @@ public class HallServiceImpl implements HallService {
             Set<String> normalizedRequested,
             Map<String, HallImage> existingByPath,
             UUID hallId) {
+        // Một image path chỉ nên thuộc về một hall để tránh reuse nhầm giữa các phòng chiếu.
         for (String path : normalizedRequested) {
             if (!existingByPath.containsKey(path)
                     && hallImageRepository.existsByImagePathAndHall_IdNot(path, hallId)) {
@@ -292,6 +312,7 @@ public class HallServiceImpl implements HallService {
             Set<String> normalizedRequested,
             Map<String, HallImage> existingByPath,
             List<HallImage> imagesToSave) {
+        // Tạo mới ảnh chưa tồn tại hoặc khôi phục ảnh đã từng bị xóa mềm.
         for (String path : normalizedRequested) {
             HallImage image = existingByPath.get(path);
             if (image == null) {
@@ -313,6 +334,7 @@ public class HallServiceImpl implements HallService {
             Set<String> normalizedRequested,
             List<HallImage> existingImages,
             List<HallImage> imagesToSave) {
+        // Ảnh cũ không còn trong request sẽ bị xóa mềm để giữ lịch sử dữ liệu.
         for (HallImage existing : existingImages) {
             if (!normalizedRequested.contains(existing.getImagePath())
                     && !Boolean.TRUE.equals(existing.getIsDeleted())) {
@@ -323,6 +345,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private CinemaResponse resolveCinemaResponse(UUID cinemaId) {
+        // Enrich tên cinema từ cinema-service; nếu lỗi thì vẫn trả response tối thiểu với cinemaId.
         try {
             String cinemaName = cinemaGrpcClient.getCinemaNameById(cinemaId);
             return CinemaResponse.builder()
@@ -339,6 +362,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private String normalizeAndValidateImagePath(String rawPath) {
+        // Chỉ chấp nhận path nội bộ, không nhận URL tuyệt đối từ bên ngoài.
         String imagePath = rawPath == null ? "" : rawPath.trim();
         if (imagePath.isEmpty() || imagePath.length() > 500) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
@@ -354,6 +378,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private boolean hallHasActiveBookingOnActiveShowtime(UUID hallId) {
+        // Nếu hall có showtime active và trên đó còn booking active thì chặn update/delete.
         List<UUID> activeShowtimeIds = showtimeGrpcClient.listActiveShowtimeIdsByHall(hallId);
         if (activeShowtimeIds.isEmpty()) {
             return false;
@@ -362,10 +387,12 @@ public class HallServiceImpl implements HallService {
     }
 
     private void validateManagerRole(HttpServletRequest httpRequest) {
+        // Hall là tài nguyên vận hành nên chỉ admin/manager mới được ghi.
         RequestAuthUtils.requireAnyRole(httpRequest, HeaderNames.ROLE_ADMIN, HeaderNames.ROLE_MANAGER);
     }
 
     private void validateCinemaOwnership(HttpServletRequest httpRequest, UUID cinemaId) {
+        // Manager chỉ được thao tác trên cinema mình phụ trách; admin được bỏ qua ràng buộc này.
         if (cinemaId == null) {
             throw new BusinessException(ErrorCode.INVALID_INPUT);
         }
@@ -393,6 +420,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private PageRequest<HallField> scopeHallSearchRequest(PageRequest<HallField> request, HttpServletRequest currentRequest) {
+        // Tự động gắn filter cinema_id theo quyền user để search không vượt phạm vi truy cập.
         if (currentRequest == null) {
             return request;
         }
@@ -430,6 +458,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private PageResponse<HallResponse> emptyHallPageResponse(PageRequest<HallField> request) {
+        // Trả page rỗng khi user không có cinema nào trong phạm vi được phép xem.
         int page = request.getPageOrDefault();
         int size = request.getSizeOrDefault();
         return PageResponse.<HallResponse>builder()
@@ -444,6 +473,8 @@ public class HallServiceImpl implements HallService {
     }
 
     private void authorizeHallReadAccess(Hall hall) {
+        // Với luồng đọc chi tiết, admin xem mọi hall;
+        // manager/staff chỉ xem hall thuộc cinema được cấp quyền.
         HttpServletRequest currentRequest = getCurrentHttpRequest();
         if (currentRequest == null) {
             return;
@@ -470,6 +501,7 @@ public class HallServiceImpl implements HallService {
     }
 
     private HttpServletRequest getCurrentHttpRequest() {
+        // Lấy request hiện tại từ RequestContext cho các flow read không truyền request trực tiếp.
         RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
         if (attributes instanceof ServletRequestAttributes servletRequestAttributes) {
             return servletRequestAttributes.getRequest();
