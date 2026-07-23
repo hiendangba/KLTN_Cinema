@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: email_service
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT}
+    from:
+      name: ${MAIL_FROM_NAME}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:admin}
+    password: ${SPRING_RABBITMQ_PASSWORD:admin}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 1000
+          max-interval: 10000
+          multiplier: 2.0
+          max-attempts: 5
+server:
+  port: ${SERVER_PORT:8093}
+  http2:
+    enabled: true

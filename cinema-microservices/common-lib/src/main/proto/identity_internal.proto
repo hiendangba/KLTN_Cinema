@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package cinema.identity.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.identity";
+option java_outer_classname = "IdentityInternalProto";
+
+import "common.proto";
+
+service IdentityInternalService {
+  rpc LockUserAccount(LockUserAccountRequest) returns (cinema.common.v1.OperationReply);
+  rpc UnlockUserAccount(UnlockUserAccountRequest) returns (cinema.common.v1.OperationReply);
+  rpc GetUserAccountByUserId(GetUserAccountByUserIdRequest) returns (GetUserAccountByUserIdReply);
+  rpc UpdateUserAccountByUserId(UpdateUserAccountByUserIdRequest) returns (cinema.common.v1.OperationReply);
+  rpc ChangePasswordByUserId(ChangePasswordByUserIdRequest) returns (cinema.common.v1.OperationReply);
+  rpc ResetPasswordByUserId(ResetPasswordByUserIdRequest) returns (cinema.common.v1.OperationReply);
+  rpc CreateCustomerProfile(CreateCustomerProfileRequest) returns (CreateCustomerProfileReply);
+  rpc DeleteCustomerProfile(DeleteCustomerProfileRequest) returns (cinema.common.v1.OperationReply);
+}
+
+message LockUserAccountRequest {
+  string user_id = 1;
+}
+
+message UnlockUserAccountRequest {
+  string user_id = 1;
+}
+
+message GetUserAccountByUserIdRequest {
+  string user_id = 1;
+}
+
+message UpdateUserAccountByUserIdRequest {
+  string user_id = 1;
+  string email = 2;
+}
+
+message ChangePasswordByUserIdRequest {
+  string user_id = 1;
+  string old_password = 2;
+  string new_password = 3;
+}
+
+message ResetPasswordByUserIdRequest {
+  string user_id = 1;
+  string new_password = 2;
+}
+
+message CreateCustomerProfileRequest {
+  string name = 1;
+  string email = 2;
+  string phone = 3;
+  string dob = 4;
+  string gender = 5;
+}
+
+message CreateCustomerProfileReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  string user_id = 4;
+}
+
+message DeleteCustomerProfileRequest {
+  string user_id = 1;
+}
+
+message IdentityAccountPayload {
+  string id = 1;
+  string email = 2;
+  string provider = 3;
+  string provider_id = 4;
+  string role = 5;
+  string status = 6;
+  bool is_deleted = 7;
+  string time_created = 8;
+  string time_updated = 9;
+}
+
+message GetUserAccountByUserIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  IdentityAccountPayload account = 4;
+}

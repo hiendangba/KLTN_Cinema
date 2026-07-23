@@ -1,0 +1,16 @@
+{
+  "name": "cinemastar-postman-newman",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Postman/Newman smoke tests for CinemaStar production APIs.",
+  "scripts": {
+    "test:api:prod": "newman run CinemaStar.postman_collection.json -e cinema-prod.postman_environment.json --reporters cli,junit,htmlextra --reporter-junit-export reports/junit.xml --reporter-htmlextra-export reports/report.html --timeout-request 20000 --delay-request 100",
+    "test:api:prod:readonly": "newman run CinemaStar.postman_collection.json -e cinema-prod.postman_environment.json --folder \"ReadOnly Smoke\" --reporters cli,junit,htmlextra --reporter-junit-export reports/junit.xml --reporter-htmlextra-export reports/report.html --timeout-request 20000 --delay-request 100",
+    "test:api:prod:mutations": "newman run CinemaStar.postman_collection.json -e cinema-prod.postman_environment.json --folder \"Mutation Smoke\" --env-var RUN_MUTATIONS=true --reporters cli,junit,htmlextra --reporter-junit-export reports/junit-mutations.xml --reporter-htmlextra-export reports/report-mutations.html --timeout-request 20000 --delay-request 100"
+  },
+  "devDependencies": {
+    "newman": "^6.2.1",
+    "newman-reporter-htmlextra": "^1.23.1"
+  }
+}
+

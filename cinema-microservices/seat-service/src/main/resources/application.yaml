@@ -1,0 +1,53 @@
+spring:
+  application:
+    name: ${APP_NAME:seat-service}
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/seat_db}
+    username: ${DB_USERNAME:seat_user}
+    password: ${DB_PASSWORD:seat_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:4}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:120000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:600000}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT:20000}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:5000}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2000}
+      client-name: ${REDIS_CLIENT_NAME:${APP_NAME:seat-service}}
+      ssl:
+        enabled: false
+      lettuce:
+        pool:
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:4}
+          min-idle: ${REDIS_POOL_MIN_IDLE:1}
+          max-wait: ${REDIS_POOL_MAX_WAIT:2000}
+        shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:100}
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9199}
+    client:
+      channels:
+        booking:
+          address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
+
+server:
+  port: ${SERVER_PORT:8099}
+  http2:
+    enabled: true

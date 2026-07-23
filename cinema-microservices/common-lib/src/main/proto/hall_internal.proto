@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package cinema.hall.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.hall";
+option java_outer_classname = "HallInternalProto";
+
+service HallInternalService {
+  rpc GetHallById(GetHallByIdRequest) returns (GetHallByIdReply);
+  rpc GetSeatsByCodes(GetSeatsByCodesRequest) returns (GetSeatsByCodesReply);
+  rpc ListActiveHallIdsByCinema(ListActiveHallIdsByCinemaRequest) returns (ListActiveHallIdsByCinemaReply);
+}
+
+message GetHallByIdRequest {
+  string hall_id = 1;
+}
+
+message HallPayload {
+  string id = 1;
+  string cinema_id = 2;
+  string name = 3;
+  reserved 4;
+}
+
+message GetHallByIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  HallPayload hall = 4;
+}
+
+message GetSeatsByCodesRequest {
+  string hall_id = 1;
+  repeated string seat_codes = 2;
+}
+
+message SeatPayload {
+  string id = 1;
+  string seat_code = 2;
+  int32 row = 3;
+  int32 col = 4;
+  string seat_type = 5;
+}
+
+message GetSeatsByCodesReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated SeatPayload seats = 4;
+}
+
+message ListActiveHallIdsByCinemaRequest {
+  string cinema_id = 1;
+}
+
+message ListActiveHallIdsByCinemaReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated string hall_ids = 4;
+}

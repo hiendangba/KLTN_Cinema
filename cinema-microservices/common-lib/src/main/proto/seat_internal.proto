@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package cinema.seat.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.seat";
+option java_outer_classname = "SeatInternalProto";
+
+service SeatInternalService {
+  rpc GetLayoutByHallId(GetLayoutByHallIdRequest) returns (GetLayoutByHallIdReply);
+  rpc GetSeatsByCodes(GetSeatsByCodesRequest) returns (GetSeatsByCodesReply);
+  rpc CreateLayoutDefinition(CreateLayoutDefinitionRequest) returns (CreateLayoutDefinitionReply);
+  rpc ReplaceLayoutDefinition(ReplaceLayoutDefinitionRequest) returns (ReplaceLayoutDefinitionReply);
+}
+
+message GetLayoutByHallIdRequest {
+  string hall_id = 1;
+}
+
+message LayoutProfilePayload {
+  string hall_id = 1;
+  int32 total_rows = 2;
+  int32 total_cols = 3;
+  string screen_position = 4;
+}
+
+message LayoutSeatPayload {
+  string id = 1;
+  string hall_id = 2;
+  string seat_code = 3;
+  int32 row = 4;
+  int32 col = 5;
+  string seat_type = 6;
+}
+
+message LayoutCellPayload {
+  string id = 1;
+  string hall_id = 2;
+  int32 row = 3;
+  int32 col = 4;
+  string cell_type = 5;
+}
+
+message GetLayoutByHallIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  LayoutProfilePayload profile = 4;
+  repeated LayoutSeatPayload seats = 5;
+  repeated LayoutCellPayload cells = 6;
+}
+
+message GetSeatsByCodesRequest {
+  string hall_id = 1;
+  repeated string seat_codes = 2;
+}
+
+message GetSeatsByCodesReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated LayoutSeatPayload seats = 4;
+}
+
+message LayoutDefinitionCellInput {
+  int32 row = 1;
+  int32 col = 2;
+  string type = 3;
+  string seat_type = 4;
+}
+
+message CreateLayoutDefinitionRequest {
+  string hall_id = 1;
+  int32 total_rows = 2;
+  int32 total_cols = 3;
+  string screen_position = 4;
+  repeated LayoutDefinitionCellInput cells = 5;
+}
+
+message CreateLayoutDefinitionReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+}
+
+message ReplaceLayoutDefinitionRequest {
+  string hall_id = 1;
+  int32 total_rows = 2;
+  int32 total_cols = 3;
+  string screen_position = 4;
+  repeated LayoutDefinitionCellInput cells = 5;
+}
+
+message ReplaceLayoutDefinitionReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+}

@@ -1,0 +1,554 @@
+services:
+  identity-service:
+    image: ${IMAGE_REPO}/identity-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "${IDENTITY_JAVA_OPTS:--Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=256m -XX:ReservedCodeCacheSize=96m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError}"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_POOL_MAX_SIZE: "5"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/identity_db
+      DB_USERNAME: identity_user
+      DB_PASSWORD: identity_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
+      EMAIL_SERVICE_URL: http://email-service:8093/api/email
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-12000000}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-259200000}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      AUTH_COOKIE_SAME_SITE: ${AUTH_COOKIE_SAME_SITE:-None}
+      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:?GOOGLE_CLIENT_IDS is required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET is required}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:?GOOGLE_REDIRECT_URI is required}
+      GOOGLE_SUCCESS_REDIRECT_URL: ${GOOGLE_SUCCESS_REDIRECT_URL:-https://cinema-star-ten.vercel.app/movies}
+      GOOGLE_FAILURE_REDIRECT_URL: ${GOOGLE_FAILURE_REDIRECT_URL:-https://cinema-star-ten.vercel.app/login}
+      GOOGLE_OAUTH_STATE_TTL_MINUTES: ${GOOGLE_OAUTH_STATE_TTL_MINUTES:-5}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      GRPC_SERVER_PORT: 9190
+      SERVER_PORT: 8090
+    expose:
+      - "9190"
+      - "8090"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    mem_limit: 768m
+
+  user-service:
+    image: ${IMAGE_REPO}/user-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_POOL_MAX_SIZE: "6"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/user_db
+      DB_USERNAME: user_user
+      DB_PASSWORD: user_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      IDENTITY_GRPC_HOST: identity-service
+      IDENTITY_GRPC_PORT: 9190
+      CINEMA_GRPC_HOST: cinema-service
+      CINEMA_GRPC_PORT: 9196
+      GRPC_SERVER_PORT: 9191
+      SERVER_PORT: 8091
+    expose:
+      - "9191"
+      - "8091"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - cinema-service
+    mem_limit: 576m
+
+  film-service:
+    image: ${IMAGE_REPO}/film-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms48m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/film_db
+      DB_USERNAME: film_user
+      DB_PASSWORD: film_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      CINEMA_GRPC_HOST: cinema-service
+      CINEMA_GRPC_PORT: 9196
+      SHOWTIME_GRPC_HOST: showtime-service
+      SHOWTIME_GRPC_PORT: 9194
+      REVIEW_GRPC_HOST: review-service
+      REVIEW_GRPC_PORT: 9198
+      GRPC_SERVER_PORT: 9192
+      SERVER_PORT: 8092
+    expose:
+      - "9192"
+      - "8092"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    mem_limit: 448m
+
+  showtime-service:
+    image: ${IMAGE_REPO}/showtime-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/showtime_db
+      DB_USERNAME: showtime_user
+      DB_PASSWORD: showtime_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      FILM_SERVICE_URL: http://film-service:8092/api/films
+      HALL_SERVICE_URL: http://hall-service:8097/api/halls
+      FILM_GRPC_HOST: film-service
+      FILM_GRPC_PORT: 9192
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      CINEMA_GRPC_HOST: cinema-service
+      CINEMA_GRPC_PORT: 9196
+      HALL_GRPC_HOST: hall-service
+      HALL_GRPC_PORT: 9197
+      SEAT_GRPC_HOST: seat-service
+      SEAT_GRPC_PORT: 9199
+      SHOWTIME_SCHEDULED_TO_ONGOING_CRON: "0 0 0 * * *"
+      SHOWTIME_SCHEDULED_TO_ONGOING_WINDOW_DAYS: "7"
+      SHOWTIME_ONGOING_TO_FINISHED_DELAY_MS: "300000"
+      GRPC_SERVER_PORT: 9194
+      SERVER_PORT: 8094
+    expose:
+      - "9194"
+      - "8094"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - booking-service
+      - film-service
+      - hall-service
+      - cinema-service
+      - seat-service
+    mem_limit: 640m
+
+  booking-service:
+    image: ${IMAGE_REPO}/booking-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms96m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/booking_db
+      DB_USERNAME: booking_user
+      DB_PASSWORD: booking_pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      CINEMA_GRPC_HOST: cinema-service
+      CINEMA_GRPC_PORT: 9196
+      HALL_GRPC_HOST: hall-service
+      HALL_GRPC_PORT: 9197
+      IDENTITY_GRPC_HOST: identity-service
+      IDENTITY_GRPC_PORT: 9190
+      FILM_GRPC_HOST: film-service
+      FILM_GRPC_PORT: 9192
+      SHOWTIME_GRPC_HOST: showtime-service
+      SHOWTIME_GRPC_PORT: 9194
+      SEAT_GRPC_HOST: seat-service
+      SEAT_GRPC_PORT: 9199
+      PAYMENT_GRPC_HOST: payment-service
+      PAYMENT_GRPC_PORT: 9198
+      GRPC_SERVER_PORT: 9195
+      SERVER_PORT: 8095
+      BOOKING_SEAT_LOCK_MINUTES: ${BOOKING_SEAT_LOCK_MINUTES:-5}
+      BOOKING_EXPIRATION_SCHEDULER_DELAY_MS: ${BOOKING_EXPIRATION_SCHEDULER_DELAY_MS:-1800000}
+    expose:
+      - "9195"
+      - "8095"
+    depends_on:
+      - postgres
+      - redis
+      - cinema-service
+      - identity-service
+      - film-service
+    mem_limit: 640m
+
+  payment-service:
+    image: ${IMAGE_REPO}/payment-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms96m -Xmx288m -XX:+UseSerialGC -XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=80m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/tmp -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      DB_URL: jdbc:postgresql://postgres:5432/payment_db
+      DB_USERNAME: payment_user
+      DB_PASSWORD: payment_pass
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      CINEMA_GRPC_HOST: cinema-service
+      CINEMA_GRPC_PORT: 9196
+      FILM_GRPC_HOST: film-service
+      FILM_GRPC_PORT: 9192
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      VIETQR_BASE_URL: https://api.vietqr.io
+      VIETQR_BANKS_PATH: /v2/banks
+      VIETQR_API_KEY: ${VIETQR_API_KEY:?VIETQR_API_KEY is required}
+      VIETQR_SECRET_KEY: ${VIETQR_SECRET_KEY:?VIETQR_SECRET_KEY is required}
+      VIETQR_SYNC_CRON: ${VIETQR_SYNC_CRON:-0 0 3 1 * *}
+      MOMO_BASE_URL: ${MOMO_BASE_URL:-https://test-payment.momo.vn}
+      MOMO_PARTNER_CODE: ${MOMO_PARTNER_CODE:?MOMO_PARTNER_CODE is required}
+      MOMO_ACCESS_KEY: ${MOMO_ACCESS_KEY:?MOMO_ACCESS_KEY is required}
+      MOMO_SECRET_KEY: ${MOMO_SECRET_KEY:?MOMO_SECRET_KEY is required}
+      MOMO_RETURN_URL: ${MOMO_RETURN_URL:?MOMO_RETURN_URL is required}
+      MOMO_IPN_URL: ${MOMO_IPN_URL:?MOMO_IPN_URL is required}
+      MOMO_REQUEST_TYPE: ${MOMO_REQUEST_TYPE:-captureWallet}
+      MOMO_LANG: ${MOMO_LANG:-vi}
+      PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS: ${PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS:-60000}
+      SERVER_PORT: 8098
+    expose:
+      - "8098"
+    depends_on:
+      - postgres
+      - booking-service
+      - film-service
+      - cinema-service
+    mem_limit: 576m
+
+  upload-service:
+    image: ${IMAGE_REPO}/upload-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms48m -Xmx192m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      DB_URL: jdbc:postgresql://postgres:5432/upload_db
+      DB_USERNAME: upload_user
+      DB_PASSWORD: upload_pass
+      SERVER_PORT: 8100
+      MULTIPART_MAX_FILE_SIZE: ${MULTIPART_MAX_FILE_SIZE:-25MB}
+      MULTIPART_MAX_REQUEST_SIZE: ${MULTIPART_MAX_REQUEST_SIZE:-100MB}
+      UPLOAD_PUBLIC_ROOT: /data/uploads/public
+      UPLOAD_TEMP_ROOT: /data/uploads/tmp/video-sessions
+      UPLOAD_IMAGE_MAX_FILE_COUNT: ${UPLOAD_IMAGE_MAX_FILE_COUNT:-5}
+      UPLOAD_IMAGE_MAX_SIZE: ${UPLOAD_IMAGE_MAX_SIZE:-10MB}
+      UPLOAD_VIDEO_MAX_SIZE: ${UPLOAD_VIDEO_MAX_SIZE:-10GB}
+      UPLOAD_VIDEO_CHUNK_SIZE: ${UPLOAD_VIDEO_CHUNK_SIZE:-20MB}
+      UPLOAD_VIDEO_SESSION_TTL_MINUTES: ${UPLOAD_VIDEO_SESSION_TTL_MINUTES:-120}
+      UPLOAD_CLEANUP_CRON: ${UPLOAD_CLEANUP_CRON:-0 */15 * * * *}
+    expose:
+      - "8100"
+    depends_on:
+      - postgres
+    volumes:
+      - upload_data:/data/uploads
+    mem_limit: 352m
+
+  review-service:
+    image: ${IMAGE_REPO}/review-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms64m -Xmx224m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_URL: jdbc:postgresql://postgres:5432/review_db
+      DB_USERNAME: review_user
+      DB_PASSWORD: review_pass
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
+      GRPC_SERVER_PORT: 9198
+      SERVER_PORT: 8101
+    expose:
+      - "9198"
+      - "8101"
+    depends_on:
+      - postgres
+      - booking-service
+      - user-service
+    mem_limit: 448m
+
+  hall-service:
+    image: ${IMAGE_REPO}/hall-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms64m -Xmx320m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/hall_db
+      DB_USERNAME: hall_user
+      DB_PASSWORD: hall_pass
+      JPA_DDL_AUTO: update
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      CINEMA_GRPC_HOST: cinema-service
+      CINEMA_GRPC_PORT: 9196
+      SHOWTIME_GRPC_HOST: showtime-service
+      SHOWTIME_GRPC_PORT: 9194
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      SEAT_GRPC_HOST: seat-service
+      SEAT_GRPC_PORT: 9199
+      GRPC_SERVER_PORT: 9197
+      SERVER_PORT: 8097
+    expose:
+      - "9197"
+      - "8097"
+    depends_on:
+      - postgres
+      - redis
+      - cinema-service
+    mem_limit: 512m
+
+  seat-service:
+    image: ${IMAGE_REPO}/seat-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms64m -Xmx192m -XX:+UseSerialGC -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/seat_db
+      DB_USERNAME: seat_user
+      DB_PASSWORD: seat_pass
+      JPA_DDL_AUTO: update
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: default
+      REDIS_PASSWORD: ""
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      GRPC_SERVER_PORT: 9199
+      SERVER_PORT: 8099
+    expose:
+      - "9199"
+      - "8099"
+    depends_on:
+      - postgres
+      - redis
+      - booking-service
+    mem_limit: 384m
+
+  cinema-service:
+    image: ${IMAGE_REPO}/cinema-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms48m -Xmx288m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:+ExitOnOutOfMemoryError"
+      JPA_SHOW_SQL: "false"
+      JPA_DDL_AUTO: "update"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      DB_POOL_MAX_SIZE: "4"
+      DB_POOL_MIN_IDLE: "1"
+      DB_URL: jdbc:postgresql://postgres:5432/cinema_db
+      DB_USERNAME: cinema_user
+      DB_PASSWORD: cinema_pass
+      USER_GRPC_HOST: user-service
+      USER_GRPC_PORT: 9191
+      HALL_GRPC_HOST: hall-service
+      HALL_GRPC_PORT: 9197
+      SHOWTIME_GRPC_HOST: showtime-service
+      SHOWTIME_GRPC_PORT: 9194
+      BOOKING_GRPC_HOST: booking-service
+      BOOKING_GRPC_PORT: 9195
+      GRPC_SERVER_PORT: 9196
+      SERVER_PORT: 8096
+    expose:
+      - "9196"
+      - "8096"
+    depends_on:
+      - postgres
+    mem_limit: 352m
+
+  email-service:
+    image: ${IMAGE_REPO}/email-service:${IMAGE_TAG:-dev}
+    pull_policy: always
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Ho_Chi_Minh"
+      JAVA_OPTS: "-Xms48m -Xmx128m -XX:+UseSerialGC -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=48m -XX:+ExitOnOutOfMemoryError"
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      MAIL_HOST: ${MAIL_HOST:?MAIL_HOST is required}
+      MAIL_PORT: ${MAIL_PORT:?MAIL_PORT is required}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:?MAIL_FROM_NAME is required}
+      MAIL_USERNAME: ${MAIL_USERNAME:?MAIL_USERNAME is required}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:?MAIL_PASSWORD is required}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      SERVER_PORT: 8093
+    expose:
+      - "8093"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    mem_limit: 160m
+  postgres:
+    image: postgres:16
+    container_name: pg
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+    mem_limit: 300m
+
+  redis:
+    image: redis:7
+    container_name: redis-container
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "900 1"
+      - --save
+      - "300 10"
+      - --save
+      - "60 10000"
+      - --maxmemory
+      - "80mb"
+      - --maxmemory-policy
+      - allkeys-lru
+      - --tcp-keepalive
+      - "60"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    mem_limit: 96m
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    mem_limit: 100m
+
+  envoy:
+    image: envoyproxy/envoy:v1.31.2
+    container_name: api-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+      - "9901:9901"
+    volumes:
+      - ./envoy/envoy.prod.yaml:/etc/envoy/envoy.yaml:ro
+      - ./envoy/certs:/etc/envoy/certs:ro
+    command:
+      ["-c", "/etc/envoy/envoy.yaml", "--service-cluster", "cinema-gateway"]
+    mem_limit: 70m
+    networks:
+      default: {}
+      cinema-shared:
+        aliases:
+          - cinema-api.duckdns.org
+          - cinema-api
+
+volumes:
+  pgdata:
+  redis_data:
+  rabbitmq_data:
+  upload_data:
+
+networks:
+  cinema-shared:
+    external: true
+    name: cinema-shared

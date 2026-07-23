@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package cinema.showtime.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.showtime";
+option java_outer_classname = "ShowtimeInternalProto";
+
+service ShowtimeInternalService {
+  rpc GetShowtimeById(GetShowtimeByIdRequest) returns (GetShowtimeByIdReply);
+  rpc ListActiveShowtimeIdsByHall(ListActiveShowtimeIdsByHallRequest) returns (ListActiveShowtimeIdsByHallReply);
+  rpc ListActiveFilmIds(ListActiveFilmIdsRequest) returns (ListActiveFilmIdsReply);
+  rpc ListActiveFilmIdsByCinema(ListActiveFilmIdsByCinemaRequest) returns (ListActiveFilmIdsByCinemaReply);
+  rpc ListActiveFilmIdsByShowtimeDate(ListActiveFilmIdsByShowtimeDateRequest) returns (ListActiveFilmIdsByShowtimeDateReply);
+}
+
+message GetShowtimeByIdRequest {
+  string showtime_id = 1;
+}
+
+message ShowtimePayload {
+  string id = 1;
+  string hall_id = 2;
+  string cinema_id = 3;
+  string pricing_policy_id = 4;
+  string film_id = 5;
+  string start_date_time = 6;
+  string end_date_time = 7;
+}
+
+message GetShowtimeByIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  ShowtimePayload showtime = 4;
+}
+
+message ListActiveShowtimeIdsByHallRequest {
+  string hall_id = 1;
+}
+
+message ListActiveShowtimeIdsByHallReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated string showtime_ids = 4;
+}
+
+message ListActiveFilmIdsRequest {
+}
+
+message ListActiveFilmIdsReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated string film_ids = 4;
+}
+
+message ListActiveFilmIdsByCinemaRequest {
+  string cinema_id = 1;
+}
+
+message ListActiveFilmIdsByCinemaReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated string film_ids = 4;
+}
+
+message ListActiveFilmIdsByShowtimeDateRequest {
+  string showtime_date = 1;
+}
+
+message ListActiveFilmIdsByShowtimeDateReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated string film_ids = 4;
+}

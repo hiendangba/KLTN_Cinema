@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package cinema.payment.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.payment";
+option java_outer_classname = "PaymentInternalProto";
+
+service PaymentInternalService {
+  rpc GetPaymentSessionByBookingId(GetPaymentSessionByBookingIdRequest) returns (GetPaymentSessionByBookingIdReply);
+}
+
+message GetPaymentSessionByBookingIdRequest {
+  string booking_id = 1;
+  string requester_user_id = 2;
+  string requester_role = 3;
+}
+
+message PaymentSessionPayload {
+  string id = 1;
+  string booking_id = 2;
+  string showtime_id = 3;
+  string user_id = 4;
+  string payment_method = 5;
+  string order_invoice_number = 6;
+  string provider_ref = 7;
+  string pay_url = 8;
+  string status = 9;
+  string amount = 10;
+  string promotion_code = 11;
+  string promotion_name = 12;
+  string promotion_discount_amount = 13;
+  int64 loyalty_points_used = 14;
+  int64 loyalty_points_earned = 15;
+  string expires_at = 16;
+  string paid_at = 17;
+  string expired_at = 18;
+  string failure_reason = 19;
+}
+
+message GetPaymentSessionByBookingIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  PaymentSessionPayload session = 4;
+}

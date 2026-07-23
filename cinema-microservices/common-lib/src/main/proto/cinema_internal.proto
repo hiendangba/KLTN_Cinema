@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package cinema.cinema.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.cinema";
+option java_outer_classname = "CinemaInternalProto";
+
+service CinemaInternalService {
+  rpc GetAllActiveCinemas(GetAllActiveCinemasRequest) returns (GetAllActiveCinemasReply);
+  rpc GetCinemaByUserId(GetCinemaByUserIdRequest) returns (GetCinemaByUserIdReply);
+  rpc GetCinemasByUserId(GetCinemaByUserIdRequest) returns (GetCinemasByUserIdReply);
+  rpc GetCinemaById(GetCinemaByIdRequest) returns (GetCinemaByIdReply);
+}
+
+message GetAllActiveCinemasRequest {
+}
+
+message GetCinemaByUserIdRequest {
+  string user_id = 1;
+  string role = 2;
+}
+
+message CinemaPayload {
+  string id = 1;
+  string name = 2;
+  string open_time = 3;
+  string close_time = 4;
+}
+
+message GetCinemaByUserIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  CinemaPayload cinema = 4;
+}
+
+message GetAllActiveCinemasReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated CinemaPayload cinemas = 4;
+}
+
+message GetCinemasByUserIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated CinemaPayload cinemas = 4;
+}
+
+message GetCinemaByIdRequest {
+  string cinema_id = 1;
+}
+
+message GetCinemaByIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  CinemaPayload cinema = 4;
+}

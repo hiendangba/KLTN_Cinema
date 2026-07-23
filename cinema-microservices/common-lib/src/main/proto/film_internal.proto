@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package cinema.film.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.film";
+option java_outer_classname = "FilmInternalProto";
+
+service FilmInternalService {
+  rpc GetFilmById(GetFilmByIdRequest) returns (GetFilmByIdReply);
+  rpc GetFilmsByIds(GetFilmsByIdsRequest) returns (GetFilmsByIdsReply);
+}
+
+message GetFilmByIdRequest {
+  string film_id = 1;
+}
+
+message FilmPayload {
+  string id = 1;
+  string title = 2;
+  string director = 3;
+  reserved 4, 5;
+  string release_date = 6;
+  string description = 7;
+  int32 duration = 8;
+  string poster = 9;
+  string trailer = 10;
+  string country = 11;
+  string language = 12;
+  string age_rating = 13;
+  string status = 14;
+  string time_created = 15;
+  string time_updated = 16;
+  repeated FilmTypePayload types = 17;
+  repeated ActorPayload actors = 18;
+}
+
+message FilmTypePayload {
+  string id = 1;
+  string name = 2;
+  string time_created = 3;
+  string time_updated = 4;
+}
+
+message ActorPayload {
+  string id = 1;
+  string name = 2;
+  int32 birth_year = 3;
+  string hometown = 4;
+  string avatar_url = 5;
+  string time_created = 6;
+  string time_updated = 7;
+}
+
+message GetFilmByIdReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  FilmPayload film = 4;
+}
+
+message GetFilmsByIdsRequest {
+  repeated string film_ids = 1;
+}
+
+message GetFilmsByIdsReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated FilmPayload films = 4;
+}

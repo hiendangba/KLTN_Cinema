@@ -1,0 +1,448 @@
+package com.cinema.user_service.grpc;
+
+import com.cinema.Enum.UserEnum;
+import com.cinema.exception.BusinessException;
+import com.cinema.exception.ErrorCode;
+import com.cinema.grpc.common.OperationReply;
+import com.cinema.grpc.user.CheckUserExistsReply;
+import com.cinema.grpc.user.CheckUserExistsRequest;
+import com.cinema.grpc.user.GetCustomerRankByIdReply;
+import com.cinema.grpc.user.GetCustomerRankByIdRequest;
+import com.cinema.grpc.user.DeleteProfileRequest;
+import com.cinema.grpc.user.DeleteCustomerProfileForBookingRequest;
+import com.cinema.grpc.user.CreateCustomerProfileRequest;
+import com.cinema.grpc.user.CreateManagerProfileRequest;
+import com.cinema.grpc.user.CreateStaffProfileRequest;
+import com.cinema.grpc.user.AdjustUserLoyaltyPointsReply;
+import com.cinema.grpc.user.AdjustUserLoyaltyPointsRequest;
+import com.cinema.grpc.user.GetUserBasicByIdReply;
+import com.cinema.grpc.user.GetUserBasicByIdRequest;
+import com.cinema.grpc.user.UserBasicPayload;
+import com.cinema.grpc.user.UserInternalServiceGrpc;
+import com.cinema.user_service.dto.request.RegisterCustomerRequest;
+import com.cinema.user_service.dto.request.RegisterManagerRequest;
+import com.cinema.user_service.dto.request.RegisterStaffRequest;
+import com.cinema.user_service.dto.response.CustomerRankResponse;
+import com.cinema.user_service.dto.response.UserExistenceResponse;
+import com.cinema.user_service.dto.response.UserResponse;
+import com.cinema.user_service.services.CustomerRankService;
+import com.cinema.user_service.services.UserService;
+import io.grpc.stub.StreamObserver;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.UUID;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class UserInternalGrpcService extends UserInternalServiceGrpc.UserInternalServiceImplBase {
+
+    private final UserService userService;
+    private final CustomerRankService customerRankService;
+
+    @Override
+    public void createCustomerProfile(
+            CreateCustomerProfileRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            userService.createCustomerProfile(RegisterCustomerRequest.builder()
+                    .id(UUID.fromString(request.getId()))
+                    .name(request.getName())
+                    .email(request.getEmail())
+                    .dob(LocalDate.parse(request.getDob()))
+                    .gender(UserEnum.Gender.valueOf(request.getGender()))
+                    .phone(request.getPhone())
+                    .role(UserEnum.UserRole.valueOf(request.getRole()))
+                    .build());
+            responseObserver.onNext(success("Customer profile created successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while creating customer profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void createManagerProfile(
+            CreateManagerProfileRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            userService.createManagerProfile(RegisterManagerRequest.builder()
+                    .id(UUID.fromString(request.getId()))
+                    .name(request.getName())
+                    .email(request.getEmail())
+                    .dob(LocalDate.parse(request.getDob()))
+                    .gender(UserEnum.Gender.valueOf(request.getGender()))
+                    .phone(request.getPhone())
+                    .role(UserEnum.UserRole.valueOf(request.getRole()))
+                    .bankCode(blankToNull(request.getBankCode()))
+                    .accountNumber(blankToNull(request.getAccountNumber()))
+                    .accountName(blankToNull(request.getAccountName()))
+                    .build());
+            responseObserver.onNext(success("Manager profile created successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while creating manager profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void createStaffProfile(
+            CreateStaffProfileRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            userService.createStaffProfile(RegisterStaffRequest.builder()
+                    .id(UUID.fromString(request.getId()))
+                    .name(request.getName())
+                    .email(request.getEmail())
+                    .dob(LocalDate.parse(request.getDob()))
+                    .gender(UserEnum.Gender.valueOf(request.getGender()))
+                    .phone(request.getPhone())
+                    .role(UserEnum.UserRole.valueOf(request.getRole()))
+                    .bankCode(blankToNull(request.getBankCode()))
+                    .accountNumber(blankToNull(request.getAccountNumber()))
+                    .accountName(blankToNull(request.getAccountName()))
+                    .build());
+            responseObserver.onNext(success("Staff profile created successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while creating staff profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void deleteCustomerProfile(DeleteProfileRequest request, StreamObserver<OperationReply> responseObserver) {
+        handleDelete(request, responseObserver, UserEnum.UserRole.CUSTOMER);
+    }
+
+    @Override
+    public void deleteCustomerProfileForBooking(
+            DeleteCustomerProfileForBookingRequest request,
+            StreamObserver<OperationReply> responseObserver) {
+        try {
+            UUID userId = UUID.fromString(request.getUserId());
+            userService.deleteCustomerProfileForBooking(userId);
+            responseObserver.onNext(success("Customer profile deleted successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while deleting booking customer profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void deleteManagerProfile(DeleteProfileRequest request, StreamObserver<OperationReply> responseObserver) {
+        handleDelete(request, responseObserver, UserEnum.UserRole.MANAGER);
+    }
+
+    @Override
+    public void deleteStaffProfile(DeleteProfileRequest request, StreamObserver<OperationReply> responseObserver) {
+        handleDelete(request, responseObserver, UserEnum.UserRole.STAFF);
+    }
+
+    @Override
+    public void checkUserExists(
+            CheckUserExistsRequest request,
+            StreamObserver<CheckUserExistsReply> responseObserver) {
+        try {
+            UserExistenceResponse response = userService.checkUserExists(UUID.fromString(request.getUserId()));
+            responseObserver.onNext(CheckUserExistsReply.newBuilder()
+                    .setSuccess(true)
+                    .setExists(response.isExists())
+                    .setMessage(response.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(CheckUserExistsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(CheckUserExistsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while checking user existence", ex);
+            responseObserver.onNext(CheckUserExistsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void addUserLoyaltyPoints(
+            AdjustUserLoyaltyPointsRequest request,
+            StreamObserver<AdjustUserLoyaltyPointsReply> responseObserver) {
+        handleLoyaltyPointsAdjustment(request, responseObserver, true);
+    }
+
+    @Override
+    public void deductUserLoyaltyPoints(
+            AdjustUserLoyaltyPointsRequest request,
+            StreamObserver<AdjustUserLoyaltyPointsReply> responseObserver) {
+        handleLoyaltyPointsAdjustment(request, responseObserver, false);
+    }
+
+    @Override
+    public void getUserBasicById(GetUserBasicByIdRequest request,
+            StreamObserver<GetUserBasicByIdReply> responseObserver) {
+        try {
+            UserResponse user = userService.getUserById(UUID.fromString(request.getUserId()));
+            log.info("USER_BASIC_RESPONSE userId={} lifetimePaidAmount={} loyaltyPoints={} rankCode={}",
+                    user.getId(),
+                    user.getLifetimePaidAmount(),
+                    user.getLoyaltyPoints(),
+                    user.getCustomerRank() == null ? null : user.getCustomerRank().code());
+            responseObserver.onNext(GetUserBasicByIdReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("User fetched successfully")
+                    .setUser(UserBasicPayload.newBuilder()
+                            .setId(user.getId().toString())
+                            .setName(blankToEmpty(user.getName()))
+                            .setLoyaltyPoints(user.getLoyaltyPoints() == null ? 0L : user.getLoyaltyPoints())
+                            .setLifetimePaidAmount(user.getLifetimePaidAmount() == null
+                                    ? "0"
+                                    : user.getLifetimePaidAmount().toPlainString())
+                            .setCustomerRankCode(user.getCustomerRank() == null
+                                    ? ""
+                                    : blankToEmpty(user.getCustomerRank().code()))
+                            .setCustomerRankName(user.getCustomerRank() == null
+                                    ? ""
+                                    : blankToEmpty(user.getCustomerRank().name()))
+                            .setCustomerRankLevel(user.getCustomerRank() == null
+                                    || user.getCustomerRank().level() == null
+                                    ? 0
+                                    : user.getCustomerRank().level())
+                            .setEarningAmountUnit(user.getCustomerRank() == null
+                                    || user.getCustomerRank().earningAmountUnit() == null
+                                    ? "1000"
+                                    : user.getCustomerRank().earningAmountUnit().toPlainString())
+                            .setEarningPointsPerUnit(user.getCustomerRank() == null
+                                    || user.getCustomerRank().earningPointsPerUnit() == null
+                                    ? "1"
+                                    : user.getCustomerRank().earningPointsPerUnit().toPlainString())
+                            .build())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(GetUserBasicByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(GetUserBasicByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching user by id", ex);
+            responseObserver.onNext(GetUserBasicByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void getCustomerRankById(
+            GetCustomerRankByIdRequest request,
+            StreamObserver<GetCustomerRankByIdReply> responseObserver) {
+        try {
+            CustomerRankResponse rank = customerRankService.getRankById(UUID.fromString(request.getRankId()));
+            log.info("CUSTOMER_RANK_RESPONSE rankId={} code={} level={}",
+                    rank.id(),
+                    rank.code(),
+                    rank.level());
+            responseObserver.onNext(GetCustomerRankByIdReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Customer rank fetched successfully")
+                    .setRank(com.cinema.grpc.user.CustomerRankPayload.newBuilder()
+                            .setId(rank.id().toString())
+                            .setCode(blankToEmpty(rank.code()))
+                            .setName(blankToEmpty(rank.name()))
+                            .setMinLifetimeAmount(rank.minLifetimeAmount() == null
+                                    ? "0"
+                                    : rank.minLifetimeAmount().toPlainString())
+                            .setEarningAmountUnit(rank.earningAmountUnit() == null
+                                    ? "0"
+                                    : rank.earningAmountUnit().toPlainString())
+                            .setEarningPointsPerUnit(rank.earningPointsPerUnit() == null
+                                    ? "0"
+                                    : rank.earningPointsPerUnit().toPlainString())
+                            .setLevel(rank.level() == null ? 0 : rank.level())
+                            .setStatus(rank.status() == null ? "" : rank.status().name())
+                            .build())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(GetCustomerRankByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(GetCustomerRankByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while fetching customer rank by id", ex);
+            responseObserver.onNext(GetCustomerRankByIdReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    private void handleLoyaltyPointsAdjustment(
+            AdjustUserLoyaltyPointsRequest request,
+            StreamObserver<AdjustUserLoyaltyPointsReply> responseObserver,
+            boolean isAddition) {
+        try {
+            UUID userId = UUID.fromString(request.getUserId());
+            long loyaltyPoints = request.getLoyaltyPoints();
+            long nextPoints = isAddition
+                    ? userService.addLoyaltyPoints(userId, loyaltyPoints)
+                    : userService.deductLoyaltyPoints(userId, loyaltyPoints);
+            responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
+                    .setSuccess(true)
+                    .setMessage(
+                            isAddition ? "Loyalty points added successfully" : "Loyalty points deducted successfully")
+                    .setLoyaltyPoints(nextPoints)
+                    .build());
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INVALID_FORMAT.name())
+                    .setMessage(ErrorCode.INVALID_FORMAT.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ex.getErrorCode().name())
+                    .setMessage(ex.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while adjusting user loyalty points", ex);
+            responseObserver.onNext(AdjustUserLoyaltyPointsReply.newBuilder()
+                    .setSuccess(false)
+                    .setErrorKey(ErrorCode.INTERNAL_ERROR.name())
+                    .setMessage(ErrorCode.INTERNAL_ERROR.getMessage())
+                    .build());
+            responseObserver.onCompleted();
+        }
+    }
+
+    private void handleDelete(
+            DeleteProfileRequest request,
+            StreamObserver<OperationReply> responseObserver,
+            UserEnum.UserRole targetRole) {
+        try {
+            UUID targetUserId = UUID.fromString(request.getUserId());
+            UUID actorId = UUID.fromString(request.getActorId());
+            UserEnum.UserRole actorRole = UserEnum.UserRole.valueOf(request.getActorRole());
+
+            switch (targetRole) {
+                case CUSTOMER -> userService.deleteCustomerProfile(targetUserId, actorId, actorRole);
+                case MANAGER -> userService.deleteManagerProfile(targetUserId, actorId, actorRole);
+                case STAFF -> userService.deleteStaffProfile(targetUserId, actorId, actorRole);
+                default -> throw new BusinessException(ErrorCode.INVALID_FORMAT);
+            }
+
+            responseObserver.onNext(success("Profile deleted successfully"));
+            responseObserver.onCompleted();
+        } catch (IllegalArgumentException ex) {
+            responseObserver.onNext(failure(ErrorCode.INVALID_FORMAT));
+            responseObserver.onCompleted();
+        } catch (BusinessException ex) {
+            responseObserver.onNext(failure(ex));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            log.error("Unexpected gRPC error while deleting user profile", ex);
+            responseObserver.onNext(failure(ErrorCode.INTERNAL_ERROR));
+            responseObserver.onCompleted();
+        }
+    }
+
+    private OperationReply success(String message) {
+        return OperationReply.newBuilder()
+                .setSuccess(true)
+                .setMessage(message)
+                .build();
+    }
+
+    private OperationReply failure(BusinessException exception) {
+        return failure(exception.getErrorCode());
+    }
+
+    private OperationReply failure(ErrorCode errorCode) {
+        return OperationReply.newBuilder()
+                .setSuccess(false)
+                .setErrorKey(errorCode.name())
+                .setMessage(errorCode.getMessage())
+                .build();
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    private String blankToEmpty(String value) {
+        return value == null || value.isBlank() ? "" : value;
+    }
+}

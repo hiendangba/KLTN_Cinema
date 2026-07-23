@@ -1,0 +1,66 @@
+spring:
+  config:
+    import: optional:file:src/main/resources/.env[.properties]
+  application:
+    name: payment-service
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9198}
+    client:
+      channels:
+        user:
+          address: "${USER_GRPC_HOST:localhost}:${USER_GRPC_PORT:9191}"
+        booking:
+          address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
+        cinema:
+          address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
+        film:
+          address: "${FILM_GRPC_HOST:localhost}:${FILM_GRPC_PORT:9192}"
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+
+server:
+  port: ${SERVER_PORT:8098}
+  http2:
+    enabled: true
+
+vietqr:
+  base-url: ${VIETQR_BASE_URL}
+  banks-path: ${VIETQR_BANKS_PATH}
+  api-key: ${VIETQR_API_KEY}
+  secret-key: ${VIETQR_SECRET_KEY}
+  sync-cron: ${VIETQR_SYNC_CRON:0 0 3 1 * *}
+
+momo:
+  base-url: ${MOMO_BASE_URL:https://test-payment.momo.vn}
+  partner-code: ${MOMO_PARTNER_CODE:replace_me_partner_code}
+  access-key: ${MOMO_ACCESS_KEY:replace_me_access_key}
+  secret-key: ${MOMO_SECRET_KEY:replace_me_secret_key}
+  redirect-url: ${MOMO_RETURN_URL:http://localhost:3000/payment/result}
+  ipn-url: ${MOMO_IPN_URL:http://localhost:8098/api/payments/webhooks/momo}
+  request-type: ${MOMO_REQUEST_TYPE:captureWallet}
+  lang: ${MOMO_LANG:vi}
+
+payment:
+  expiration-scheduler-delay-ms: ${PAYMENT_EXPIRATION_SCHEDULER_DELAY_MS:60000}
+  loyalty-outbox:
+    publisher-delay-ms: ${PAYMENT_LOYALTY_OUTBOX_PUBLISHER_DELAY_MS:15000}
+  customer-rank-outbox:
+    publisher-delay-ms: ${PAYMENT_CUSTOMER_RANK_OUTBOX_PUBLISHER_DELAY_MS:15000}

@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: ${APP_NAME:cinema-service}
+  devtools:
+    restart:
+      enabled: false
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/cinema_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:4}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:120000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:600000}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT:20000}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+  grpc:
+    client:
+      channels:
+        user:
+          address: "${USER_GRPC_HOST:localhost}:${USER_GRPC_PORT:9191}"
+        hall:
+          address: "${HALL_GRPC_HOST:localhost}:${HALL_GRPC_PORT:9197}"
+        showtime:
+          address: "${SHOWTIME_GRPC_HOST:localhost}:${SHOWTIME_GRPC_PORT:9194}"
+        booking:
+          address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
+    server:
+      port: ${GRPC_SERVER_PORT:9196}
+
+server:
+  port: ${SERVER_PORT:8096}
+  http2:
+    enabled: true

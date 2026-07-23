@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package cinema.booking.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.booking";
+option java_outer_classname = "BookingInternalProto";
+
+service BookingInternalService {
+  rpc CheckShowtimeBooked(CheckShowtimeBookedRequest) returns (CheckShowtimeBookedReply);
+  rpc GetSeatRuntimeStates(GetSeatRuntimeStatesRequest) returns (GetSeatRuntimeStatesReply);
+  rpc HasActiveBookingByShowtimeIds(HasActiveBookingByShowtimeIdsRequest) returns (HasActiveBookingByShowtimeIdsReply);
+  rpc GetBookingPaymentContext(GetBookingPaymentContextRequest) returns (GetBookingPaymentContextReply);
+  rpc UpsertBookingPromotionSnapshot(UpsertBookingPromotionSnapshotRequest) returns (UpsertBookingPromotionSnapshotReply);
+  rpc ConfirmBookingPayment(ConfirmBookingPaymentRequest) returns (ConfirmBookingPaymentReply);
+  rpc CheckUserEligibleForReview(CheckUserEligibleForReviewRequest) returns (CheckUserEligibleForReviewReply);
+}
+
+message CheckShowtimeBookedRequest {
+  string showtime_id = 1;
+}
+
+message CheckShowtimeBookedReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  bool booked = 4;
+}
+
+message GetSeatRuntimeStatesRequest {
+  string showtime_id = 1;
+  repeated string seat_codes = 2;
+}
+
+message SeatRuntimeStatePayload {
+  string seat_code = 1;
+  string state = 2;
+}
+
+message GetSeatRuntimeStatesReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  repeated SeatRuntimeStatePayload seat_states = 4;
+}
+
+message HasActiveBookingByShowtimeIdsRequest {
+  repeated string showtime_ids = 1;
+}
+
+message HasActiveBookingByShowtimeIdsReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  bool has_active_booking = 4;
+}
+
+message GetBookingPaymentContextRequest {
+  string booking_id = 1;
+}
+
+message BookingPaymentContextPayload {
+  string booking_id = 1;
+  string showtime_id = 2;
+  string cinema_id = 3;
+  string user_id = 4;
+  string final_amount = 5;
+  string reserved_until = 6;
+  string booking_status = 7;
+  string payment_status = 8;
+  string ticket_subtotal = 9;
+  string product_subtotal = 10;
+  string film_id = 11;
+  string promotion_id = 12;
+  string promotion_code = 13;
+  string promotion_name = 14;
+  string promotion_discount_amount = 15;
+  string payable_amount = 16;
+  int64 loyalty_points_used = 17;
+  int64 loyalty_points_earned = 18;
+}
+
+message GetBookingPaymentContextReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  BookingPaymentContextPayload booking = 4;
+}
+
+message UpsertBookingPromotionSnapshotRequest {
+  string booking_id = 1;
+  string promotion_id = 2;
+  string promotion_code = 3;
+  string promotion_name = 4;
+  string promotion_discount_amount = 5;
+  string payable_amount = 6;
+  int64 loyalty_points_used = 7;
+  int64 loyalty_points_earned = 8;
+}
+
+message UpsertBookingPromotionSnapshotReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  BookingPaymentContextPayload booking = 4;
+}
+
+message ConfirmBookingPaymentRequest {
+  string booking_id = 1;
+  string provider_ref = 2;
+  string payment_method = 3;
+  string order_invoice_number = 4;
+  string transaction_amount = 5;
+  int64 loyalty_points_used = 6;
+  int64 loyalty_points_earned = 7;
+}
+
+message ConfirmBookingPaymentReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  BookingPaymentContextPayload booking = 4;
+}
+
+message CheckUserEligibleForReviewRequest {
+  string user_id = 1;
+  string film_id = 2;
+}
+
+message CheckUserEligibleForReviewReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+  bool eligible = 4;
+}

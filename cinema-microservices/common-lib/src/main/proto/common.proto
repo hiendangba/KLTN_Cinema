@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package cinema.common.v1;
+
+option java_multiple_files = true;
+option java_package = "com.cinema.grpc.common";
+option java_outer_classname = "CommonProto";
+
+message OperationReply {
+  bool success = 1;
+  string error_key = 2;
+  string message = 3;
+}

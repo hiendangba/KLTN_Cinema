@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: upload-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/upload_db}
+    username: ${DB_USERNAME:upload_user}
+    password: ${DB_PASSWORD:upload_pass}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: ${MULTIPART_MAX_FILE_SIZE:25MB}
+      max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:100MB}
+
+server:
+  port: ${SERVER_PORT:8100}
+  http2:
+    enabled: true
+  tomcat:
+    max-swallow-size: -1
+
+upload:
+  public-root: ${UPLOAD_PUBLIC_ROOT:/data/uploads/public}
+  temp-root: ${UPLOAD_TEMP_ROOT:/data/uploads/tmp/video-sessions}
+  image-max-file-count: ${UPLOAD_IMAGE_MAX_FILE_COUNT:5}
+  image-max-size: ${UPLOAD_IMAGE_MAX_SIZE:10MB}
+  video-max-size: ${UPLOAD_VIDEO_MAX_SIZE:10GB}
+  video-chunk-size: ${UPLOAD_VIDEO_CHUNK_SIZE:20MB}
+  video-session-ttl-minutes: ${UPLOAD_VIDEO_SESSION_TTL_MINUTES:120}
+  cleanup-cron: ${UPLOAD_CLEANUP_CRON:0 */15 * * * *}
+  allowed-image-content-types:
+    - image/jpeg
+    - image/png
+    - image/webp
+    - image/gif
+  allowed-video-content-types:
+    - video/mp4
+    - video/quicktime
+    - video/x-msvideo
+    - video/x-matroska

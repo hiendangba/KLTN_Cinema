@@ -1,0 +1,110 @@
+package com.cinema.user_service.entity;
+
+import com.cinema.Enum.UserEnum;
+import com.github.f4b6a3.uuid.UuidCreator;
+
+import jakarta.persistence.*;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+
+import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.util.UUID;
+import java.time.LocalDate;
+
+@Entity
+@Table(
+        name = "users",
+        indexes = {
+                @Index(name = "idx_phone", columnList = "phone"),
+                @Index(name = "idx_name", columnList = "name")
+        }
+)
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class User {
+    @Id
+    @Column(columnDefinition = "uuid")
+    UUID id;
+
+    @Column(nullable = false, unique = true)
+    private String email;
+
+    @Column(nullable = false, length = 100)
+    String name;
+
+    @Column(name = "dob")
+    LocalDate dob;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    UserEnum.Gender gender;
+
+    @Column(length = 15, unique = true)
+    String phone;
+
+    @Column(name = "bank_code", length = 50)
+    String bankCode;
+
+    @Column(name = "account_number", length = 50)
+    String accountNumber;
+
+    @Column(name = "account_name")
+    String accountName;
+
+    @Column(name = "loyalty_points")
+    @Builder.Default
+    Long loyaltyPoints = 0L;
+
+    @Column(name = "lifetime_paid_amount", precision = 14, scale = 2)
+    @Builder.Default
+    BigDecimal lifetimePaidAmount = BigDecimal.ZERO;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private UserEnum.UserRole role;
+
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted;
+
+    @Column(nullable = false, updatable = false)
+    LocalDateTime timeCreated;
+
+    @Column(nullable = false)
+    LocalDateTime timeUpdated;
+
+    @PrePersist
+    public void generateId() {
+        if (this.id == null) {
+            this.id = UuidCreator.getTimeOrderedEpoch();
+        }
+        this.isDeleted = false;
+        if (this.loyaltyPoints == null) {
+            this.loyaltyPoints = 0L;
+        }
+        if (this.lifetimePaidAmount == null) {
+            this.lifetimePaidAmount = BigDecimal.ZERO;
+        }
+        timeCreated = LocalDateTime.now();
+        timeUpdated = LocalDateTime.now();
+    }
+
+    @PostLoad
+    protected void normalizeSnapshotFields() {
+        if (this.loyaltyPoints == null) {
+            this.loyaltyPoints = 0L;
+        }
+        if (this.lifetimePaidAmount == null) {
+            this.lifetimePaidAmount = BigDecimal.ZERO;
+        }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        timeUpdated = LocalDateTime.now();
+    }
+}

@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: ${APP_NAME:review-service}
+  config:
+    import: optional:file:src/main/resources/.env[.properties]
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/review_db}
+    username: ${DB_USERNAME:review_user}
+    password: ${DB_PASSWORD:review_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:4}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:120000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:600000}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT:20000}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9198}
+    client:
+      channels:
+        booking:
+          address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
+        user:
+          address: "${USER_GRPC_HOST:localhost}:${USER_GRPC_PORT:9191}"
+server:
+  port: ${SERVER_PORT:8101}
+  http2:
+    enabled: true

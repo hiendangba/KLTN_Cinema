@@ -1,0 +1,78 @@
+spring:
+  config:
+    import: optional:file:src/main/resources/.env[.properties]
+  application:
+    name: ${APP_NAME:showtime-service}
+  devtools:
+    restart:
+      enabled: false
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:4}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      idle-timeout: ${DB_POOL_IDLE_TIMEOUT:120000}
+      max-lifetime: ${DB_POOL_MAX_LIFETIME:600000}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT:20000}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+  data:
+    redis:
+      #      url: ${REDIS_URL:}
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:5000}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:2000}
+      client-name: ${REDIS_CLIENT_NAME:${APP_NAME:showtime-service}}
+      ssl:
+        enabled: false
+      lettuce:
+        pool:
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:4}
+          min-idle: ${REDIS_POOL_MIN_IDLE:1}
+          max-wait: ${REDIS_POOL_MAX_WAIT:2000}
+        shutdown-timeout: ${REDIS_SHUTDOWN_TIMEOUT:100}
+  grpc:
+    server:
+      port: ${GRPC_SERVER_PORT:9194}
+    client:
+      channels:
+        film:
+          address: "${FILM_GRPC_HOST:localhost}:${FILM_GRPC_PORT:9192}"
+        booking:
+          address: "${BOOKING_GRPC_HOST:localhost}:${BOOKING_GRPC_PORT:9195}"
+        cinema:
+          address: "${CINEMA_GRPC_HOST:localhost}:${CINEMA_GRPC_PORT:9196}"
+        hall:
+          address: "${HALL_GRPC_HOST:localhost}:${HALL_GRPC_PORT:9197}"
+        seat:
+          address: "${SEAT_GRPC_HOST:localhost}:${SEAT_GRPC_PORT:9199}"
+rabbitmq:
+  host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+  port: ${SPRING_RABBITMQ_PORT:5672}
+  username: ${SPRING_RABBITMQ_USERNAME:admin}
+  password: ${SPRING_RABBITMQ_PASSWORD:admin}
+server:
+  port: ${SERVER_PORT:8094}
+  http2:
+    enabled: true
+
+showtime:
+  status-scheduler:
+    scheduled-to-ongoing-cron: ${SHOWTIME_SCHEDULED_TO_ONGOING_CRON:0 0 0 * * *}
+    scheduled-to-ongoing-window-days: ${SHOWTIME_SCHEDULED_TO_ONGOING_WINDOW_DAYS:7}
+    ongoing-to-finished-delay-ms: ${SHOWTIME_ONGOING_TO_FINISHED_DELAY_MS:300000}
